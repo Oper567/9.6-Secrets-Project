@@ -13,13 +13,12 @@ import path from "path";
 import { fileURLToPath } from "url";
 import multer from "multer";
 import { v2 as cloudinary } from 'cloudinary';
-import pkg from 'multer-storage-cloudinary'; // Updated Import
-
-// Destructure CloudinaryStorage from the default export
-const { CloudinaryStorage } = pkg;
+import pkg from 'multer-storage-cloudinary';
 
 dotenv.config();
 
+// FIX: Handle ESM vs CommonJS import for CloudinaryStorage
+const CloudinaryStorage = pkg.CloudinaryStorage || pkg;
 const PostgresStore = pgSession(session);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -79,7 +78,7 @@ async function sendWelcomeNote(userId) {
   try {
     await db.query("INSERT INTO notifications (user_id, sender_id, message) VALUES ($1, 1, $2)", 
     [userId, "Welcome to Apugo Village! 🌴"]);
-  } catch (err) { console.error(err); }
+  } catch (err) { console.error("Notification Error:", err); }
 }
 
 app.use(async (req, res, next) => {
@@ -91,7 +90,7 @@ app.use(async (req, res, next) => {
       await db.query("UPDATE users SET last_active = NOW() WHERE id = $1", [req.user.id]);
       const noteCount = await db.query("SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND is_read = false", [req.user.id]);
       res.locals.unreadCount = noteCount.rows[0].count;
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error("Middleware DB Error:", e); }
   }
   next();
 });
@@ -146,7 +145,10 @@ app.post("/register", async (req, res) => {
     const user = await db.query("INSERT INTO users (email, password, role) VALUES ($1,$2,$3) RETURNING *", [req.body.email, hash, "user"]);
     await sendWelcomeNote(user.rows[0].id);
     req.login(user.rows[0], () => res.redirect("/feed"));
-  } catch { res.redirect("/register"); }
+  } catch (err) { 
+    console.error(err);
+    res.redirect("/register"); 
+  }
 });
 
 app.post("/login", passport.authenticate("local", { successRedirect: "/feed", failureRedirect: "/login", failureFlash: true }));
@@ -158,18 +160,26 @@ app.get("/feed", async (req, res) => {
   try {
     const announcements = await db.query(`SELECT e.*, u.email AS author FROM events e JOIN users u ON e.created_by=u.id WHERE is_announcement=true AND is_deleted=false ORDER BY created_at DESC`);
     const trending = await db.query(`SELECT e.id, e.description, COUNT(l.id) as likes_count FROM events e LEFT JOIN likes l ON e.id = l.event_id WHERE e.is_deleted = false GROUP BY e.id ORDER BY likes_count DESC LIMIT 3`);
+    
     let postsQuery = `
-      SELECT e.*, u.email AS author, u.last_active, (SELECT COUNT(*) FROM likes WHERE event_id=e.id) AS likes,
+      SELECT e.*, u.email AS author, u.last_active, 
+      (SELECT COUNT(*) FROM likes WHERE event_id=e.id) AS likes,
       (SELECT JSON_AGG(json_build_object('content', c.content, 'author', cu.email)) FROM comments c JOIN users cu ON c.user_id = cu.id WHERE c.event_id = e.id) as comments_list
-      FROM events e JOIN users u ON e.created_by=u.id WHERE is_announcement=false AND is_deleted=false
+      FROM events e JOIN users u ON e.created_by=u.id 
+      WHERE is_announcement=false AND is_deleted=false
     `;
+    
     const params = [];
-    if (search) { postsQuery += ` AND (e.description ILIKE $1)`; params.push(`%${search}%`); }
+    if (search) { 
+      postsQuery += ` AND (e.description ILIKE $1)`; 
+      params.push(`%${search}%`); 
+    }
     postsQuery += ` ORDER BY e.is_pinned DESC, e.created_at DESC`;
+    
     const posts = await db.query(postsQuery, params);
     res.render("feed", { announcements: announcements.rows, posts: posts.rows, trending: trending.rows, search });
   } catch (err) { 
-    console.error(err);
+    console.error("Feed Load Error:", err);
     res.status(500).send("Error loading feed"); 
   }
 });
@@ -191,7 +201,8 @@ app.post("/settings/update", async (req, res) => {
     req.flash("success", "Settings updated!");
     res.redirect("/settings");
   } catch (err) {
-    console.error(err);
+    console.error("Settings Update Error:", err);
+    req.flash("error", "Update failed.");
     res.redirect("/settings");
   }
 });
@@ -201,7 +212,10 @@ app.get("/profile", async (req, res) => {
   try {
     const result = await db.query("SELECT * FROM events WHERE created_by = $1 AND is_deleted = false ORDER BY created_at DESC", [req.user.id]);
     res.render("profile", { posts: result.rows, search: "" });
-  } catch (e) { res.redirect("/feed"); }
+  } catch (e) { 
+    console.error(e);
+    res.redirect("/feed"); 
+  }
 });
 
 app.get("/api/notifications", async (req, res) => {
@@ -222,7 +236,7 @@ app.post("/event/create", upload.single("localMedia"), async (req, res) => {
       ["Post", req.body.description, mediaPath, req.user.id, req.user.role === 'admin', mediaType]);
     res.redirect("/feed");
   } catch (err) {
-    console.error(err);
+    console.error("Post Creation Error:", err);
     res.redirect("/feed");
   }
 });
@@ -251,9 +265,16 @@ app.post("/event/:id/comment", async (req, res) => {
 app.post("/event/:id/delete", async (req, res) => {
   if (!req.isAuthenticated()) return res.redirect("/login");
   try {
-    await db.query("UPDATE events SET is_deleted = true WHERE id = $1 AND (created_by = $2 OR (SELECT role FROM users WHERE id = $2) = 'admin')", [req.params.id, req.user.id]);
+    await db.query(`
+      UPDATE events 
+      SET is_deleted = true 
+      WHERE id = $1 AND (created_by = $2 OR (SELECT role FROM users WHERE id = $2) = 'admin')
+    `, [req.params.id, req.user.id]);
     res.redirect("back");
-  } catch (err) { res.redirect("back"); }
+  } catch (err) { 
+    console.error(err);
+    res.redirect("back"); 
+  }
 });
 
 app.listen(port, () => console.log(`🚀 Village Square live at port ${port}`));
