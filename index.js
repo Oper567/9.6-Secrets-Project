@@ -13,11 +13,10 @@ import path from "path";
 import { fileURLToPath } from "url";
 import multer from "multer";
 import { v2 as cloudinary } from 'cloudinary';
-import pkg from 'multer-storage-cloudinary';
+import { CloudinaryStorage } from 'multer-storage-cloudinary';
 
 dotenv.config();
 
-const CloudinaryStorage = pkg.CloudinaryStorage || pkg;
 const PostgresStore = pgSession(session);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -61,7 +60,7 @@ app.use(session({
   secret: process.env.SESSION_SECRET || "apugo_secret",
   resave: false,
   saveUninitialized: false,
-  cookie: { maxAge: 1000 * 60 * 60 * 24, secure: true, sameSite: 'lax' }
+  cookie: { maxAge: 1000 * 60 * 60 * 24, secure: process.env.NODE_ENV === "production", sameSite: 'lax' }
 }));
 
 app.use(flash());
@@ -162,10 +161,12 @@ app.get("/feed", async (req, res) => {
     postsQuery += ` ORDER BY e.is_pinned DESC, e.created_at DESC`;
     const posts = await db.query(postsQuery, params);
     res.render("feed", { announcements: announcements.rows, posts: posts.rows, trending: trending.rows, search });
-  } catch (err) { res.status(500).send("Error loading feed"); }
+  } catch (err) { 
+    console.error(err);
+    res.status(500).send("Error loading feed"); 
+  }
 });
 
-// SETTINGS: Match the action="/settings/update" in your EJS
 app.get("/settings", (req, res) => {
   if (!req.isAuthenticated()) return res.redirect("/login");
   res.render("settings", { user: req.user, search: "" });
