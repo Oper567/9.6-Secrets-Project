@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin HQ | Apugo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#0f172a] text-slate-200 min-h-screen p-4 md:p-8">
+    <div class="max-w-6xl mx-auto">
+        <div class="flex justify-between items-center mb-8 border-b border-slate-800 pb-6">
+            <div>
+                <h1 class="text-3xl font-black italic text-white uppercase tracking-tighter">Admin <span class="text-blue-500">HQ</span></h1>
+                <p class="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Village Management System</p>
+            </div>
+            <div class="bg-slate-900/50 border border-slate-800 p-4 rounded-2xl flex items-center gap-4">
+                <div class="text-right">
+                    <p class="text-[10px] text-slate-500 uppercase font-black">Total Villagers</p>
+                    <p class="text-2xl font-black text-white"><%= totalUsers %></p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-slate-900/30 border border-slate-800 rounded-3xl overflow-hidden">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-800/50 text-slate-400 text-[10px] uppercase font-black tracking-widest">
+                        <th class="p-5">Villager</th>
+                        <th class="p-5">Post Description</th>
+                        <th class="p-5 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800">
+                    <% allPosts.forEach(post => { %>
+                        <tr class="hover:bg-white/5 transition-colors">
+                            <td class="p-5">
+                                <span class="font-bold text-blue-400">@<%= post.author.split('@')[0] %></span>
+                            </td>
+                            <td class="p-5">
+                                <p class="text-sm text-slate-400 truncate max-w-xs"><%= post.description %></p>
+                            </td>
+                            <td class="p-5">
+                                <div class="flex justify-end gap-2">
+                                    <form action="/event/<%= post.id %>/pin" method="POST">
+                                        <button class="px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all <%= post.is_pinned ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20' : 'bg-slate-800 text-slate-300 hover:bg-slate-700' %>">
+                                            <%= post.is_pinned ? '📌 Pinned' : 'Pin' %>
+                                        </button>
+                                    </form>
+                                    <form action="/event/<%= post.id %>/delete" method="POST">
+                                        <button class="bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all">
+                                            Delete
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    <% }) %>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

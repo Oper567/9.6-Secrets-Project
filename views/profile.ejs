@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Profile | Apugo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background: #020617; font-family: 'Plus Jakarta Sans', sans-serif; }
+    </style>
+</head>
+<body class="text-slate-200 pb-20">
+    <div class="max-w-4xl mx-auto p-6">
+        <div class="bg-slate-900/40 border border-slate-800 p-8 rounded-[3rem] text-center mb-10">
+            <div class="w-24 h-24 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-full mx-auto mb-4 flex items-center justify-center text-3xl font-black">
+                <%= user.email[0].toUpperCase() %>
+            </div>
+            <h1 class="text-2xl font-black text-white">@<%= user.email.split('@')[0] %></h1>
+            <p class="text-blue-500 text-xs font-black uppercase tracking-widest mt-1"><%= user.role %></p>
+            
+            <div class="flex justify-center gap-12 mt-8">
+                <div>
+                    <p class="text-2xl font-black text-white"><%= posts.length %></p>
+                    <p class="text-[10px] text-slate-500 uppercase font-black">Posts</p>
+                </div>
+                <div>
+                    <p class="text-2xl font-black text-white"><%= unreadCount %></p>
+                    <p class="text-[10px] text-slate-500 uppercase font-black">Alerts</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <% posts.forEach(post => { %>
+                <div class="aspect-square bg-slate-900 rounded-2xl overflow-hidden border border-slate-800 group relative">
+                    <% if (post.image_url) { %>
+                        <% if (post.media_type === 'video') { %>
+                            <video src="<%= post.image_url %>" class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all"></video>
+                        <% } else { %>
+                            <img src="<%= post.image_url %>" class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all">
+                        <% } %>
+                    <% } %>
+                    <div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <form action="/event/<%= post.id %>/delete" method="POST">
+                            <button class="bg-red-500 text-white text-[10px] font-black px-4 py-2 rounded-xl uppercase">Delete</button>
+                        </form>
+                    </div>
+                </div>
+            <% }) %>
+        </div>
+    </div>
+
+    <nav class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/80 backdrop-blur-xl border border-white/10 px-8 py-4 rounded-full flex gap-10 shadow-2xl">
+        <a href="/feed" class="text-slate-400 hover:text-white">🏠</a>
+        <a href="/discover" class="text-slate-400 hover:text-white">🔍</a>
+        <a href="/profile" class="text-blue-500">👤</a>
+    </nav>
+</body>
+</html>

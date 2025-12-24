@@ -1,0 +1,17 @@
+
+body {
+  background-color: #1A1A1A;
+  background-image: url("/public/images/unnamed.jpg");
+}
+
+.centered {
+    padding-top: 200px;
+    text-align: center;
+}
+
+.secret-text {
+  text-align: center;
+  font-size: 2rem;
+  color: #fff;
+  background-color: #000;
+}

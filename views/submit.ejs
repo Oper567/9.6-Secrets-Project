@@ -1,0 +1,60 @@
+<%- include('partials/header') %>
+
+<style>
+  body {
+    background: #f7f7f7;
+    font-family: 'Segoe UI', sans-serif;
+  }
+
+  .jumbotron {
+    background: #fff;
+    border-radius: 1rem;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+    padding: 40px;
+    max-width: 600px;
+    margin: 50px auto;
+    text-align: center;
+  }
+
+  .jumbotron i {
+    color: #343a40;
+    margin-bottom: 20px;
+  }
+
+  .secret-text {
+    font-size: 1.2rem;
+    color: #555;
+    margin-bottom: 30px;
+  }
+
+  .form-control {
+    border-radius: 0.5rem;
+    margin-bottom: 15px;
+  }
+
+  .btn-dark {
+    background-color: #343a40;
+    border: none;
+  }
+
+  .btn-dark:hover {
+    background-color: #23272b;
+  }
+</style>
+
+<div class="container">
+  <div class="jumbotron">
+    <i class="fas fa-key fa-6x"></i>
+    <h1 class="display-3">Secrets</h1>
+    <p class="secret-text">Don't keep your secrets, share them anonymously!</p>
+
+    <form action="/submit" method="POST">
+      <div class="form-group">
+        <input type="text" class="form-control text-center" name="secret" placeholder="What's your secret?" required>
+      </div>
+      <button type="submit" class="btn btn-dark w-100">Submit</button>
+    </form>
+  </div>
+</div>
+
+<%- include('partials/footer') %>
