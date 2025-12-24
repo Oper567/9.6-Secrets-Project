@@ -17,9 +17,7 @@ import pkg from 'multer-storage-cloudinary';
 
 dotenv.config();
 
-// FIX: This ensures the constructor is found correctly in both local and production environments
 const CloudinaryStorage = pkg.CloudinaryStorage || pkg;
-
 const PostgresStore = pgSession(session);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -28,13 +26,13 @@ const app = express();
 const port = process.env.PORT || 3000;
 const saltRounds = 10;
 
-/* ---------------- DATABASE CONNECTION (POOL) ---------------- */
+/* ---------------- DATABASE ---------------- */
 const db = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false } 
 });
 
-/* ---------------- CLOUDINARY CONFIG ---------------- */
+/* ---------------- CLOUDINARY ---------------- */
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -59,19 +57,11 @@ app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
 app.use(session({
-  store: new PostgresStore({
-    pool: db,
-    tableName: 'session',
-    createTableIfMissing: true 
-  }),
+  store: new PostgresStore({ pool: db, tableName: 'session', createTableIfMissing: true }),
   secret: process.env.SESSION_SECRET || "apugo_secret",
   resave: false,
   saveUninitialized: false,
-  cookie: { 
-    maxAge: 1000 * 60 * 60 * 24, 
-    secure: true,                
-    sameSite: 'lax' 
-  }
+  cookie: { maxAge: 1000 * 60 * 60 * 24, secure: true, sameSite: 'lax' }
 }));
 
 app.use(flash());
@@ -82,21 +72,20 @@ app.use(passport.session());
 async function sendWelcomeNote(userId) {
   try {
     await db.query("INSERT INTO notifications (user_id, sender_id, message) VALUES ($1, 1, $2)", 
-    [userId, "Welcome to Apugo Village! 🌴 Check the Discover tab to see what's trending."]);
-  } catch (err) { console.error("Welcome Note Error:", err); }
+    [userId, "Welcome to Apugo Village! 🌴"]);
+  } catch (err) { console.error(err); }
 }
 
 app.use(async (req, res, next) => {
   res.locals.user = req.user || null;
   res.locals.messages = req.flash();
   res.locals.unreadCount = 0;
-  
   if (req.isAuthenticated()) {
     try {
       await db.query("UPDATE users SET last_active = NOW() WHERE id = $1", [req.user.id]);
       const noteCount = await db.query("SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND is_read = false", [req.user.id]);
       res.locals.unreadCount = noteCount.rows[0].count;
-    } catch (e) { console.error("Global Var Error:", e); }
+    } catch (e) { console.error(e); }
   }
   next();
 });
@@ -176,26 +165,44 @@ app.get("/feed", async (req, res) => {
   } catch (err) { res.status(500).send("Error loading feed"); }
 });
 
-app.get("/settings", async (req, res) => {
-    if (!req.isAuthenticated()) return res.redirect("/login");
-    res.render("settings", { search: "" });
+// SETTINGS: Match the action="/settings/update" in your EJS
+app.get("/settings", (req, res) => {
+  if (!req.isAuthenticated()) return res.redirect("/login");
+  res.render("settings", { user: req.user, search: "" });
+});
+
+app.post("/settings/update", async (req, res) => {
+  if (!req.isAuthenticated()) return res.redirect("/login");
+  const { email, newPassword } = req.body;
+  try {
+    await db.query("UPDATE users SET email = $1 WHERE id = $2", [email, req.user.id]);
+    if (newPassword && newPassword.trim() !== "") {
+      const hash = await bcrypt.hash(newPassword, saltRounds);
+      await db.query("UPDATE users SET password = $1 WHERE id = $2", [hash, req.user.id]);
+    }
+    req.flash("success", "Settings updated!");
+    res.redirect("/settings");
+  } catch (err) {
+    console.error(err);
+    res.redirect("/settings");
+  }
 });
 
 app.get("/profile", async (req, res) => {
-    if (!req.isAuthenticated()) return res.redirect("/login");
-    try {
-        const result = await db.query("SELECT * FROM events WHERE created_by = $1 AND is_deleted = false ORDER BY created_at DESC", [req.user.id]);
-        res.render("profile", { posts: result.rows, search: "" });
-    } catch (e) { res.redirect("/feed"); }
+  if (!req.isAuthenticated()) return res.redirect("/login");
+  try {
+    const result = await db.query("SELECT * FROM events WHERE created_by = $1 AND is_deleted = false ORDER BY created_at DESC", [req.user.id]);
+    res.render("profile", { posts: result.rows, search: "" });
+  } catch (e) { res.redirect("/feed"); }
 });
 
 app.get("/api/notifications", async (req, res) => {
-    if (!req.isAuthenticated()) return res.json([]);
-    try {
-        const result = await db.query("SELECT * FROM notifications WHERE user_id = $1 AND is_read = false", [req.user.id]);
-        await db.query("UPDATE notifications SET is_read = true WHERE user_id = $1", [req.user.id]);
-        res.json(result.rows);
-    } catch (e) { res.json([]); }
+  if (!req.isAuthenticated()) return res.json([]);
+  try {
+    const result = await db.query("SELECT * FROM notifications WHERE user_id = $1 AND is_read = false", [req.user.id]);
+    await db.query("UPDATE notifications SET is_read = true WHERE user_id = $1", [req.user.id]);
+    res.json(result.rows);
+  } catch (e) { res.json([]); }
 });
 
 app.post("/event/create", upload.single("localMedia"), async (req, res) => {
@@ -207,7 +214,7 @@ app.post("/event/create", upload.single("localMedia"), async (req, res) => {
       ["Post", req.body.description, mediaPath, req.user.id, req.user.role === 'admin', mediaType]);
     res.redirect("/feed");
   } catch (err) {
-    console.error("Create Post Error:", err);
+    console.error(err);
     res.redirect("/feed");
   }
 });
@@ -226,19 +233,19 @@ app.post("/event/:id/like", async (req, res) => {
 });
 
 app.post("/event/:id/comment", async (req, res) => {
-    if (!req.isAuthenticated()) return res.redirect("/login");
-    try {
-        await db.query("INSERT INTO comments (event_id, user_id, content) VALUES ($1, $2, $3)", [req.params.id, req.user.id, req.body.content]);
-        res.redirect("back");
-    } catch (err) { res.redirect("back"); }
+  if (!req.isAuthenticated()) return res.redirect("/login");
+  try {
+    await db.query("INSERT INTO comments (event_id, user_id, content) VALUES ($1, $2, $3)", [req.params.id, req.user.id, req.body.content]);
+    res.redirect("back");
+  } catch (err) { res.redirect("back"); }
 });
 
 app.post("/event/:id/delete", async (req, res) => {
-    if (!req.isAuthenticated()) return res.redirect("/login");
-    try {
-        await db.query("UPDATE events SET is_deleted = true WHERE id = $1 AND (created_by = $2 OR (SELECT role FROM users WHERE id = $2) = 'admin')", [req.params.id, req.user.id]);
-        res.redirect("back");
-    } catch (err) { res.redirect("back"); }
+  if (!req.isAuthenticated()) return res.redirect("/login");
+  try {
+    await db.query("UPDATE events SET is_deleted = true WHERE id = $1 AND (created_by = $2 OR (SELECT role FROM users WHERE id = $2) = 'admin')", [req.params.id, req.user.id]);
+    res.redirect("back");
+  } catch (err) { res.redirect("back"); }
 });
 
 app.listen(port, () => console.log(`🚀 Village Square live at port ${port}`));
