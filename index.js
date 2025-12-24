@@ -12,13 +12,10 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import multer from "multer";
-import { v2 as cloudinary } from 'cloudinary';
-import pkg from 'multer-storage-cloudinary';
+import { createClient } from '@supabase/supabase-js';
 
 dotenv.config();
 
-// FIX: Handle ESM vs CommonJS import for CloudinaryStorage
-const CloudinaryStorage = pkg.CloudinaryStorage || pkg;
 const PostgresStore = pgSession(session);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,22 +30,9 @@ const db = new pg.Pool({
   ssl: { rejectUnauthorized: false } 
 });
 
-/* ---------------- CLOUDINARY ---------------- */
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
-
-const storage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: 'apugo_village',
-    resource_type: 'auto',
-    allowed_formats: ['jpg', 'png', 'jpeg', 'mp4', 'mov']
-  },
-});
-const upload = multer({ storage: storage });
+/* ---------------- SUPABASE STORAGE ---------------- */
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+const upload = multer({ storage: multer.memoryStorage() });
 
 /* ---------------- MIDDLEWARE ---------------- */
 app.set("trust proxy", 1); 
@@ -227,13 +211,36 @@ app.get("/api/notifications", async (req, res) => {
   } catch (e) { res.json([]); }
 });
 
+/* ---------------- UPDATED CREATE POST (SUPABASE) ---------------- */
 app.post("/event/create", upload.single("localMedia"), async (req, res) => {
   if (!req.isAuthenticated()) return res.redirect("/login");
   try {
-    const mediaPath = req.file ? req.file.path : null;
-    const mediaType = (req.file && req.file.mimetype && req.file.mimetype.startsWith("video")) ? 'video' : 'image';
-    await db.query("INSERT INTO events (title, description, image_url, created_by, is_announcement, media_type) VALUES ($1,$2,$3,$4,$5,$6)", 
-      ["Post", req.body.description, mediaPath, req.user.id, req.user.role === 'admin', mediaType]);
+    let mediaUrl = null;
+    let mediaType = 'image';
+
+    if (req.file) {
+      const fileName = `${Date.now()}-${req.file.originalname}`;
+      const { data, error } = await supabase.storage
+        .from('apugo_village') // MUST MATCH BUCKET NAME IN SUPABASE
+        .upload(fileName, req.file.buffer, {
+          contentType: req.file.mimetype,
+          upsert: true
+        });
+
+      if (error) throw error;
+
+      const { data: publicData } = supabase.storage
+        .from('apugo_village')
+        .getPublicUrl(fileName);
+      
+      mediaUrl = publicData.publicUrl;
+      mediaType = req.file.mimetype.startsWith("video") ? 'video' : 'image';
+    }
+
+    await db.query(
+      "INSERT INTO events (title, description, image_url, created_by, is_announcement, media_type) VALUES ($1,$2,$3,$4,$5,$6)", 
+      ["Post", req.body.description, mediaUrl, req.user.id, req.user.role === 'admin', mediaType]
+    );
     res.redirect("/feed");
   } catch (err) {
     console.error("Post Creation Error:", err);
