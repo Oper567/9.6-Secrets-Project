@@ -13,7 +13,10 @@ import path from "path";
 import { fileURLToPath } from "url";
 import multer from "multer";
 import { v2 as cloudinary } from 'cloudinary';
-import { CloudinaryStorage } from 'multer-storage-cloudinary';
+import pkg from 'multer-storage-cloudinary'; // Updated Import
+
+// Destructure CloudinaryStorage from the default export
+const { CloudinaryStorage } = pkg;
 
 dotenv.config();
 
@@ -60,7 +63,11 @@ app.use(session({
   secret: process.env.SESSION_SECRET || "apugo_secret",
   resave: false,
   saveUninitialized: false,
-  cookie: { maxAge: 1000 * 60 * 60 * 24, secure: process.env.NODE_ENV === "production", sameSite: 'lax' }
+  cookie: { 
+    maxAge: 1000 * 60 * 60 * 24, 
+    secure: process.env.NODE_ENV === "production", 
+    sameSite: 'lax' 
+  }
 }));
 
 app.use(flash());
