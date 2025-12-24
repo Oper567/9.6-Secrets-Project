@@ -17,7 +17,9 @@ import pkg from 'multer-storage-cloudinary';
 
 dotenv.config();
 
-const { CloudinaryStorage } = pkg;
+// FIX: This ensures the constructor is found correctly in both local and production environments
+const CloudinaryStorage = pkg.CloudinaryStorage || pkg;
+
 const PostgresStore = pgSession(session);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -174,7 +176,6 @@ app.get("/feed", async (req, res) => {
   } catch (err) { res.status(500).send("Error loading feed"); }
 });
 
-/* ---------------- NEWLY ADDED ROUTES ---------------- */
 app.get("/settings", async (req, res) => {
     if (!req.isAuthenticated()) return res.redirect("/login");
     res.render("settings", { search: "" });
@@ -199,34 +200,45 @@ app.get("/api/notifications", async (req, res) => {
 
 app.post("/event/create", upload.single("localMedia"), async (req, res) => {
   if (!req.isAuthenticated()) return res.redirect("/login");
-  const mediaPath = req.file ? req.file.path : null;
-  const mediaType = (req.file && req.file.mimetype && req.file.mimetype.startsWith("video")) ? 'video' : 'image';
-  await db.query("INSERT INTO events (title, description, image_url, created_by, is_announcement, media_type) VALUES ($1,$2,$3,$4,$5,$6)", 
-    ["Post", req.body.description, mediaPath, req.user.id, req.user.role === 'admin', mediaType]);
-  res.redirect("/feed");
+  try {
+    const mediaPath = req.file ? req.file.path : null;
+    const mediaType = (req.file && req.file.mimetype && req.file.mimetype.startsWith("video")) ? 'video' : 'image';
+    await db.query("INSERT INTO events (title, description, image_url, created_by, is_announcement, media_type) VALUES ($1,$2,$3,$4,$5,$6)", 
+      ["Post", req.body.description, mediaPath, req.user.id, req.user.role === 'admin', mediaType]);
+    res.redirect("/feed");
+  } catch (err) {
+    console.error("Create Post Error:", err);
+    res.redirect("/feed");
+  }
 });
 
 app.post("/event/:id/like", async (req, res) => {
   if (!req.isAuthenticated()) return res.redirect("/login");
-  const check = await db.query("SELECT * FROM likes WHERE user_id=$1 AND event_id=$2", [req.user.id, req.params.id]);
-  if (check.rows.length) {
-    await db.query("DELETE FROM likes WHERE user_id=$1 AND event_id=$2", [req.user.id, req.params.id]);
-  } else {
-    await db.query("INSERT INTO likes (user_id,event_id) VALUES ($1,$2)", [req.user.id, req.params.id]);
-  }
-  res.redirect("back");
+  try {
+    const check = await db.query("SELECT * FROM likes WHERE user_id=$1 AND event_id=$2", [req.user.id, req.params.id]);
+    if (check.rows.length) {
+      await db.query("DELETE FROM likes WHERE user_id=$1 AND event_id=$2", [req.user.id, req.params.id]);
+    } else {
+      await db.query("INSERT INTO likes (user_id,event_id) VALUES ($1,$2)", [req.user.id, req.params.id]);
+    }
+    res.redirect("back");
+  } catch (err) { res.redirect("back"); }
 });
 
 app.post("/event/:id/comment", async (req, res) => {
     if (!req.isAuthenticated()) return res.redirect("/login");
-    await db.query("INSERT INTO comments (event_id, user_id, content) VALUES ($1, $2, $3)", [req.params.id, req.user.id, req.body.content]);
-    res.redirect("back");
+    try {
+        await db.query("INSERT INTO comments (event_id, user_id, content) VALUES ($1, $2, $3)", [req.params.id, req.user.id, req.body.content]);
+        res.redirect("back");
+    } catch (err) { res.redirect("back"); }
 });
 
 app.post("/event/:id/delete", async (req, res) => {
     if (!req.isAuthenticated()) return res.redirect("/login");
-    await db.query("UPDATE events SET is_deleted = true WHERE id = $1 AND (created_by = $2 OR (SELECT role FROM users WHERE id = $2) = 'admin')", [req.params.id, req.user.id]);
-    res.redirect("back");
+    try {
+        await db.query("UPDATE events SET is_deleted = true WHERE id = $1 AND (created_by = $2 OR (SELECT role FROM users WHERE id = $2) = 'admin')", [req.params.id, req.user.id]);
+        res.redirect("back");
+    } catch (err) { res.redirect("back"); }
 });
 
 app.listen(port, () => console.log(`🚀 Village Square live at port ${port}`));
