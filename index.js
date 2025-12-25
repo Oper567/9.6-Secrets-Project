@@ -24,10 +24,23 @@ const app = express();
 const port = process.env.PORT || 3000;
 const saltRounds = 10;
 
-/* ---------------- DATABASE ---------------- */
+/* ---------------- DATABASE (FIXED FOR TIMEOUTS) ---------------- */
 const db = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false } 
+  ssl: { rejectUnauthorized: false },
+  // These 3 lines fix the "Unable to check out connection" timeout error
+  connectionTimeoutMillis: 10000, // Give it 10 seconds to connect
+  idleTimeoutMillis: 30000,       // Keep idle connections open for 30s
+  max: 10                         // Limit total connections to avoid overloading the pooler
+});
+
+// Test the connection on startup to log specific errors
+db.connect((err, client, release) => {
+  if (err) {
+    return console.error('❌ Database connection error:', err.stack);
+  }
+  console.log('✅ Connected to Supabase Database');
+  release();
 });
 
 /* ---------------- SUPABASE STORAGE ---------------- */
@@ -42,7 +55,12 @@ app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
 app.use(session({
-  store: new PostgresStore({ pool: db, tableName: 'session', createTableIfMissing: true }),
+  store: new PostgresStore({ 
+    pool: db, 
+    tableName: 'session', 
+    createTableIfMissing: true,
+    pruneSessionInterval: 60 * 30 // Prune every 30 mins
+  }),
   secret: process.env.SESSION_SECRET || "apugo_secret",
   resave: false,
   saveUninitialized: false,
@@ -221,7 +239,7 @@ app.post("/event/create", upload.single("localMedia"), async (req, res) => {
     if (req.file) {
       const fileName = `${Date.now()}-${req.file.originalname}`;
       const { data, error } = await supabase.storage
-        .from('apugo_village') // MUST MATCH BUCKET NAME IN SUPABASE
+        .from('apugo_village') 
         .upload(fileName, req.file.buffer, {
           contentType: req.file.mimetype,
           upsert: true
