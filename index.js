@@ -541,33 +541,32 @@ app.post("/event/:id/delete", async (req, res) => {
 
 /* --- PROFILE & ADMIN --- */
 app.get('/profile', async (req, res) => {
+    if (!req.isAuthenticated()) return res.redirect("/login");
+    
     try {
         const userId = req.user.id;
 
-        // 1. Fetch User Posts (Secrets)
-        // Adjust the query based on your DB (MySQL uses ? , PostgreSQL uses $1)
+        // 1. Fetch User Posts (Changed table name to 'events' and fixed $1 syntax)
         const postsResult = await db.query(
-            'SELECT * FROM posts WHERE user_id = ? ORDER BY created_at DESC', 
+            'SELECT * FROM events WHERE created_by = $1 AND is_deleted = false ORDER BY created_at DESC', 
             [userId]
         );
-        const posts = postsResult.rows || postsResult || [];
+        const posts = postsResult.rows;
 
         // 2. Fetch Kinship Count (Accepted Friends)
         const friendResult = await db.query(
-            'SELECT COUNT(*) as count FROM friends WHERE (user_id = ? OR friend_id = ?) AND status = "accepted"', 
-            [userId, userId]
+            "SELECT COUNT(*) as count FROM friendships WHERE (sender_id = $1 OR receiver_id = $1) AND status = 'accepted'", 
+            [userId]
         );
-        // Extract count safely regardless of DB driver format
-        const friendCount = friendResult[0]?.count || friendResult.rows?.[0]?.count || 0;
+        const friendCount = friendResult.rows[0].count;
 
         // 3. Fetch Unread Alerts Count
         const alertResult = await db.query(
-            'SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = false', 
+            'SELECT COUNT(*) as count FROM notifications WHERE user_id = $1 AND is_read = false', 
             [userId]
         );
-        const unreadCount = alertResult[0]?.count || alertResult.rows?.[0]?.count || 0;
+        const unreadCount = alertResult.rows[0].count;
 
-        // 4. Render with ALL keys the EJS expects
         res.render('profile', {
             user: req.user,
             posts: posts,
@@ -577,33 +576,35 @@ app.get('/profile', async (req, res) => {
 
     } catch (error) {
         console.error("Critical Profile Error:", error);
-        // Instead of just a string, send the error to see what's wrong in the browser during dev
         res.status(500).send(`Error loading profile: ${error.message}`);
     }
 });
+
 app.get('/notifications', async (req, res) => {
+    if (!req.isAuthenticated()) return res.redirect("/login");
+
     try {
         const userId = req.user.id;
 
-        // 1. Fetch notifications for the logged-in user
-        // Adjust query based on your table/DB (e.g., db.query for MySQL, pool.query for PG)
+        // 1. Fetch notifications using Postgres $1 syntax
         const result = await db.query(
-            'SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC', 
+            'SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC', 
             [userId]
         );
         
-        // Handle different DB result formats (rows for PG, direct array for MySQL)
-        const notifications = result.rows || result || [];
+        // Postgres results are always in .rows
+        const notifications = result.rows;
 
         // 2. Render the notifications.ejs file
         res.render('notifications', {
             user: req.user,
-            notifications: notifications
+            notifications: notifications,
+            search: "" // Keeping consistency with your other routes
         });
 
-        // 3. (Optional) Mark notifications as read once they are viewed
+        // 3. Mark notifications as read using $1
         await db.query(
-            'UPDATE notifications SET is_read = true WHERE user_id = ? AND is_read = false',
+            'UPDATE notifications SET is_read = true WHERE user_id = $1 AND is_read = false',
             [userId]
         );
 
