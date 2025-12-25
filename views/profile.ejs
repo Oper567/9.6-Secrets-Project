@@ -70,7 +70,9 @@
                         <p class="text-[9px] text-slate-500 uppercase font-black tracking-tighter">Secrets</p>
                     </div>
                     <div class="text-center border-x border-slate-800 px-10">
-                        <p class="text-xl font-black text-white"><%= friendCount || 0 %></p>
+                        <p class="text-xl font-black text-white">
+                        <%= (typeof friendCount !== 'undefined') ? friendCount : 0 %>
+                        </p>
                         <p class="text-[9px] text-slate-500 uppercase font-black tracking-tighter">Kinship</p>
                     </div>
                     <div class="text-center">

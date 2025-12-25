@@ -486,12 +486,23 @@ app.post("/event/:id/delete", async (req, res) => {
 
 /* --- PROFILE & ADMIN --- */
 
-app.get("/profile", async (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect("/login");
-  try {
-    const result = await db.query("SELECT * FROM events WHERE created_by = $1 AND is_deleted = false ORDER BY created_at DESC", [req.user.id]);
-    res.render("profile", { posts: result.rows, search: "" });
-  } catch (e) { res.redirect("/feed"); }
+// index.js (approx line 493 based on your error)
+app.get('/profile', async (req, res) => {
+    try {
+        // ... your existing logic to get user and posts ...
+        
+        // 1. Get the count of friends (example query)
+        const friendCount = await db.query('SELECT COUNT(*) FROM connections WHERE user_id = ?', [req.user.id]);
+
+        res.render('profile', {
+            user: req.user,
+            posts: userPosts,
+            // MAKE SURE THIS IS SENT:
+            friendCount: friendCount[0].count || 0 
+        });
+    } catch (err) {
+        res.status(500).send("Error loading profile");
+    }
 });
 
 app.get("/settings", (req, res) => req.isAuthenticated() ? res.render("settings", { user: req.user, search: "" }) : res.redirect("/login"));
@@ -500,7 +511,7 @@ app.get("/admin", isAdmin, async (req, res) => {
   try {
     const users = await db.query("SELECT id, email, role, is_verified FROM users ORDER BY id DESC");
     res.render("admin-dashboard", { users: users.rows, search: "" });
-  } catch (err) { res.redirect("/feed"); }
+  } catch (err) { res.redirect(req.get('Referrer') || '/feed'); }
 });
 
 app.listen(port, () => console.log(`🚀 Village Square live at port ${port}`));
