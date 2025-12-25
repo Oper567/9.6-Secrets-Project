@@ -1,241 +1,234 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Apugo | Messages</title>
-
-  <script src="https://cdn.tailwindcss.com"></script>
-
-  <style>
-    body {
-      background-color: #020617;
-      height: 100vh;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .chat-container {
-      flex: 1;
-      overflow-y: auto;
-      scroll-behavior: smooth;
-    }
-
-    .bubble {
-      max-width: 85%;
-      padding: 10px 14px;
-      font-size: 13px;
-      font-weight: 500;
-      margin-bottom: 8px;
-      word-wrap: break-word;
-    }
-
-    .bubble-me {
-      background: #2563eb;
-      color: white;
-      align-self: flex-end;
-      border-radius: 18px 18px 4px 18px;
-    }
-
-    .bubble-them {
-      background: #1e293b;
-      color: #cbd5e1;
-      align-self: flex-start;
-      border-radius: 18px 18px 18px 4px;
-    }
-
-    .friend-item.active {
-      background-color: #0f172a;
-      border-left: 4px solid #2563eb;
-    }
-
-    #inputDock {
-      position: sticky;
-      bottom: 0;
-    }
-  </style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Apugo | Whispers</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #020617; height: 100vh; overflow: hidden; display: flex; flex-direction: column; font-family: 'Inter', sans-serif; }
+        .chat-container { flex: 1; overflow-y: auto; scroll-behavior: smooth; }
+        .chat-container::-webkit-scrollbar { width: 4px; }
+        .chat-container::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
+        
+        /* Message Bubbles */
+        .bubble { max-width: 80%; padding: 12px 16px; font-size: 14px; margin-bottom: 8px; line-height: 1.5; }
+        .bubble-me { background: #2563eb; color: white; align-self: flex-end; border-radius: 20px 20px 4px 20px; box-shadow: 0 4px 15px rgba(37, 99, 235, 0.2); }
+        .bubble-them { background: #1e293b; color: #cbd5e1; align-self: flex-start; border-radius: 20px 20px 20px 4px; border: 1px border #334155; }
+        
+        .friend-item.active { background-color: #0f172a; border-left: 4px solid #2563eb; }
+        .glass-nav { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(12px); }
+    </style>
 </head>
 
 <body class="text-slate-200">
 
-<!-- NAV -->
-<nav class="bg-slate-900 border-b border-slate-800 p-3 flex items-center gap-3">
-  <a href="/feed" class="text-slate-400 hover:text-white">←</a>
-  <div>
-    <h1 class="font-black text-blue-500 italic text-lg">MESSAGES</h1>
-    <p id="chatStatus" class="text-[9px] text-slate-500 uppercase font-black tracking-widest">
-      Village Square
-    </p>
-  </div>
+<nav class="glass-nav border-b border-slate-800 p-4 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto flex justify-between items-center">
+        <div class="flex items-center gap-4">
+            <a href="/feed" class="text-slate-400 hover:text-white transition text-xl">←</a>
+            <div>
+                <h1 class="font-black text-blue-500 italic text-xl tracking-tighter">WHISPERS</h1>
+                <p id="chatStatus" class="text-[9px] text-slate-500 uppercase font-black tracking-[0.2em]">Village Secret Square</p>
+            </div>
+        </div>
+        <div class="hidden md:block">
+            <span class="text-[10px] font-black text-slate-600 uppercase tracking-widest">End-to-End Encrypted</span>
+        </div>
+    </div>
 </nav>
 
-<div class="flex flex-1 overflow-hidden">
+<div class="flex flex-1 overflow-hidden max-w-7xl mx-auto w-full">
 
-  <!-- FRIEND LIST -->
-  <aside id="friendsList"
-    class="w-20 md:w-64 bg-slate-950 border-r border-slate-800 overflow-y-auto shrink-0">
-
-    <% friends.forEach(f => { %>
-      <div
-        id="friend-<%= f.id %>"
-        class="friend-item p-3 md:p-4 flex flex-col md:flex-row items-center gap-3 cursor-pointer border-b border-slate-900/50 hover:bg-slate-900"
-        data-id="<%= f.id %>"
-        data-name="<%= f.email.split('@')[0] %>"
-      >
-        <div class="w-10 h-10 bg-gradient-to-tr from-blue-700 to-blue-500 rounded-full flex items-center justify-center font-bold uppercase text-sm">
-          <%= f.email[0] %>
+    <aside id="friendsList" class="w-20 md:w-80 bg-slate-950 border-r border-slate-800 overflow-y-auto shrink-0 custom-scrollbar">
+        <div class="p-4 border-b border-slate-900 hidden md:block">
+            <input type="text" placeholder="Search friends..." class="w-full bg-slate-900 border border-slate-800 rounded-lg py-2 px-3 text-xs outline-none focus:border-blue-600 transition">
         </div>
-        <span class="hidden md:block text-xs font-bold truncate">
-          @<%= f.email.split('@')[0] %>
-        </span>
-      </div>
-    <% }) %>
+        
+        <% if (friends && friends.length > 0) { %>
+            <% friends.forEach(f => { %>
+                <div id="friend-<%= f.id %>" 
+                    class="friend-item p-4 flex flex-col md:flex-row items-center gap-4 cursor-pointer border-b border-slate-900/50 hover:bg-slate-900 transition-all group"
+                    data-id="<%= f.id %>" 
+                    data-name="<%= f.email.split('@')[0] %>">
+                    
+                    <div class="relative">
+                        <div class="w-12 h-12 bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-full flex items-center justify-center font-bold uppercase text-blue-500 group-hover:scale-105 transition shadow-lg">
+                            <%= f.email[0] %>
+                        </div>
+                        <span class="absolute bottom-0 right-0 w-3 h-3 border-2 border-slate-950 rounded-full bg-green-500"></span>
+                    </div>
 
-  </aside>
+                    <div class="hidden md:block flex-1 min-w-0">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm font-bold truncate">@<%= f.email.split('@')[0] %></span>
+                        </div>
+                        <p class="text-[10px] text-slate-500 truncate uppercase tracking-tighter mt-0.5">Click to open scroll</p>
+                    </div>
+                </div>
+            <% }) %>
+        <% } else { %>
+            <div class="p-8 text-center hidden md:block">
+                <p class="text-[10px] font-black text-slate-600 uppercase">No connections yet</p>
+            </div>
+        <% } %>
+    </aside>
 
-  <!-- CHAT -->
-  <main class="flex-1 flex flex-col bg-slate-950">
+    <main class="flex-1 flex flex-col bg-slate-950/50 relative">
+        
+        <div id="chatWindow" class="chat-container p-6 flex flex-col">
+            <div id="emptyState" class="my-auto text-center animate-fade-in">
+                <div class="text-5xl mb-6">🏮</div>
+                <h2 class="font-black text-slate-400 uppercase tracking-widest text-sm">Select a contact</h2>
+                <p class="text-[10px] text-slate-600 mt-2 max-w-[200px] mx-auto">Private whispers are only visible to you and the recipient.</p>
+            </div>
+        </div>
 
-    <div id="chatWindow" class="chat-container p-4 flex flex-col">
-      <div id="emptyState" class="mt-20 text-center">
-        <div class="text-2xl mb-4">🌴</div>
-        <h2 class="font-black text-slate-400">Select a villager to chat</h2>
-        <p class="text-xs text-slate-600">Chat is private between you two.</p>
-      </div>
-    </div>
+        <div id="inputDock" class="hidden p-4 bg-slate-900/80 border-t border-slate-800 backdrop-blur-md">
+            <form id="chatForm" class="flex gap-3 max-w-4xl mx-auto items-center">
+                <div class="flex-1 relative">
+                    <input id="msgInput" type="text" autocomplete="off" placeholder="Write a whisper..." 
+                        class="w-full bg-slate-950 border border-slate-800 rounded-2xl px-5 py-3.5 text-sm outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-all" />
+                </div>
+                <button type="submit" class="bg-blue-600 hover:bg-blue-500 w-12 h-12 rounded-2xl text-white flex items-center justify-center transition active:scale-90 shadow-lg shadow-blue-900/20">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+                    </svg>
+                </button>
+            </form>
+        </div>
 
-    <!-- INPUT -->
-    <div id="inputDock" class="hidden p-3 bg-slate-900/50 border-t border-slate-800">
-      <form id="chatForm" class="flex gap-2 max-w-4xl mx-auto">
-        <input
-          id="msgInput"
-          type="text"
-          placeholder="Write something..."
-          class="flex-1 bg-slate-950 border border-slate-800 rounded-2xl px-4 py-3 text-sm outline-none focus:border-blue-600"
-        />
-        <button
-          class="bg-blue-600 hover:bg-blue-500 w-12 h-12 rounded-2xl text-white"
-        >
-          ➤
-        </button>
-      </form>
-    </div>
-
-  </main>
+    </main>
 </div>
 
 <script>
 /* =============================
-   STATE
+    STATE MANAGEMENT
 ============================= */
 const currentUserId = '<%= user.id %>';
-const targetUserFromFeed = '<%= targetUser %>';
+const targetUserFromFeed = "<%= typeof targetUser !== 'undefined' ? targetUser : '' %>";
 let currentFriendId = null;
 let lastMessageId = null;
 
+const chatWindow = document.getElementById('chatWindow');
+const inputDock = document.getElementById('inputDock');
+const chatStatus = document.getElementById('chatStatus');
+const msgInput = document.getElementById('msgInput');
+
 /* =============================
-   FRIEND CLICK (EVENT DELEGATION)
+    EVENT DELEGATION (SIDEBAR)
 ============================= */
 document.getElementById('friendsList').addEventListener('click', e => {
-  const item = e.target.closest('.friend-item');
-  if (!item) return;
-
-  const id = item.dataset.id;
-  const name = item.dataset.name;
-
-  if (currentFriendId === id) return;
-
-  selectFriend(id, name);
+    const item = e.target.closest('.friend-item');
+    if (!item) return;
+    selectFriend(item.dataset.id, item.dataset.name);
 });
 
-/* =============================
-   SELECT FRIEND
-============================= */
 async function selectFriend(id, name) {
-  currentFriendId = id;
-  lastMessageId = null;
+    if (currentFriendId === id) return;
+    
+    currentFriendId = id;
+    lastMessageId = null; // Reset for new chat
 
-  document.querySelectorAll('.friend-item').forEach(el =>
-    el.classList.remove('active')
-  );
-  document.getElementById(`friend-${id}`)?.classList.add('active');
+    // UI Updates
+    document.querySelectorAll('.friend-item').forEach(el => el.classList.remove('active'));
+    document.getElementById(`friend-${id}`)?.classList.add('active');
+    
+    inputDock.classList.remove('hidden');
+    chatStatus.innerHTML = `Whispering with <span class="text-blue-400">@${name}</span>`;
+    
+    // Show loading spinner
+    chatWindow.innerHTML = `
+        <div class="my-auto flex flex-col items-center">
+            <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+            <p class="text-[9px] font-black uppercase tracking-widest text-slate-600 mt-4">Opening scroll...</p>
+        </div>
+    `;
 
-  document.getElementById('emptyState')?.remove();
-  document.getElementById('inputDock').classList.remove('hidden');
-  document.getElementById('chatStatus').innerText = `Chatting with @${name}`;
-
-  document.getElementById('chatWindow').innerHTML =
-    '<p class="text-xs text-slate-600 text-center mt-6">Loading messages...</p>';
-
-  await fetchMessages(true);
+    await fetchMessages(true);
 }
 
 /* =============================
-   FETCH MESSAGES
+    MESSAGE FETCHING
 ============================= */
 async function fetchMessages(force = false) {
-  if (!currentFriendId) return;
+    if (!currentFriendId) return;
 
-  const res = await fetch(`/api/chat/${currentFriendId}`);
-  const messages = await res.json();
+    try {
+        const res = await fetch(`/api/chat/${currentFriendId}`);
+        const messages = await res.json();
 
-  if (!messages.length) return;
+        // Check if we actually need to re-render
+        if (!force && messages.length > 0 && messages[messages.length - 1].id === lastMessageId) return;
 
-  const last = messages[messages.length - 1];
-  if (!force && last.id === lastMessageId) return;
+        if (messages.length === 0) {
+            chatWindow.innerHTML = `
+                <div class="my-auto text-center opacity-30">
+                    <p class="text-[10px] font-black uppercase tracking-widest">The scroll is empty</p>
+                    <p class="text-[8px] uppercase mt-1">Break the silence below</p>
+                </div>`;
+            return;
+        }
 
-  const chat = document.getElementById('chatWindow');
-  chat.innerHTML = '';
+        chatWindow.innerHTML = ''; // Clear window
+        messages.forEach(m => {
+            const isMe = m.sender_id == currentUserId;
+            const time = new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            const div = document.createElement('div');
+            div.className = `bubble ${isMe ? 'bubble-me' : 'bubble-them'} animate-fade-in`;
+            div.innerHTML = `
+                <div class="break-words">${m.content}</div>
+                <div class="text-[8px] mt-1.5 opacity-60 font-black uppercase text-right tracking-tighter">${time}</div>
+            `;
+            chatWindow.appendChild(div);
+            lastMessageId = m.id;
+        });
 
-  messages.forEach(m => {
-    const div = document.createElement('div');
-    div.className = `bubble ${m.sender_id == currentUserId ? 'bubble-me' : 'bubble-them'}`;
-    div.innerText = m.content;
-    chat.appendChild(div);
-    lastMessageId = m.id;
-  });
-
-  chat.scrollTop = chat.scrollHeight;
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+    } catch (err) {
+        console.error("Village Whisper Error:", err);
+    }
 }
 
 /* =============================
-   SEND MESSAGE
+    MESSAGE SENDING
 ============================= */
 document.getElementById('chatForm').addEventListener('submit', async e => {
-  e.preventDefault();
+    e.preventDefault();
+    const content = msgInput.value.trim();
+    if (!content || !currentFriendId) return;
 
-  const input = document.getElementById('msgInput');
-  const content = input.value.trim();
-  if (!content || !currentFriendId) return;
+    msgInput.value = ''; // Instant clear for UX
 
-  input.value = '';
-
-  await fetch('/api/chat/send', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ receiverId: currentFriendId, content })
-  });
-
-  fetchMessages(true);
+    try {
+        await fetch('/api/chat/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ receiverId: currentFriendId, content })
+        });
+        fetchMessages(true); // Immediate update
+    } catch (err) {
+        console.error("Send error:", err);
+    }
 });
 
 /* =============================
-   AUTO OPEN FROM FEED
+    INIT & POLLING
 ============================= */
 window.addEventListener('load', () => {
-  if (targetUserFromFeed && targetUserFromFeed !== 'null') {
-    document.getElementById(`friend-${targetUserFromFeed}`)?.click();
-  }
+    // If we came from a "Message" button on the feed
+    if (targetUserFromFeed && targetUserFromFeed !== 'null' && targetUserFromFeed !== '') {
+        const friendEl = document.getElementById(`friend-${targetUserFromFeed}`);
+        if (friendEl) friendEl.click();
+    }
 });
 
-/* =============================
-   SAFE POLLING
-============================= */
+// Refresh chat every 3 seconds
 setInterval(() => {
-  if (currentFriendId) fetchMessages();
+    if (currentFriendId) fetchMessages();
 }, 3000);
-</script>
 
+</script>
 </body>
 </html>
