@@ -342,6 +342,29 @@ app.post("/settings/profile-pic", upload.single("avatar"), async (req, res) => {
         res.redirect("/feed");
     }
 });
+app.post("/login", async (req, res) => {
+    try {
+        console.log("Login attempt for:", req.body.email); // Check if this shows in Render logs
+        
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email: req.body.email,
+            password: req.body.password,
+        });
+
+        if (error) {
+            console.log("Auth Error:", error.message);
+            // This stops the spinner by sending the user back
+            return res.render("login", { messages: { error: error.message } });
+        }
+
+        console.log("Success! Redirecting...");
+        return res.redirect("/feed");
+
+    } catch (err) {
+        console.error("Critical System Error:", err);
+        return res.status(500).send("The village gates are jammed. Try again later.");
+    }
+});
 
 app.get("/auth/verify/:token", async (req, res) => {
     const { token } = req.params;

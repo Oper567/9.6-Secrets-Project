@@ -17,6 +17,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            overflow-x: hidden;
         }
 
         .glass-card { 
@@ -37,6 +38,11 @@
             background: rgba(2, 6, 23, 0.8);
             box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
         }
+
+        .btn-loading {
+            pointer-events: none;
+            opacity: 0.6;
+        }
     </style>
 </head>
 <body class="p-4 md:p-6">
@@ -55,21 +61,21 @@
                 <p class="text-slate-400 text-xs md:text-sm font-medium">Reconnect with the community.</p>
             </div>
 
-            <% if (messages.error) { %>
-                <div class="bg-red-500/10 border border-red-500/20 text-red-400 p-3.5 rounded-xl mb-6 text-[11px] md:text-xs font-bold animate__animated animate__shakeX flex items-center">
+            <% if (typeof messages !== 'undefined' && messages.error) { %>
+                <div id="error-alert" class="bg-red-500/10 border border-red-500/20 text-red-400 p-3.5 rounded-xl mb-6 text-[11px] md:text-xs font-bold animate__animated animate__shakeX flex items-center">
                     <i class="fa-solid fa-circle-exclamation mr-3 text-base"></i> <%= messages.error %>
                 </div>
             <% } %>
 
-            <form action="/login" method="POST" class="space-y-4">
+            <form action="/login" method="POST" id="loginForm" class="space-y-4">
                 <div>
                     <input type="email" name="email" placeholder="Village Email" required
-                        class="input-field w-full px-5 py-3.5 rounded-xl outline-none text-sm font-medium placeholder:text-slate-600">
+                        class="input-field w-full px-5 py-4 rounded-xl outline-none text-sm font-medium placeholder:text-slate-600">
                 </div>
 
                 <div class="relative">
                     <input type="password" name="password" id="password" placeholder="Password" required
-                        class="input-field w-full px-5 py-3.5 rounded-xl outline-none text-sm font-medium placeholder:text-slate-600 pr-16">
+                        class="input-field w-full px-5 py-4 rounded-xl outline-none text-sm font-medium placeholder:text-slate-600 pr-16">
                     
                     <button type="button" onclick="togglePassword()" id="toggleBtn" 
                         class="absolute right-5 top-1/2 -translate-y-1/2 text-[9px] uppercase font-black tracking-widest text-slate-500 hover:text-blue-400 transition-colors">
@@ -81,15 +87,15 @@
                     <a href="/forgot-password" class="text-[11px] font-bold text-blue-500 hover:text-blue-400 transition">Forgot Password?</a>
                 </div>
 
-                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-xl font-bold text-base shadow-lg shadow-blue-600/20 transition-all transform active:scale-95">
-                    Sign In
+                <button type="submit" id="submitBtn" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-xl font-bold text-base shadow-lg shadow-blue-600/20 transition-all transform active:scale-95 flex items-center justify-center gap-2">
+                    <span id="btnText">Sign In</span>
                 </button>
             </form>
 
             <div class="mt-8 relative">
                 <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-800/50"></div></div>
                 <div class="relative flex justify-center text-[9px] uppercase tracking-[0.2em]">
-                    <span class="bg-[#050b1d] px-3 text-slate-500 font-black">Continue With</span>
+                    <span class="bg-[#0b1224] px-3 text-slate-500 font-black">Continue With</span>
                 </div>
             </div>
 
@@ -110,6 +116,16 @@
     </div>
 
     <script>
+        const loginForm = document.getElementById('loginForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const btnText = document.getElementById('btnText');
+
+        // Handle Form Submission Spinning
+        loginForm.addEventListener('submit', function() {
+            submitBtn.classList.add('btn-loading');
+            btnText.innerHTML = '<i class="fas fa-circle-notch animate-spin mr-2"></i> Entering Village...';
+        });
+
         function togglePassword() {
             const passwordInput = document.getElementById('password');
             const toggleBtn = document.getElementById('toggleBtn');
