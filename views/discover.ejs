@@ -1,93 +1,217 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" />
-<title>Discover | Apugo Village</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" />
+    <title>Discover | Apugo Village</title>
 
-<!-- Tailwind -->
-<script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
 
-<!-- Icons -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"/>
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"/>
 
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
 
-    body {
-        background-color: #020617;
-        font-family: 'Plus Jakarta Sans', sans-serif;
-        -webkit-tap-highlight-color: transparent;
-        color: #e2e8f0;
-    }
+        body {
+            background-color: #020617;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
 
-    .glass-nav {
-        background: rgba(15, 23, 42, 0.9);
-        backdrop-filter: blur(20px);
-    }
+        .glass-nav {
+            background: rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(20px);
+        }
 
-    .masonry-grid {
-        column-count: 1;
-        column-gap: 1.5rem;
-    }
-    @media (min-width: 640px) { .masonry-grid { column-count: 2; } }
-    @media (min-width: 1024px) { .masonry-grid { column-count: 3; } }
+        /* Masonry */
+        .masonry-grid {
+            column-count: 1;
+            column-gap: 1.5rem;
+        }
+        @media (min-width: 640px) {
+            .masonry-grid { column-count: 2; }
+        }
+        @media (min-width: 1024px) {
+            .masonry-grid { column-count: 3; }
+        }
 
-    .break-inside-avoid { break-inside: avoid; margin-bottom: 1.5rem; }
+        .break-inside-avoid {
+            break-inside: avoid;
+            margin-bottom: 1.5rem;
+        }
 
-    @keyframes fadeUp {
-        from { opacity: 0; transform: translateY(20px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    .animate-card { animation: fadeUp 0.5s ease-out forwards; }
-
-    #mobileMenu { display: none; }
-</style>
+        /* Animation */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-card {
+            animation: fadeUp 0.5s ease-out forwards;
+        }
+    </style>
 </head>
 
-<body class="pb-32">
+<body class="text-slate-200 pb-32">
 
 <!-- NAVBAR -->
 <nav class="glass-nav border-b border-slate-800 sticky top-0 z-50">
     <div class="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
-        <div class="flex items-center gap-4">
-            <button id="menuBtn" class="lg:hidden text-slate-400 p-2">
-                <i class="fas fa-bars text-xl"></i>
-            </button>
-            <h1 class="text-xl font-black text-blue-500 italic tracking-tighter cursor-pointer" onclick="location.href='/feed'">APUGO</h1>
-        </div>
-        <div class="hidden lg:flex items-center gap-3">
-            <form action="/discover" method="GET" class="relative">
-                <input type="text" name="search" placeholder="Search secrets..." class="bg-slate-900 border border-slate-800 rounded-full py-1.5 pl-8 pr-4 text-[10px] uppercase font-black focus:border-blue-500 outline-none w-48 transition-all"/>
+
+        <h1
+            class="text-xl font-black text-blue-500 italic tracking-tighter cursor-pointer"
+            onclick="location.href='/feed'">
+            APUGO
+        </h1>
+
+        <div class="flex items-center gap-3">
+            <form action="/discover" method="GET" class="relative hidden sm:block">
+                <input
+                    type="text"
+                    name="search"
+                    placeholder="Search secrets..."
+                    class="bg-slate-900 border border-slate-800 rounded-full py-1.5 pl-8 pr-4 text-[10px] uppercase font-black focus:border-blue-500 outline-none w-48 transition-all" />
                 <i class="fas fa-search absolute left-3 top-2.5 text-slate-600 text-[10px]"></i>
             </form>
-            <a href="/logout" class="text-[9px] font-black text-slate-500 uppercase border border-slate-800 px-3 py-1.5 rounded-full hover:bg-red-900/20 hover:text-red-400 transition-all">Exit</a>
-        </div>
-    </div>
 
-    <!-- MOBILE MENU -->
-    <div id="mobileMenu" class="lg:hidden px-4 py-4 border-t border-slate-800 bg-slate-900/90">
-        <form action="/discover" method="GET" class="relative mb-4">
-            <input type="text" name="search" placeholder="Search secrets..." class="bg-slate-900 border border-slate-800 rounded-full py-2 pl-8 pr-4 text-[10px] uppercase font-black focus:border-blue-500 outline-none w-full transition-all"/>
-            <i class="fas fa-search absolute left-4 top-3 text-slate-600 text-[10px]"></i>
-        </form>
-        <a href="/logout" class="block text-[9px] font-black text-slate-500 uppercase border border-slate-800 px-3 py-2 rounded-full hover:bg-red-900/20 hover:text-red-400 transition-all">Exit</a>
+            <a
+                href="/logout"
+                class="text-[9px] font-black text-slate-500 uppercase border border-slate-800 px-3 py-1.5 rounded-full hover:bg-red-900/20 hover:text-red-400 transition-all">
+                Exit
+            </a>
+        </div>
     </div>
 </nav>
 
-<!-- MAIN CONTENT -->
-<div class="max-w-6xl mx-auto px-6 mt-6">
+<!-- CONTENT -->
+<div class="max-w-6xl mx-auto px-6">
 
-    <header class="mb-10">
-        <h1 class="text-5xl font-black italic tracking-tighter text-white mb-2">DISCOVER</h1>
+    <!-- HEADER -->
+    <header class="mb-10 mt-8">
+        <h1 class="text-5xl font-black italic tracking-tighter text-white mb-2">
+            DISCOVER
+        </h1>
         <div class="flex items-center gap-3">
             <div class="h-1 w-12 bg-blue-600"></div>
-            <p class="text-slate-500 text-[10px] uppercase tracking-[0.3em] font-black">Trending across the village</p>
+            <p class="text-slate-500 text-[10px] uppercase tracking-[0.3em] font-black">
+                Trending across the village
+            </p>
         </div>
     </header>
 
-    <!-- POSTS GRID -->
-    <div id="postsGrid" class="masonry-grid"></div>
+    <!-- GRID -->
+    <div class="masonry-grid">
+
+        <% if (posts && posts.length > 0) { %>
+            <% posts.forEach((post, index) => { %>
+
+                <article
+                    class="break-inside-avoid animate-card bg-slate-900/40 border border-slate-800 rounded-[2rem] overflow-hidden shadow-xl group hover:border-blue-500/50 hover:bg-slate-900 transition-all duration-500"
+                    style="animation-delay:<%= index * 0.1 %>s">
+
+                    <!-- MEDIA -->
+                    <% if (post.image_url) { %>
+                        <div class="relative overflow-hidden cursor-pointer">
+
+                            <% if (post.media_type === 'video') { %>
+                                <video
+                                    src="<%= post.image_url %>"
+                                    muted
+                                    loop
+                                    class="w-full grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-700"
+                                    onmouseover="this.play()"
+                                    onmouseout="this.pause()">
+                                </video>
+
+                                <div class="absolute top-4 right-4 bg-black/60 backdrop-blur-md w-8 h-8 rounded-full flex items-center justify-center">
+                                    <i class="fas fa-play text-[8px] text-white"></i>
+                                </div>
+                            <% } else { %>
+                                <img
+                                    src="<%= post.image_url %>"
+                                    alt="Village Secret"
+                                    class="w-full grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-700"/>
+                            <% } %>
+
+                            <div class="absolute inset-0 bg-gradient-to-t from-slate-950/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
+                                <span class="text-[9px] font-black uppercase tracking-widest text-white">
+                                    View Full Secret
+                                </span>
+                            </div>
+                        </div>
+                    <% } %>
+
+                    <!-- BODY -->
+                    <div class="p-6">
+
+                        <!-- AUTHOR -->
+                        <div class="flex justify-between items-start mb-4">
+                            <div>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-xs font-black text-white uppercase">
+                                        @<%= post.author.split('@')[0] %>
+                                    </span>
+                                    <% if (post.is_verified) { %>
+                                        <i class="fas fa-check-circle text-[10px] text-blue-500"></i>
+                                    <% } %>
+                                </div>
+                                <span class="text-[8px] text-slate-600 font-black uppercase tracking-widest">
+                                    Resident
+                                </span>
+                            </div>
+
+                            <% if (user.id !== post.created_by) { %>
+                                <form action="/friends/request/<%= post.created_by %>" method="POST">
+                                    <button
+                                        class="bg-blue-600 hover:bg-blue-500 text-white text-[9px] font-black px-3 py-1.5 rounded-lg uppercase tracking-widest transition-all active:scale-90 shadow-lg shadow-blue-600/20">
+                                        Connect +
+                                    </button>
+                                </form>
+                            <% } %>
+                        </div>
+
+                        <!-- TEXT -->
+                        <p class="text-sm text-slate-400 group-hover:text-slate-200 transition-colors italic leading-relaxed mb-4">
+                            "<%= post.description %>"
+                        </p>
+
+                        <!-- STATS -->
+                        <div class="flex gap-4 pt-4 border-t border-slate-800/50">
+                            <span class="text-[10px] font-black text-slate-500 uppercase">
+                                <i class="fas fa-heart text-red-500/80 mr-1.5"></i>
+                                <%= post.likes || 0 %> Vibes
+                            </span>
+
+                            <span class="text-[10px] font-black text-slate-500 uppercase">
+                                <i class="fas fa-comment text-blue-500/80 mr-1.5"></i>
+                                <%= post.comments_count || 0 %> Whispers
+                            </span>
+                        </div>
+
+                    </div>
+                </article>
+
+            <% }) %>
+
+        <% } else { %>
+
+            <!-- EMPTY STATE -->
+            <div class="py-24 text-center border-2 border-dashed border-slate-800 rounded-[3rem] bg-slate-900/20">
+                <i class="fas fa-wind text-slate-800 text-5xl mb-4"></i>
+                <p class="text-slate-500 font-black uppercase tracking-widest text-xs">
+                    The winds are silent...
+                </p>
+                <a
+                    href="/feed"
+                    class="text-blue-500 text-[10px] font-black uppercase tracking-widest hover:underline mt-4 inline-block">
+                    Post the first secret
+                </a>
+            </div>
+
+        <% } %>
+
+    </div>
 </div>
 
 <!-- MOBILE NAV -->
@@ -97,63 +221,6 @@
     <a href="/messages" class="text-slate-400 hover:text-white hover:scale-125 transition-all">💬</a>
     <a href="/profile" class="text-slate-400 hover:text-white hover:scale-125 transition-all">👤</a>
 </nav>
-
-<!-- JAVASCRIPT -->
-<script>
-    // Mobile Menu Toggle
-    const menuBtn = document.getElementById('menuBtn');
-    const mobileMenu = document.getElementById('mobileMenu');
-
-    menuBtn.addEventListener('click', () => {
-        mobileMenu.style.display = mobileMenu.style.display === 'block' ? 'none' : 'block';
-    });
-
-    // Placeholder posts
-    const posts = [
-        {author: 'alice@example.com', description: 'The first secret...', image_url: 'https://via.placeholder.com/400x300', media_type: 'image', likes: 10, comments_count: 2, is_verified: true, created_by: 2},
-        {author: 'bob@example.com', description: 'Another secret...', image_url: 'https://via.placeholder.com/400x400', media_type: 'image', likes: 5, comments_count: 0, is_verified: false, created_by: 3},
-        {author: 'carol@example.com', description: 'Look at this...', image_url: 'https://via.placeholder.com/500x300', media_type: 'image', likes: 8, comments_count: 1, is_verified: true, created_by: 4}
-    ];
-
-    const postsGrid = document.getElementById('postsGrid');
-
-    posts.forEach((post, index) => {
-        const postEl = document.createElement('article');
-        postEl.className = "break-inside-avoid animate-card bg-slate-900/40 border border-slate-800 rounded-[2rem] overflow-hidden shadow-xl group hover:border-blue-500/50 hover:bg-slate-900 transition-all duration-500";
-        postEl.style.animationDelay = `${index * 0.1}s`;
-        postEl.innerHTML = `
-            <div class="relative overflow-hidden cursor-pointer">
-                ${post.media_type === 'video' ? `
-                <video src="${post.image_url}" muted loop class="w-full grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-700" onmouseover="this.play()" onmouseout="this.pause()"></video>
-                <div class="absolute top-4 right-4 bg-black/60 backdrop-blur-md w-8 h-8 rounded-full flex items-center justify-center">
-                    <i class="fas fa-play text-[8px] text-white"></i>
-                </div>` : `
-                <img src="${post.image_url}" alt="Village Secret" class="w-full grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-700"/>`}
-                <div class="absolute inset-0 bg-gradient-to-t from-slate-950/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
-                    <span class="text-[9px] font-black uppercase tracking-widest text-white">View Full Secret</span>
-                </div>
-            </div>
-            <div class="p-6">
-                <div class="flex justify-between items-start mb-4">
-                    <div>
-                        <div class="flex items-center gap-1.5">
-                            <span class="text-xs font-black text-white uppercase">@${post.author.split('@')[0]}</span>
-                            ${post.is_verified ? `<i class="fas fa-check-circle text-[10px] text-blue-500"></i>` : ''}
-                        </div>
-                        <span class="text-[8px] text-slate-600 font-black uppercase tracking-widest">Resident</span>
-                    </div>
-                    <button class="bg-blue-600 hover:bg-blue-500 text-white text-[9px] font-black px-3 py-1.5 rounded-lg uppercase tracking-widest transition-all active:scale-90 shadow-lg shadow-blue-600/20">Connect +</button>
-                </div>
-                <p class="text-sm text-slate-400 group-hover:text-slate-200 transition-colors italic leading-relaxed mb-4">"${post.description}"</p>
-                <div class="flex gap-4 pt-4 border-t border-slate-800/50">
-                    <span class="text-[10px] font-black text-slate-500 uppercase"><i class="fas fa-heart text-red-500/80 mr-1.5"></i>${post.likes} Vibes</span>
-                    <span class="text-[10px] font-black text-slate-500 uppercase"><i class="fas fa-comment text-blue-500/80 mr-1.5"></i>${post.comments_count} Whispers</span>
-                </div>
-            </div>
-        `;
-        postsGrid.appendChild(postEl);
-    });
-</script>
 
 </body>
 </html>
