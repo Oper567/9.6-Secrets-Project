@@ -33,6 +33,10 @@ const db = new pg.Pool({
   max: 10                         
 });
 
+db.on('error', (err) => {
+  console.error('Unexpected error on idle client', err);
+});
+
 /* ---------------- SUPABASE STORAGE & AUTH ---------------- */
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 const upload = multer({ storage: multer.memoryStorage() });
@@ -44,7 +48,6 @@ app.use(express.static("public"));
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
-// FORCE HTTPS in Production
 app.use((req, res, next) => {
   if (process.env.NODE_ENV === 'production' && req.headers['x-forwarded-proto'] !== 'https') {
     return res.redirect('https://' + req.get('host') + req.url);
@@ -75,7 +78,6 @@ app.use(passport.session());
 
 /* ---------------- HELPERS & GATEKEEPERS ---------------- */
 
-// 1. Send Welcome Notification
 async function sendWelcomeNote(userId) {
   try {
     await db.query("INSERT INTO notifications (user_id, sender_id, message) VALUES ($1, 1, $2)", 
@@ -83,21 +85,18 @@ async function sendWelcomeNote(userId) {
   } catch (err) { console.error("Notification Error:", err); }
 }
 
-// 2. Admin Only Gatekeeper
 function isAdmin(req, res, next) {
   if (req.isAuthenticated() && req.user.role === 'admin') return next();
   req.flash("error", "Access denied. Elders only!");
   res.redirect("/feed");
 }
 
-// 3. Verified Only Gatekeeper
 function isVerified(req, res, next) {
   if (req.isAuthenticated() && req.user.is_verified) return next();
   req.flash("error", "Please verify your email to interact with the village.");
   res.redirect("/profile");
 }
 
-// 4. Global Template Variables & Activity Tracker
 app.use(async (req, res, next) => {
   res.locals.user = req.user || null;
   res.locals.messages = req.flash();
@@ -112,7 +111,7 @@ app.use(async (req, res, next) => {
   next();
 });
 
-/* ---------------- PASSPORT STRATEGIES ---------------- */
+/* ---------------- PASSPORT ---------------- */
 
 passport.use(new LocalStrategy({ usernameField: "email" }, async (email, password, done) => {
   try {
@@ -135,8 +134,6 @@ passport.use(new GoogleStrategy({
     const email = profile.emails[0].value;
     const result = await db.query("SELECT * FROM users WHERE email = $1", [email]);
     if (result.rows.length > 0) return done(null, result.rows[0]);
-    
-    // Google users are automatically verified
     const newUser = await db.query(
         "INSERT INTO users (email, password, role, is_verified) VALUES ($1, $2, $3, $4) RETURNING *", 
         [email, "google-oauth", "user", true]
@@ -156,7 +153,6 @@ passport.deserializeUser(async (id, done) => {
 
 /* ---------------- ROUTES ---------------- */
 
-// --- Authentication ---
 app.get("/", (req, res) => res.render("home"));
 app.get("/login", (req, res) => res.render("login"));
 app.get("/register", (req, res) => res.render("register"));
@@ -169,7 +165,8 @@ app.post("/register", async (req, res) => {
   }
   try {
     const hash = await bcrypt.hash(password, saltRounds);
-    const user = await db.query("INSERT INTO users (email, password, role) VALUES ($1,$2,$3) RETURNING *", [email, hash, "user"]);
+    // Auto-verifying on register for better UX
+    const user = await db.query("INSERT INTO users (email, password, role, is_verified) VALUES ($1,$2,$3,$4) RETURNING *", [email, hash, "user", true]);
     await sendWelcomeNote(user.rows[0].id);
     req.login(user.rows[0], () => res.redirect("/feed"));
   } catch (err) { 
@@ -181,29 +178,28 @@ app.post("/register", async (req, res) => {
 app.post("/login", passport.authenticate("local", { successRedirect: "/feed", failureRedirect: "/login", failureFlash: true }));
 app.get("/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
 app.get("/auth/google/callback", passport.authenticate("google", { failureRedirect: "/login" }), (req, res) => res.redirect("/feed"));
-app.get("/logout", (req, res) => req.logout(() => res.redirect("/")));
-
-// --- Admin Dashboard ---
-app.get("/admin", isAdmin, async (req, res) => {
-  try {
-    const usersCount = await db.query("SELECT COUNT(*) FROM users");
-    const postsCount = await db.query("SELECT COUNT(*) FROM events WHERE is_deleted = false");
-    const recentActivity = await db.query(`
-      SELECT e.*, u.email as author_email 
-      FROM events e 
-      JOIN users u ON e.created_by = u.id 
-      WHERE is_deleted = false 
-      ORDER BY created_at DESC LIMIT 10
-    `);
-    res.render("admin-dashboard", { 
-      stats: { users: usersCount.rows[0].count, posts: postsCount.rows[0].count },
-      recentPosts: recentActivity.rows,
-      search: "" 
-    });
-  } catch (err) { res.status(500).send("Admin access error"); }
+app.get("/logout", (req, res, next) => {
+  req.logout((err) => {
+    if (err) return next(err);
+    res.redirect("/");
+  });
 });
 
-// --- Feed & Posts ---
+/* --- DISCOVER --- */
+app.get("/discover", async (req, res) => {
+  if (!req.isAuthenticated()) return res.redirect("/login");
+  try {
+    const discoverPosts = await db.query(`
+      SELECT e.*, u.email AS author, u.is_verified,
+      (SELECT COUNT(*) FROM likes WHERE event_id=e.id) AS likes_count
+      FROM events e JOIN users u ON e.created_by=u.id 
+      WHERE e.is_deleted=false ORDER BY RANDOM() LIMIT 24
+    `);
+    res.render("discover", { posts: discoverPosts.rows, search: "" });
+  } catch (err) { res.redirect("/feed"); }
+});
+
+/* --- FEED --- */
 app.get("/feed", async (req, res) => {
   if (!req.isAuthenticated()) return res.redirect("/login");
   const search = req.query.search || "";
@@ -213,7 +209,7 @@ app.get("/feed", async (req, res) => {
     
     let postsQuery = `
       SELECT e.*, u.email AS author, u.last_active, u.is_verified, 
-      (SELECT COUNT(*) FROM likes WHERE event_id=e.id) AS likes,
+      (SELECT COUNT(*) FROM likes WHERE event_id=e.id) AS likes_count,
       (SELECT JSON_AGG(json_build_object('content', c.content, 'author', cu.email)) FROM comments c JOIN users cu ON c.user_id = cu.id WHERE c.event_id = e.id) as comments_list
       FROM events e JOIN users u ON e.created_by=u.id 
       WHERE is_announcement=false AND is_deleted=false
@@ -231,32 +227,39 @@ app.get("/feed", async (req, res) => {
   } catch (err) { res.status(500).send("Error loading feed"); }
 });
 
-// --- Post Creation (Supabase) ---
+/* --- ADMIN --- */
+app.get("/admin", isAdmin, async (req, res) => {
+  try {
+    const users = await db.query("SELECT id, email, role, is_verified FROM users ORDER BY id DESC");
+    res.render("admin-dashboard", { users: users.rows, search: "" });
+  } catch (err) { res.redirect("/feed"); }
+});
+
+app.post("/admin/promote/:id", isAdmin, async (req, res) => {
+  try {
+    await db.query("UPDATE users SET role = 'admin' WHERE id = $1", [req.params.id]);
+    res.redirect("back");
+  } catch (err) { res.redirect("back"); }
+});
+
+/* --- ACTIONS --- */
 app.post("/event/create", isVerified, upload.single("localMedia"), async (req, res) => {
   try {
     let mediaUrl = null;
     let mediaType = 'image';
-
     if (req.file) {
       const fileName = `${Date.now()}-${req.file.originalname}`;
-      await supabase.storage.from('apugo_village').upload(fileName, req.file.buffer, {
-        contentType: req.file.mimetype,
-        upsert: true
-      });
+      await supabase.storage.from('apugo_village').upload(fileName, req.file.buffer, { contentType: req.file.mimetype, upsert: true });
       const { data: publicData } = supabase.storage.from('apugo_village').getPublicUrl(fileName);
       mediaUrl = publicData.publicUrl;
       mediaType = req.file.mimetype.startsWith("video") ? 'video' : 'image';
     }
-
-    await db.query(
-      "INSERT INTO events (title, description, image_url, created_by, is_announcement, media_type) VALUES ($1,$2,$3,$4,$5,$6)", 
-      ["Post", req.body.description, mediaUrl, req.user.id, req.user.role === 'admin', mediaType]
-    );
+    await db.query("INSERT INTO events (title, description, image_url, created_by, is_announcement, media_type) VALUES ($1,$2,$3,$4,$5,$6)", 
+      ["Post", req.body.description, mediaUrl, req.user.id, req.user.role === 'admin', mediaType]);
     res.redirect("/feed");
   } catch (err) { res.redirect("/feed"); }
 });
 
-// --- Likes, Comments, Delete ---
 app.post("/event/:id/like", isVerified, async (req, res) => {
   try {
     const check = await db.query("SELECT * FROM likes WHERE user_id=$1 AND event_id=$2", [req.user.id, req.params.id]);
@@ -277,37 +280,13 @@ app.post("/event/:id/comment", isVerified, async (req, res) => {
 });
 
 app.post("/event/:id/delete", async (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect("/login");
   try {
-    await db.query(`
-      UPDATE events 
-      SET is_deleted = true 
-      WHERE id = $1 AND (created_by = $2 OR (SELECT role FROM users WHERE id = $2) = 'admin')
-    `, [req.params.id, req.user.id]);
+    await db.query(`UPDATE events SET is_deleted = true WHERE id = $1 AND (created_by = $2 OR (SELECT role FROM users WHERE id = $2) = 'admin')`, [req.params.id, req.user.id]);
     res.redirect("back");
   } catch (err) { res.redirect("back"); }
 });
 
-// --- Settings & Profile ---
-app.get("/settings", (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect("/login");
-  res.render("settings", { user: req.user, search: "" });
-});
-
-app.post("/settings/update", async (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect("/login");
-  const { email, newPassword } = req.body;
-  try {
-    await db.query("UPDATE users SET email = $1 WHERE id = $2", [email, req.user.id]);
-    if (newPassword && newPassword.trim() !== "") {
-      const hash = await bcrypt.hash(newPassword, saltRounds);
-      await db.query("UPDATE users SET password = $1 WHERE id = $2", [hash, req.user.id]);
-    }
-    req.flash("success", "Settings updated!");
-    res.redirect("/settings");
-  } catch (err) { res.redirect("/settings"); }
-});
-
+/* --- PROFILE & SETTINGS --- */
 app.get("/profile", async (req, res) => {
   if (!req.isAuthenticated()) return res.redirect("/login");
   try {
@@ -316,35 +295,39 @@ app.get("/profile", async (req, res) => {
   } catch (e) { res.redirect("/feed"); }
 });
 
-// --- Password Reset ---
-app.get("/forgot-password", (req, res) => res.render("forgot-password", { search: "" }));
+app.get("/settings", (req, res) => req.isAuthenticated() ? res.render("settings", { user: req.user, search: "" }) : res.redirect("/login"));
 
-app.post("/auth/reset-password", async (req, res) => {
-  const { email } = req.body;
+app.post("/settings/update", async (req, res) => {
+  const { email, newPassword } = req.body;
   try {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${process.env.SITE_URL || 'http://localhost:3000'}/update-password`,
-    });
-    if (error) throw error;
-    req.flash("success", "Reset link sent! Check your email.");
+    await db.query("UPDATE users SET email = $1 WHERE id = $2", [email, req.user.id]);
+    if (newPassword?.trim()) {
+      const hash = await bcrypt.hash(newPassword, saltRounds);
+      await db.query("UPDATE users SET password = $1 WHERE id = $2", [hash, req.user.id]);
+    }
+    req.flash("success", "Updated!");
+    res.redirect("/settings");
+  } catch (err) { res.redirect("/settings"); }
+});
+
+/* --- AUTH FLOWS --- */
+app.get("/forgot-password", (req, res) => res.render("forgot-password", { search: "" }));
+app.post("/auth/reset-password", async (req, res) => {
+  try {
+    await supabase.auth.resetPasswordForEmail(req.body.email, { redirectTo: `${process.env.SITE_URL || 'http://localhost:3000'}/update-password` });
+    req.flash("success", "Reset link sent!");
     res.redirect("/login");
   } catch (err) { res.redirect("/forgot-password"); }
 });
-
 app.get("/update-password", (req, res) => res.render("update-password", { search: "" }));
-
 app.post("/auth/update-password", async (req, res) => {
-  const { email, newPassword } = req.body;
   try {
-    const hash = await bcrypt.hash(newPassword, saltRounds);
-    // Password update also verifies the user
-    await db.query("UPDATE users SET password = $1, is_verified = true WHERE email = $2", [hash, email]);
-    req.flash("success", "Password updated successfully!");
+    const hash = await bcrypt.hash(req.body.newPassword, saltRounds);
+    await db.query("UPDATE users SET password = $1, is_verified = true WHERE email = $2", [hash, req.body.email]);
     res.redirect("/login");
   } catch (err) { res.redirect("/update-password"); }
 });
 
-// --- Notifications API ---
 app.get("/api/notifications", async (req, res) => {
   if (!req.isAuthenticated()) return res.json([]);
   try {
