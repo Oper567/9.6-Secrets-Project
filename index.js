@@ -264,23 +264,36 @@ app.get("/auth/verify/:token", async (req, res) => {
 });
 
   // UNFRIEND: Remove connection and all related messages
-  app.post("/friends/unfriend/:id", async (req, res) => {
-    try {
-        await db.query(
-            "DELETE FROM friendships WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)",
-            [req.user.id, req.params.id]
-        );
-        // Optional: Delete messages too if you want a clean break
-        await db.query(
-            "DELETE FROM messages WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)",
-            [req.user.id, req.params.id]
-        );
-        res.redirect("/messages");
-    } catch (err) {
-        res.redirect("back");
-    }
-});
+  app.post("/friends/request/:id", async (req, res) => {
+  if (!req.isAuthenticated() || req.user.id == req.params.id) {
+      return res.redirect("/feed");
+  }
+  
+  try {
+    // Check if a request already exists to prevent duplicates
+    const existing = await db.query(
+        "SELECT * FROM friendships WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)",
+        [req.user.id, req.params.id]
+    );
 
+    if (existing.rows.length === 0) {
+        await db.query(
+          "INSERT INTO friendships (sender_id, receiver_id, status) VALUES ($1, $2, 'pending')", 
+          [req.user.id, req.params.id]
+        );
+
+        await db.query(
+          "INSERT INTO notifications (user_id, sender_id, message) VALUES ($1, $2, $3)", 
+          [req.params.id, req.user.id, "Sent you a village friend request! 🤝"]
+        );
+    }
+
+    res.redirect("back");
+  } catch (err) { 
+    console.error(err);
+    res.redirect("/feed"); 
+  }
+});
 // DELETE ENTIRE CHAT HISTORY
 app.post("/api/chat/delete/:friendId", async (req, res) => {
     await db.query(
@@ -417,21 +430,28 @@ app.get("/feed", async (req, res) => {
 });
 
 /* --- CHAT SYSTEM --- */
-
 app.get("/messages", async (req, res) => {
   if (!req.isAuthenticated()) return res.redirect("/login");
   try {
+    // This finds everyone who is 'accepted' with the current user
     const friends = await db.query(`
         SELECT u.id, u.email FROM users u
         JOIN friendships f ON (f.sender_id = u.id OR f.receiver_id = u.id)
-        WHERE (f.sender_id = $1 OR f.receiver_id = $1) AND u.id != $1 AND f.status = 'accepted'`, [req.user.id]);
+        WHERE (f.sender_id = $1 OR f.receiver_id = $1) 
+        AND u.id != $1 
+        AND f.status = 'accepted'`, 
+        [req.user.id]
+    );
     
     res.render("messages", { 
         friends: friends.rows, 
         targetUser: req.query.userId || null, 
         search: "" 
     });
-  } catch (err) { res.redirect("/feed"); }
+  } catch (err) { 
+    console.error(err);
+    res.redirect("/feed"); 
+  }
 });
 
 app.get("/api/chat/:friendId", async (req, res) => {
