@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0, viewport-fit=cover" />
-    <title>Apugo | Whispers</title>
+    <title>Whispers | Apugo</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -19,6 +19,7 @@
             overflow: hidden; 
         }
         
+        /* Layout Transitions */
         .pane-container { 
             position: relative; 
             display: flex; 
@@ -34,47 +35,56 @@
 
         @media (min-width: 769px) {
             .pane-container { width: 100%; }
-            .friends-pane { width: 350px; border-right: 1px solid rgba(255,255,255,0.05); }
+            .friends-pane { width: 380px; border-right: 1px solid rgba(255,255,255,0.05); }
             .chat-pane { flex: 1; }
         }
 
+        /* Message Bubbles */
         .chat-container { 
             flex: 1; 
             overflow-y: auto; 
             display: flex; 
             flex-direction: column; 
             scrollbar-width: none;
-            padding-bottom: 20px;
+            padding: 1.5rem;
         }
+        .chat-container::-webkit-scrollbar { display: none; }
 
         .bubble { 
-            max-width: 75%; 
-            padding: 10px 14px; 
+            max-width: 80%; 
+            padding: 12px 16px; 
             font-size: 14px; 
-            margin-bottom: 4px; 
-            border-radius: 1.2rem; 
-            line-height: 1.4; 
+            margin-bottom: 8px; 
+            line-height: 1.5; 
             position: relative; 
             word-wrap: break-word;
+            animation: bubbleIn 0.2s ease-out;
         }
+
+        @keyframes bubbleIn {
+            from { opacity: 0; transform: translateY(10px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
         .bubble-me { 
-            background: #2563eb; 
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
             color: white; 
-            border-bottom-right-radius: 4px; 
+            border-radius: 20px 20px 4px 20px; 
             align-self: flex-end;
-            margin-right: 8px;
+            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.2);
         }
+
         .bubble-them { 
             background: #1e293b; 
-            color: #cbd5e1; 
-            border-bottom-left-radius: 4px; 
+            color: #e2e8f0; 
+            border-radius: 20px 20px 20px 4px; 
             border: 1px solid rgba(255,255,255,0.05);
             align-self: flex-start;
-            margin-left: 8px;
         }
         
-        .friend-item.active { background-color: rgba(37, 99, 235, 0.1); border-left: 4px solid #2563eb; }
+        .friend-item.active { background-color: rgba(37, 99, 235, 0.08); border-right: 3px solid #3b82f6; }
         .glass-nav { background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(255,255,255,0.05); }
+        
         .typing-dot { width: 4px; height: 4px; background: #3b82f6; border-radius: 50%; animation: blink 1.4s infinite; }
         @keyframes blink { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
     </style>
@@ -84,27 +94,31 @@
 
 <nav class="glass-nav p-3 shrink-0">
     <div class="max-w-7xl mx-auto flex items-center gap-3">
-        <button id="mobileBack" class="hidden text-slate-400 p-2" onclick="closeChat()">
+        <button id="mobileBack" class="hidden text-slate-400 p-2 hover:text-white transition" onclick="closeChat()">
             <i class="fas fa-chevron-left text-lg"></i>
         </button>
         
-        <a href="/feed" id="navHomeLink" class="text-slate-400 hover:text-white p-2">
-            <i class="fas fa-arrow-left"></i>
+        <a href="/feed" id="navHomeLink" class="text-slate-500 hover:text-white p-2 transition">
+            <i class="fas fa-house text-lg"></i>
         </a>
 
         <div class="flex-1 min-w-0 flex items-center gap-3">
-            <div id="activeChatAvatar" class="hidden w-9 h-9 rounded-full overflow-hidden border border-slate-700 bg-slate-800 flex items-center justify-center text-[10px] font-black text-blue-500 uppercase">
+            <div id="activeChatAvatar" class="hidden w-10 h-10 rounded-full overflow-hidden border border-slate-700 bg-slate-800 flex items-center justify-center text-xs font-black text-blue-500 uppercase">
                 </div>
             <div>
                 <h1 id="chatHeaderTitle" class="font-black text-blue-500 italic text-sm uppercase tracking-tighter">Whispers</h1>
-                <p id="chatStatus" class="text-[9px] text-slate-500 uppercase font-black truncate tracking-widest">Village Square</p>
+                <p id="chatStatus" class="text-[9px] text-slate-500 uppercase font-black truncate tracking-[0.2em]">Village Square</p>
             </div>
         </div>
 
         <div id="chatActions" class="hidden relative group">
-            <button class="p-2 text-slate-500"><i class="fas fa-ellipsis-v"></i></button>
-            <div class="absolute right-0 mt-2 w-48 bg-slate-900 border border-slate-800 rounded-2xl hidden group-hover:block shadow-2xl z-50 overflow-hidden">
-                <button onclick="clearChat()" class="w-full text-left px-4 py-3 text-[10px] font-black uppercase text-red-500 hover:bg-red-500/10 transition">Burn History</button>
+            <button class="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-white transition">
+                <i class="fas fa-ellipsis-v"></i>
+            </button>
+            <div class="absolute right-0 mt-2 w-48 bg-slate-900 border border-white/10 rounded-2xl hidden group-hover:block shadow-2xl z-50 overflow-hidden">
+                <button onclick="clearChat()" class="w-full text-left px-5 py-4 text-[10px] font-black uppercase text-red-500 hover:bg-red-500/10 transition">
+                    <i class="fas fa-fire-alt mr-2"></i> Burn History
+                </button>
             </div>
         </div>
     </div>
@@ -114,72 +128,77 @@
     <div id="paneContainer" class="pane-container">
         
         <aside class="friends-pane bg-slate-950 flex flex-col">
-            <div class="p-4 border-b border-white/5">
+            <div class="p-5">
                 <div class="relative">
-                    <input type="text" id="globalSearch" placeholder="Search village..." 
-                        class="w-full bg-slate-900 border border-slate-800 rounded-2xl py-2.5 pl-10 pr-4 text-xs outline-none text-white focus:border-blue-600 transition-all">
-                    <i class="fas fa-search absolute left-4 top-3.5 text-slate-600 text-xs"></i>
+                    <input type="text" id="globalSearch" placeholder="Find a soul..." 
+                        class="w-full bg-slate-900 border border-white/5 rounded-2xl py-3 pl-11 pr-4 text-xs outline-none text-white focus:border-blue-600 focus:bg-slate-900/50 transition-all shadow-inner">
+                    <i class="fas fa-search absolute left-4 top-4 text-slate-600 text-xs"></i>
                 </div>
             </div>
             
-            <div class="flex-1 overflow-y-auto">
+            <div class="flex-1 overflow-y-auto px-2 space-y-1">
                 <% if (friends && friends.length > 0) { %>
                     <% friends.forEach(f => { %>
-                        <div id="friend-<%= f.id %>" class="friend-item p-4 flex items-center gap-4 cursor-pointer border-b border-white/5 hover:bg-white/5 transition-all" 
+                        <div id="friend-<%= f.id %>" class="friend-item p-4 flex items-center gap-4 cursor-pointer rounded-2xl hover:bg-white/5 transition-all group" 
                              onclick="selectFriend('<%= f.id %>', `<%= f.email.split('@')[0] %>`, `<%= f.profile_pic %>`)">
                             
-                            <div class="relative shrink-0 w-11 h-11 bg-slate-800 rounded-full flex items-center justify-center border border-slate-700 overflow-hidden">
+                            <div class="relative shrink-0 w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center border border-slate-700 overflow-hidden shadow-lg">
                                 <% if (f.profile_pic) { %>
                                     <img src="<%= f.profile_pic %>" class="w-full h-full object-cover">
                                 <% } else { %>
-                                    <span class="font-black text-blue-500 text-xs"><%= f.email[0].toUpperCase() %></span>
+                                    <span class="font-black text-blue-500 text-sm"><%= f.email[0].toUpperCase() %></span>
                                 <% } %>
-                                <span class="absolute bottom-0 right-0 w-3 h-3 border-2 border-slate-950 rounded-full <%= f.is_online ? 'bg-green-500' : 'bg-slate-600' %>"></span>
+                                <span class="absolute bottom-0 right-0 w-3.5 h-3.5 border-4 border-slate-950 rounded-full <%= f.is_online ? 'bg-green-500' : 'bg-slate-600' %>"></span>
                             </div>
 
                             <div class="flex-1 min-w-0">
-                                <div class="flex justify-between items-center mb-0.5">
-                                    <span class="text-xs font-black block truncate text-slate-100 uppercase tracking-tight">@<%= f.email.split('@')[0] %></span>
+                                <div class="flex justify-between items-center mb-1">
+                                    <span class="text-xs font-black block truncate text-slate-200 uppercase tracking-tight group-hover:text-blue-400 transition-colors">@<%= f.email.split('@')[0] %></span>
                                     <% if (f.unread_count > 0) { %>
-                                        <span class="bg-blue-600 text-[8px] font-black px-1.5 py-0.5 rounded-full animate-pulse"><%= f.unread_count %></span>
+                                        <span class="bg-blue-600 text-[9px] font-black px-2 py-0.5 rounded-full shadow-lg shadow-blue-600/30 animate-pulse"><%= f.unread_count %></span>
                                     <% } %>
                                 </div>
-                                <p class="text-[10px] <%= f.unread_count > 0 ? 'text-blue-400 font-bold' : 'text-slate-500' %> truncate italic uppercase tracking-tighter">
-                                    <%= f.unread_count > 0 ? 'Incoming Whisper...' : 'Open Circle' %>
+                                <p class="text-[10px] <%= f.unread_count > 0 ? 'text-blue-400 font-bold' : 'text-slate-600' %> truncate italic uppercase tracking-tighter">
+                                    <%= f.unread_count > 0 ? 'A new whisper awaits...' : 'Silent' %>
                                 </p>
                             </div>
                         </div>
                     <% }) %>
                 <% } else { %>
-                    <div class="p-10 text-center opacity-20">
-                        <i class="fas fa-comment-slash text-2xl mb-2"></i>
-                        <p class="text-[9px] font-black uppercase tracking-widest">No connections yet</p>
+                    <div class="py-20 text-center opacity-30">
+                        <i class="fas fa-comment-slash text-3xl mb-4"></i>
+                        <p class="text-[10px] font-black uppercase tracking-[0.3em]">No connections yet</p>
                     </div>
                 <% } %>
             </div>
         </aside>
 
         <main class="chat-pane flex flex-col bg-slate-950 relative">
-            <div id="chatWindow" class="chat-container p-4 gap-1">
-                <div class="my-auto text-center">
-                    <div class="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center mx-auto mb-4 border border-white/5">
-                        <i class="fas fa-feather-alt text-slate-800 text-2xl"></i>
+            <div id="chatWindow" class="chat-container">
+                <div class="my-auto text-center space-y-4">
+                    <div class="w-24 h-24 bg-slate-900/50 rounded-full flex items-center justify-center mx-auto border border-white/5 shadow-2xl">
+                        <i class="fas fa-feather-alt text-slate-800 text-3xl"></i>
                     </div>
-                    <h2 class="font-black text-slate-700 uppercase text-[10px] tracking-[0.3em]">Select a Soul to Whisper</h2>
+                    <div class="space-y-1">
+                        <h2 class="font-black text-slate-600 uppercase text-[11px] tracking-[0.4em]">Ancient Grounds</h2>
+                        <p class="text-slate-800 text-[9px] font-medium uppercase tracking-widest">Select a soul to start whispering</p>
+                    </div>
                 </div>
             </div>
 
-            <div id="inputDock" class="hidden p-3 bg-slate-900/50 backdrop-blur-md border-t border-white/5">
+            <div id="inputDock" class="hidden p-4 bg-slate-900/80 backdrop-blur-xl border-t border-white/5">
                 <% if (user.is_verified) { %>
-                    <form id="chatForm" class="flex gap-2 items-center max-w-4xl mx-auto">
-                        <input id="msgInput" type="text" autocomplete="off" placeholder="Type a whisper..." 
-                            class="flex-1 bg-slate-950 border border-slate-800 rounded-2xl px-5 py-3 text-sm outline-none text-white focus:border-blue-600 transition-all shadow-inner" />
-                        <button type="submit" class="bg-blue-600 w-11 h-11 rounded-full text-white flex items-center justify-center shadow-lg shadow-blue-600/20 active:scale-90 transition-transform">
+                    <form id="chatForm" class="flex gap-3 items-center max-w-5xl mx-auto">
+                        <div class="flex-1 relative">
+                            <input id="msgInput" type="text" autocomplete="off" placeholder="Write a whisper..." 
+                                class="w-full bg-slate-950 border border-slate-800 rounded-3xl px-6 py-4 text-sm outline-none text-white focus:border-blue-600/50 transition-all shadow-2xl" />
+                        </div>
+                        <button type="submit" class="bg-blue-600 w-12 h-12 rounded-full text-white flex items-center justify-center shadow-xl shadow-blue-600/20 active:scale-90 transition-all hover:bg-blue-500">
                             <i class="fas fa-paper-plane text-xs"></i>
                         </button>
                     </form>
                 <% } else { %>
-                    <div class="text-center p-3 text-[10px] text-red-400 font-black uppercase tracking-widest">
+                    <div class="text-center p-2 text-[10px] text-red-500 font-black uppercase tracking-widest bg-red-500/5 rounded-2xl border border-red-500/10">
                         <i class="fas fa-lock mr-2"></i> Verify email to unlock whispers
                     </div>
                 <% } %>
@@ -196,24 +215,25 @@
     async function selectFriend(id, name, pic) {
         currentFriendId = id;
         
-        // Update UI Selection
+        // UI Selection Feedback
         document.querySelectorAll('.friend-item').forEach(el => el.classList.remove('active'));
         document.getElementById(`friend-${id}`).classList.add('active');
 
-        // Pane Transition for Mobile
+        // Pane Transitions
         document.getElementById('paneContainer').classList.add('show-chat');
         document.getElementById('mobileBack').classList.remove('hidden');
         document.getElementById('navHomeLink').classList.add('hidden');
         document.getElementById('inputDock').classList.remove('hidden');
         document.getElementById('chatActions').classList.remove('hidden');
         
-        // Update Header
+        // Update Header Context
         const avatarDiv = document.getElementById('activeChatAvatar');
         avatarDiv.classList.remove('hidden');
-        avatarDiv.innerHTML = pic && pic !== 'null' && pic !== '' ? `<img src="${pic}" class="w-full h-full object-cover">` : name[0].toUpperCase();
+        avatarDiv.innerHTML = pic && pic !== 'null' && pic !== '' ? `<img src="${pic}" class="w-full h-full object-cover">` : `<span class="mt-0.5">${name[0].toUpperCase()}</span>`;
         
         document.getElementById('chatHeaderTitle').innerText = `@${name}`;
-        document.getElementById('chatStatus').innerHTML = `<span class="flex items-center gap-1"><span class="typing-dot"></span> Whispering Now</span>`;
+        document.getElementById('chatHeaderTitle').classList.add('text-white');
+        document.getElementById('chatStatus').innerHTML = `<span class="flex items-center gap-1.5"><span class="typing-dot"></span> Whispering Now</span>`;
         
         await fetchMessages(true);
     }
@@ -224,6 +244,7 @@
         document.getElementById('navHomeLink').classList.remove('hidden');
         document.getElementById('activeChatAvatar').classList.add('hidden');
         document.getElementById('chatHeaderTitle').innerText = 'Whispers';
+        document.getElementById('chatHeaderTitle').classList.remove('text-white');
         document.getElementById('chatStatus').innerText = 'Village Square';
         currentFriendId = null;
     }
@@ -235,7 +256,6 @@
             const messages = await res.json();
             const chatWindow = document.getElementById('chatWindow');
             
-            // Optimization: Only redraw if new messages or read-status change
             const latestM = messages[messages.length - 1];
             if (!force && latestM && latestM.id === lastMessageId && latestM.is_read) return;
             
@@ -245,7 +265,6 @@
                 const div = document.createElement('div');
                 div.className = `bubble ${isMe ? 'bubble-me' : 'bubble-them'}`;
                 
-                // Read Receipt Logic
                 let statusIcon = '';
                 if (isMe) {
                     statusIcon = m.is_read 
@@ -255,7 +274,7 @@
 
                 div.innerHTML = `
                     <div class="font-medium">${m.content}</div>
-                    <div class="text-[7px] mt-1 opacity-60 flex items-center justify-end">
+                    <div class="text-[7px] mt-1.5 opacity-60 flex items-center justify-end font-black uppercase tracking-tighter">
                         ${new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                         ${statusIcon}
                     </div>
@@ -265,6 +284,14 @@
             });
             chatWindow.scrollTop = chatWindow.scrollHeight;
         } catch (e) { console.error("Whisper sync error"); }
+    }
+
+    async function clearChat() {
+        if (!currentFriendId || !confirm("Burn all whispers in this circle?")) return;
+        try {
+            await fetch(`/api/chat/clear/${currentFriendId}`, { method: 'DELETE' });
+            fetchMessages(true);
+        } catch (e) { alert("Failed to burn history"); }
     }
 
     document.getElementById('chatForm')?.addEventListener('submit', async e => {
@@ -282,8 +309,7 @@
         fetchMessages(true);
     });
 
-    // Sync Whispers every 3 seconds
-    setInterval(() => { if (currentFriendId) fetchMessages(); }, 3000);
+    setInterval(() => { if (currentFriendId) fetchMessages(); }, 4000);
 </script>
 </body>
 </html>
