@@ -18,7 +18,8 @@
             border-radius: 18px 18px 18px 4px; 
         }
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        #input-dock { padding-bottom: env(safe-area-inset-bottom, 12px); }
+        #inputDock { padding-bottom: env(safe-area-inset-bottom, 12px); }
+        .friend-item.active { background-color: #0f172a; border-left: 4px solid #2563eb; }
     </style>
 </head>
 <body class="text-slate-200">
@@ -38,7 +39,7 @@
     </nav>
 
     <div class="flex flex-1 overflow-hidden">
-        <aside class="w-16 md:w-64 border-r border-slate-800 overflow-y-auto no-scrollbar bg-slate-950 shrink-0">
+        <aside class="w-20 md:w-64 border-r border-slate-800 overflow-y-auto no-scrollbar bg-slate-950 shrink-0">
             <% friends.forEach(f => { %>
                 <div onclick="selectFriend('<%= f.id %>', '<%= f.email.split('@')[0] %>')" 
                      id="friend-<%= f.id %>"
@@ -55,7 +56,7 @@
 
         <main class="flex-1 flex flex-col bg-slate-950 relative">
             <div id="chatWindow" class="chat-container p-4 flex flex-col no-scrollbar">
-                <div class="mt-20 text-center">
+                <div id="emptyState" class="mt-20 text-center">
                     <div class="w-16 h-16 bg-slate-900 rounded-3xl mx-auto flex items-center justify-center text-2xl mb-4">🌴</div>
                     <h2 class="font-black text-slate-400">Select a villager to chat</h2>
                     <p class="text-xs text-slate-600 mt-1">Chat is private between you two.</p>
@@ -77,32 +78,41 @@
     </div>
 
     <script>
-        // Use EJS to safely inject the user ID into the script
+        // 1. Core Data injected from Backend
         const currentUserId = '<%= user.id %>';
+        const targetUserFromFeed = '<%= targetUser %>'; // This is the ID passed in URL query
         let currentFriendId = null;
         let lastMessageCount = 0;
 
+        // 2. Load Chat Function
         async function selectFriend(id, name) {
+            if (!id) return;
             currentFriendId = id;
-            lastMessageCount = 0; // Reset count to force re-render on friend switch
+            lastMessageCount = 0; // Force re-render
             
-            document.querySelectorAll('.friend-item').forEach(el => el.classList.remove('bg-slate-900'));
-            document.getElementById(`friend-${id}`).classList.add('bg-slate-900');
+            // UI Styling updates
+            document.querySelectorAll('.friend-item').forEach(el => el.classList.remove('active'));
+            const activeFriendEl = document.getElementById(`friend-${id}`);
+            if (activeFriendEl) activeFriendEl.classList.add('active');
+            
+            document.getElementById('emptyState').classList.add('hidden');
             document.getElementById('inputDock').classList.remove('hidden');
             document.getElementById('chatStatus').innerText = `Chatting with @${name}`;
             
             fetchMessages();
         }
 
+        // 3. Fetch History via API
         async function fetchMessages() {
             if (!currentFriendId) return;
             try {
                 const res = await fetch(`/api/chat/${currentFriendId}`);
                 const messages = await res.json();
                 
+                // Only update DOM if new messages exist to save battery/performance
                 if (messages.length !== lastMessageCount) {
                     const chatWindow = document.getElementById('chatWindow');
-                    chatWindow.innerHTML = '';
+                    chatWindow.innerHTML = ''; // Clear window
                     
                     messages.forEach(m => {
                         const isMe = m.sender_id == currentUserId;
@@ -112,12 +122,14 @@
                         chatWindow.appendChild(div);
                     });
                     
+                    // Auto-scroll to latest message
                     chatWindow.scrollTop = chatWindow.scrollHeight;
                     lastMessageCount = messages.length;
                 }
             } catch (err) { console.error("Chat fetch error:", err); }
         }
 
+        // 4. Send Message Logic
         document.getElementById('chatForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const input = document.getElementById('msgInput');
@@ -134,11 +146,25 @@
 
                 if (res.ok) {
                     input.value = '';
-                    fetchMessages();
+                    fetchMessages(); // Instant refresh
                 }
-            } catch (err) { alert("Couldn't send message."); }
+            } catch (err) { console.error("Send failed"); }
         });
 
+        // 5. THE BRIDGE: Tally with Feed Click
+        window.onload = () => {
+            if (targetUserFromFeed && targetUserFromFeed !== 'null' && targetUserFromFeed !== '') {
+                // Find the friend in the sidebar and trigger click
+                const friendBtn = document.getElementById(`friend-${targetUserFromFeed}`);
+                if (friendBtn) {
+                    friendBtn.click();
+                } else {
+                    console.log("User is not in friend list. Cannot auto-open chat.");
+                }
+            }
+        };
+
+        // 6. Polling: Check for new messages every 3 seconds
         setInterval(fetchMessages, 3000);
     </script>
 </body>
