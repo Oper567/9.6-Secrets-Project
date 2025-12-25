@@ -10,5 +10,12 @@
   <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.2.1/css/bootstrap.min.css" integrity="sha384-GJzZqFGwb1QTTN6wy59ffF1BuGJpLSa9DkKMp0DgiMDm4iYMj70gZWKYbI706tWS" crossorigin="anonymous">
   <link rel="stylesheet" href="css/styles.css">
 </head>
+<% if (user && user.role === 'admin') { %>
+  <li class="nav-item">
+    <a class="nav-link text-warning fw-bold" href="/admin">
+      <i class="fas fa-crown me-1"></i> Admin
+    </a>
+  </li>
+<% } %>
 
 <body>
