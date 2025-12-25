@@ -49,7 +49,7 @@ const transporter = nodemailer.createTransport({
 
 const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 5 * 1024 * 1024 } 
+    limits: { fileSize: 5 * 1024 * 1024 } // Increased to 5MB for village media
 });
 
 /* ---------------- MIDDLEWARE ---------------- */
@@ -88,21 +88,19 @@ app.use(flash());
 app.use(passport.initialize());
 app.use(passport.session());
 
-// GLOBAL LOCALS MIDDLEWARE - (Ensures Navbar variables are ALWAYS present)
+// Global Locals & Activity Tracker
 app.use(async (req, res, next) => {
     res.locals.user = req.user || null;
     res.locals.messages = req.flash();
     res.locals.unreadCount = 0;
-    res.locals.search = req.query.search || ""; 
+    res.locals.search = ""; 
 
     if (req.isAuthenticated()) {
         try {
             await db.query("UPDATE users SET last_active = NOW() WHERE id = $1", [req.user.id]);
             const noteCount = await db.query("SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND is_read = false", [req.user.id]);
-            res.locals.unreadCount = parseInt(noteCount.rows[0].count) || 0;
-        } catch (e) { 
-            console.error("Global Middleware Error:", e.message); 
-        }
+            res.locals.unreadCount = noteCount.rows[0].count;
+        } catch (e) { console.error("Middleware DB Error:", e); }
     }
     next();
 });
@@ -129,10 +127,9 @@ function isAdmin(req, res, next) {
 
 async function sendWelcomeNote(userId) {
     try {
-        // We set actor_id to 1 (System Admin) to ensure the Notification Join doesn't break
-        await db.query("INSERT INTO notifications (user_id, sender_id, actor_id, message) VALUES ($1, 1, 1, $2)",
+        await db.query("INSERT INTO notifications (user_id, sender_id, message) VALUES ($1, 1, $2)",
             [userId, "Welcome to Apugo Village! 🌴"]);
-    } catch (err) { console.error("Welcome Notification Error:", err); }
+    } catch (err) { console.error("Notification Error:", err); }
 }
 
 /* ---------------- PASSPORT STRATEGIES ---------------- */
@@ -189,9 +186,10 @@ app.post("/register", async (req, res) => {
         req.flash("error", "Password must be at least 8 characters long.");
         return res.redirect("/register");
     }
+
     try {
         const hash = await bcrypt.hash(password, saltRounds);
-        const token = Math.random().toString(36).substring(2, 15);
+        const token = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
 
         const user = await db.query(
             "INSERT INTO users (email, password, role, is_verified, verification_token) VALUES ($1,$2,$3,$4,$5) RETURNING *",
@@ -228,10 +226,11 @@ app.get("/logout", (req, res) => {
 
 /* ---------------- VERIFICATION & PASSWORD RESET ---------------- */
 app.get("/auth/verify/:token", async (req, res) => {
+    const { token } = req.params;
     try {
         const result = await db.query(
             "UPDATE users SET is_verified = true, verification_token = NULL WHERE verification_token = $1 RETURNING *",
-            [req.params.token]
+            [token]
         );
         if (result.rows.length > 0) {
             req.flash("success", "Village access granted! Sign in now.");
@@ -249,6 +248,7 @@ app.post("/forgot-password", async (req, res) => {
     try {
         const token = Math.random().toString(36).substring(2, 15);
         await db.query("UPDATE users SET reset_token = $1, reset_expires = NOW() + INTERVAL '1 hour' WHERE email = $2", [token, email.toLowerCase()]);
+        
         const resetLink = `${req.protocol}://${req.get('host')}/reset-password/${token}`;
         await transporter.sendMail({
             to: email,
@@ -259,15 +259,18 @@ app.post("/forgot-password", async (req, res) => {
     } catch (err) { res.render("forgot-password", { message: null, error: "System error." }); }
 });
 
-app.get("/reset-password/:token", (req, res) => res.render("reset-password", { token: req.params.token }));
+app.get("/reset-password/:token", async (req, res) => {
+    res.render("reset-password", { token: req.params.token });
+});
 
 app.post("/reset-password/:token", async (req, res) => {
+    const { token } = req.params;
     const { password } = req.body;
     try {
         const hash = await bcrypt.hash(password, saltRounds);
         const result = await db.query(
             "UPDATE users SET password = $1, reset_token = NULL, reset_expires = NULL WHERE reset_token = $2 RETURNING *",
-            [hash, req.params.token]
+            [hash, token]
         );
         if (result.rows.length > 0) {
             req.flash("success", "Password updated!");
@@ -286,7 +289,7 @@ app.get("/feed", checkVerified, async (req, res) => {
         const trending = await db.query(`SELECT e.id, e.description, COUNT(l.id) as likes_count FROM events e LEFT JOIN likes l ON e.id = l.event_id WHERE e.is_deleted = false GROUP BY e.id ORDER BY likes_count DESC LIMIT 3`);
         
         let postsQuery = `
-            SELECT e.*, u.email AS author, u.last_active, u.is_verified, 
+            SELECT e.*, u.email AS author, u.profile_pic, u.is_verified, 
             (SELECT COUNT(*) FROM likes WHERE event_id=e.id) AS likes_count,
             (SELECT status FROM friendships WHERE (sender_id = $1 AND receiver_id = e.created_by) OR (sender_id = e.created_by AND receiver_id = $1) LIMIT 1) as friend_status,
             (SELECT JSON_AGG(json_build_object('content', c.content, 'author', cu.email)) FROM comments c JOIN users cu ON c.user_id = cu.id WHERE c.event_id = e.id) as comments_list
@@ -304,9 +307,39 @@ app.get("/feed", checkVerified, async (req, res) => {
         const posts = await db.query(postsQuery, params);
         res.render("feed", { announcements: announcements.rows, posts: posts.rows, trending: trending.rows });
     } catch (err) { 
-        console.error("Feed Error:", err.message);
         res.status(500).send("Village Feed Error"); 
     }
+});
+
+// ADD THIS: Discover Route (Random media gallery)
+app.get("/discover", checkVerified, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT e.*, u.email as author 
+            FROM events e 
+            JOIN users u ON e.created_by = u.id 
+            WHERE e.image_url IS NOT NULL AND e.is_deleted = false 
+            ORDER BY RANDOM() LIMIT 24
+        `);
+        res.render("discover", { posts: result.rows });
+    } catch (err) { res.redirect("/feed"); }
+});
+
+// ADD THIS: Single Post Detail Route
+app.get("/event/:id", checkVerified, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT e.*, u.email AS author, u.profile_pic, u.is_verified,
+            (SELECT COUNT(*) FROM likes WHERE event_id=e.id) AS likes_count,
+            (SELECT JSON_AGG(json_build_object('content', c.content, 'author', cu.email, 'pic', cu.profile_pic)) 
+             FROM comments c JOIN users cu ON c.user_id = cu.id 
+             WHERE c.event_id = e.id ORDER BY c.created_at ASC) as comments_list
+            FROM events e JOIN users u ON e.created_by=u.id 
+            WHERE e.id = $1 AND e.is_deleted = false`, [req.params.id]);
+
+        if (!result.rows.length) return res.status(404).send("Whisper not found.");
+        res.render("event_detail", { post: result.rows[0] });
+    } catch (err) { res.redirect("/feed"); }
 });
 
 app.post("/event/create", checkVerified, upload.single("localMedia"), async (req, res) => {
@@ -324,7 +357,6 @@ app.post("/event/create", checkVerified, upload.single("localMedia"), async (req
     } catch (err) { res.redirect("/feed"); }
 });
 
-/* ---------------- ACTIONS (LIKES/COMMENTS/DELETE) ---------------- */
 app.post("/event/:id/like", checkVerified, async (req, res) => {
     try {
         const check = await db.query("SELECT * FROM likes WHERE user_id=$1 AND event_id=$2", [req.user.id, req.params.id]);
@@ -381,6 +413,11 @@ app.post("/api/chat/send", isAuth, async (req, res) => {
     } catch (err) { res.status(500).json({ error: "Send failed" }); }
 });
 
+app.post("/api/chat/delete/:friendId", isAuth, async (req, res) => {
+    await db.query("DELETE FROM messages WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)", [req.user.id, req.params.friendId]);
+    res.json({ success: true });
+});
+
 /* ---------------- FRIENDSHIP SYSTEM ---------------- */
 app.post("/friends/request/:id", isAuth, async (req, res) => {
     if (req.user.id == req.params.id) return res.redirect("back");
@@ -399,7 +436,7 @@ app.post("/friends/accept/:senderId", isAuth, async (req, res) => {
     } catch (err) { res.redirect("back"); }
 });
 
-/* ---------------- PROFILE & NOTIFICATIONS ---------------- */
+/* ---------------- PROFILE & SETTINGS ---------------- */
 app.get('/profile', isAuth, async (req, res) => {
     try {
         const posts = await db.query('SELECT * FROM events WHERE created_by = $1 AND is_deleted = false ORDER BY created_at DESC', [req.user.id]);
@@ -410,7 +447,6 @@ app.get('/profile', isAuth, async (req, res) => {
 
 app.get("/notifications", isAuth, async (req, res) => {
     try {
-        // Changed to LEFT JOIN to handle system notifications (Welcome messages)
         const result = await db.query(`
             SELECT n.*, u.email as actor_name, u.profile_pic as actor_pic 
             FROM notifications n 
@@ -418,12 +454,14 @@ app.get("/notifications", isAuth, async (req, res) => {
             WHERE n.user_id = $1 
             ORDER BY n.created_at DESC LIMIT 50`, [req.user.id]);
         
-        await db.query("UPDATE notifications SET is_read = true WHERE user_id = $1", [req.user.id]);
         res.render("notifications", { notifications: result.rows });
-    } catch (err) { 
-        console.error("Notifications Route Error:", err.message);
-        res.redirect("/feed"); 
-    }
+    } catch (err) { res.redirect("/feed"); }
+});
+
+// ADD THIS: Clear Notifications Route
+app.post("/notifications/clear", isAuth, async (req, res) => {
+    await db.query("UPDATE notifications SET is_read = true WHERE user_id = $1", [req.user.id]);
+    res.redirect("back");
 });
 
 app.get("/settings", isAuth, (req, res) => res.render("settings", { user: req.user }));
