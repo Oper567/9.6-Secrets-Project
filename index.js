@@ -33,22 +33,24 @@ const db = new pg.Pool({
   max: 10                         
 });
 
-db.connect((err, client, release) => {
-  if (err) return console.error('❌ Database connection error:', err.stack);
-  console.log('✅ Connected to Supabase Database');
-  release();
-});
-
 /* ---------------- SUPABASE STORAGE & AUTH ---------------- */
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 const upload = multer({ storage: multer.memoryStorage() });
 
 /* ---------------- MIDDLEWARE ---------------- */
-app.set("trust proxy", 1); 
+app.set("trust proxy", 1); // Essential for Render to handle HTTPS correctly
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static("public"));
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
+
+// FORCE HTTPS: Prevents Google OAuth from failing due to insecure redirects
+app.use((req, res, next) => {
+  if (process.env.NODE_ENV === 'production' && req.headers['x-forwarded-proto'] !== 'https') {
+    return res.redirect('https://' + req.get('host') + req.url);
+  }
+  next();
+});
 
 app.use(session({
   store: new PostgresStore({ 
@@ -62,8 +64,8 @@ app.use(session({
   saveUninitialized: false,
   cookie: { 
     maxAge: 1000 * 60 * 60 * 24, 
-    secure: process.env.NODE_ENV === "production", 
-    sameSite: 'lax' 
+    secure: process.env.NODE_ENV === "production", // Only send cookies over HTTPS in production
+    sameSite: process.env.NODE_ENV === "production" ? 'none' : 'lax' 
   }
 }));
 
@@ -109,7 +111,7 @@ passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
   callbackURL: process.env.GOOGLE_CALLBACK_URL,
-  proxy: true 
+  proxy: true // Tells Google Strategy to trust the Render proxy for HTTPS
 }, async (token, secret, profile, done) => {
   try {
     const email = profile.emails[0].value;
@@ -137,23 +139,18 @@ app.get("/register", (req, res) => res.render("register"));
 app.get("/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
 app.get("/auth/google/callback", passport.authenticate("google", { failureRedirect: "/login" }), (req, res) => res.redirect("/feed"));
 
-/* --- REGISTER (UPDATED WITH STRENGTH CHECK) --- */
 app.post("/register", async (req, res) => {
   const { email, password } = req.body;
-  
-  // Backend validation matching your UI
   if (password.length < 8) {
     req.flash("error", "Password must be at least 8 characters long.");
     return res.redirect("/register");
   }
-
   try {
     const hash = await bcrypt.hash(password, saltRounds);
     const user = await db.query("INSERT INTO users (email, password, role) VALUES ($1,$2,$3) RETURNING *", [email, hash, "user"]);
     await sendWelcomeNote(user.rows[0].id);
     req.login(user.rows[0], () => res.redirect("/feed"));
   } catch (err) { 
-    console.error(err);
     req.flash("error", "Email already registered or server error.");
     res.redirect("/register"); 
   }
@@ -172,7 +169,6 @@ app.post("/auth/reset-password", async (req, res) => {
     req.flash("success", "Reset link sent! Please check your village email.");
     res.redirect("/login");
   } catch (err) {
-    console.error(err);
     req.flash("error", "Failed to send reset email.");
     res.redirect("/forgot-password");
   }
@@ -185,16 +181,13 @@ app.post("/auth/update-password", async (req, res) => {
   try {
     const hash = await bcrypt.hash(newPassword, saltRounds);
     const result = await db.query("UPDATE users SET password = $1 WHERE email = $2", [hash, email]);
-    
     if (result.rowCount === 0) {
       req.flash("error", "User not found.");
       return res.redirect("/update-password");
     }
-    
     req.flash("success", "Password updated successfully! Welcome back.");
     res.redirect("/login");
   } catch (err) {
-    console.error(err);
     req.flash("error", "Failed to update password.");
     res.redirect("/update-password");
   }
@@ -228,10 +221,7 @@ app.get("/feed", async (req, res) => {
     
     const posts = await db.query(postsQuery, params);
     res.render("feed", { announcements: announcements.rows, posts: posts.rows, trending: trending.rows, search });
-  } catch (err) { 
-    console.error("Feed Load Error:", err);
-    res.status(500).send("Error loading feed"); 
-  }
+  } catch (err) { res.status(500).send("Error loading feed"); }
 });
 
 /* --- OTHER ROUTES --- */
@@ -252,7 +242,6 @@ app.post("/settings/update", async (req, res) => {
     req.flash("success", "Settings updated!");
     res.redirect("/settings");
   } catch (err) {
-    console.error("Settings Update Error:", err);
     req.flash("error", "Update failed.");
     res.redirect("/settings");
   }
@@ -263,10 +252,7 @@ app.get("/profile", async (req, res) => {
   try {
     const result = await db.query("SELECT * FROM events WHERE created_by = $1 AND is_deleted = false ORDER BY created_at DESC", [req.user.id]);
     res.render("profile", { posts: result.rows, search: "" });
-  } catch (e) { 
-    console.error(e);
-    res.redirect("/feed"); 
-  }
+  } catch (e) { res.redirect("/feed"); }
 });
 
 app.get("/api/notifications", async (req, res) => {
@@ -287,19 +273,11 @@ app.post("/event/create", upload.single("localMedia"), async (req, res) => {
 
     if (req.file) {
       const fileName = `${Date.now()}-${req.file.originalname}`;
-      const { data, error } = await supabase.storage
-        .from('apugo_village') 
-        .upload(fileName, req.file.buffer, {
-          contentType: req.file.mimetype,
-          upsert: true
-        });
-
-      if (error) throw error;
-
-      const { data: publicData } = supabase.storage
-        .from('apugo_village')
-        .getPublicUrl(fileName);
-      
+      await supabase.storage.from('apugo_village').upload(fileName, req.file.buffer, {
+        contentType: req.file.mimetype,
+        upsert: true
+      });
+      const { data: publicData } = supabase.storage.from('apugo_village').getPublicUrl(fileName);
       mediaUrl = publicData.publicUrl;
       mediaType = req.file.mimetype.startsWith("video") ? 'video' : 'image';
     }
@@ -309,10 +287,7 @@ app.post("/event/create", upload.single("localMedia"), async (req, res) => {
       ["Post", req.body.description, mediaUrl, req.user.id, req.user.role === 'admin', mediaType]
     );
     res.redirect("/feed");
-  } catch (err) {
-    console.error("Post Creation Error:", err);
-    res.redirect("/feed");
-  }
+  } catch (err) { res.redirect("/feed"); }
 });
 
 app.post("/event/:id/like", async (req, res) => {
@@ -345,10 +320,7 @@ app.post("/event/:id/delete", async (req, res) => {
       WHERE id = $1 AND (created_by = $2 OR (SELECT role FROM users WHERE id = $2) = 'admin')
     `, [req.params.id, req.user.id]);
     res.redirect("back");
-  } catch (err) { 
-    console.error(err);
-    res.redirect("back"); 
-  }
+  } catch (err) { res.redirect("back"); }
 });
 
 app.listen(port, () => console.log(`🚀 Village Square live at port ${port}`));
