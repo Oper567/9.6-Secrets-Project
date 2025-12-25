@@ -279,12 +279,25 @@ app.get("/api/chat/:friendId", async (req, res) => {
 });
 
 app.post("/api/chat/send", async (req, res) => {
-  if (!req.isAuthenticated()) return res.status(401).send();
+  if (!req.isAuthenticated()) return res.status(401).json({ error: "Unauthorized" });
+  
   const { receiverId, content } = req.body;
+  
+  // Basic validation to prevent empty messages
+  if (!content || !receiverId) {
+    return res.status(400).json({ error: "Missing content or recipient" });
+  }
+
   try {
-      const msg = await db.query("INSERT INTO messages (sender_id, receiver_id, content) VALUES ($1, $2, $3) RETURNING *", [req.user.id, receiverId, content]);
+      const msg = await db.query(
+        "INSERT INTO messages (sender_id, receiver_id, content) VALUES ($1, $2, $3) RETURNING *", 
+        [req.user.id, receiverId, content]
+      );
       res.json(msg.rows[0]);
-  } catch (err) { res.status(500).send(); }
+  } catch (err) {
+      console.error("CRITICAL DATABASE ERROR:", err.message); // This will show the real error in your terminal
+      res.status(500).json({ error: err.message });
+  }
 });
 
 /* --- ACTIONS (EVENTS & COMMENTS) --- */
