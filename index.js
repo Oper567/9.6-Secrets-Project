@@ -33,6 +33,12 @@ const db = new pg.Pool({
   idleTimeoutMillis: 30000,       
   max: 10                          
 });
+// Configure multer to store files in memory temporarily
+const storage = multer.memoryStorage();
+const upload = multer({ 
+    storage: storage,
+    limits: { fileSize: 2 * 1024 * 1024 } // Limit: 2MB
+});
 
 db.on('error', (err) => {
   console.error('Unexpected error on idle client', err);
@@ -47,7 +53,7 @@ const transporter = nodemailer.createTransport({
 });
 /* ---------------- SUPABASE STORAGE & AUTH ---------------- */
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-const upload = multer({ storage: multer.memoryStorage() });
+
 
 /* ---------------- MIDDLEWARE ---------------- */
 app.set("trust proxy", 1); 
@@ -312,6 +318,31 @@ app.post("/forgot-password", async (req, res) => {
         res.render("forgot-password", { message: null, error: "Something went wrong." });
     }
 });
+// The Profile Picture Upload Route
+app.post("/settings/profile-pic", upload.single("avatar"), async (req, res) => {
+    if (!req.isAuthenticated()) return res.redirect("/login");
+    
+    try {
+        if (!req.file) {
+            return res.redirect(req.get("Referrer") || "/feed");
+        }
+
+        // Convert the buffer to a Base64 string to store in the DB
+        const base64Image = req.file.buffer.toString('base64');
+        const dataUrl = `data:${req.file.mimetype};base64,${base64Image}`;
+
+        await db.query(
+            "UPDATE users SET profile_pic = $1 WHERE id = $2", 
+            [dataUrl, req.user.id]
+        );
+
+        res.redirect(req.get("Referrer") || "/feed");
+    } catch (err) {
+        console.error("Upload Error:", err);
+        res.redirect("/feed");
+    }
+});
+
 app.get("/auth/verify/:token", async (req, res) => {
     const { token } = req.params;
     try {
@@ -457,18 +488,7 @@ app.post("/friends/accept/:senderId", async (req, res) => {
 
 /* --- DISCOVER & FEED --- */
 
-app.get("/discover", async (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect("/login");
-  try {
-    const discoverPosts = await db.query(`
-      SELECT e.*, u.email AS author, u.is_verified,
-      (SELECT COUNT(*) FROM likes WHERE event_id=e.id) AS likes_count
-      FROM events e JOIN users u ON e.created_by=u.id 
-      WHERE e.is_deleted=false ORDER BY RANDOM() LIMIT 24
-    `);
-    res.render("discover", { posts: discoverPosts.rows, search: "" });
-  } catch (err) { res.redirect("/feed"); }
-});
+
 
 app.get("/feed", async (req, res) => {
   if (!req.isAuthenticated()) return res.redirect("/login");
@@ -524,13 +544,29 @@ app.get("/messages", async (req, res) => {
 });
 
 app.get("/api/chat/:friendId", async (req, res) => {
-  if (!req.isAuthenticated()) return res.json([]);
-  const result = await db.query(`
-      SELECT * FROM messages 
-      WHERE (sender_id = $1 AND receiver_id = $2) 
-      OR (sender_id = $2 AND receiver_id = $1)
-      ORDER BY created_at ASC`, [req.user.id, req.params.friendId]);
-  res.json(result.rows);
+    const { friendId } = req.params;
+    const userId = req.user.id;
+
+    try {
+        // 1. Mark incoming messages as read
+        await db.query(`
+            UPDATE messages 
+            SET is_read = true 
+            WHERE sender_id = $1 AND receiver_id = $2 AND is_read = false
+        `, [friendId, userId]);
+
+        // 2. Fetch the conversation
+        const result = await db.query(`
+            SELECT * FROM messages 
+            WHERE (sender_id = $1 AND receiver_id = $2)
+               OR (sender_id = $2 AND receiver_id = $1)
+            ORDER BY created_at ASC
+        `, [userId, friendId]);
+
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Failed to sync whispers" });
+    }
 });
 
 app.get("/users/search", async (req, res) => {
@@ -627,6 +663,25 @@ app.post("/event/:id/delete", async (req, res) => {
     res.redirect("/feed");
   }
 });
+// GET Settings Page
+app.get("/settings", async (req, res) => {
+    if (!req.isAuthenticated()) return res.redirect("/login");
+    res.render("settings", { user: req.user, message: req.query.msg });
+});
+
+// POST Update Profile
+app.post("/settings/update", async (req, res) => {
+    const { bio, profile_pic } = req.body;
+    try {
+        await db.query(
+            "UPDATE users SET bio = $1, profile_pic = $2 WHERE id = $3",
+            [bio, profile_pic, req.user.id]
+        );
+        res.redirect("/settings?msg=Soul Updated");
+    } catch (err) {
+        res.redirect("/settings?msg=Update Failed");
+    }
+});
 
 /* --- PROFILE & ADMIN --- */
 app.get('/profile', async (req, res) => {
@@ -668,38 +723,34 @@ app.get('/profile', async (req, res) => {
         res.status(500).send(`Error loading profile: ${error.message}`);
     }
 });
-
-app.get('/notifications', async (req, res) => {
+app.get("/notifications", async (req, res) => {
     if (!req.isAuthenticated()) return res.redirect("/login");
 
     try {
-        const userId = req.user.id;
+        // 1. Get all notifications for the user
+        // We JOIN with users to get the "actor's" profile picture and name
+        const result = await db.query(`
+            SELECT 
+                n.*, 
+                u.email as actor_name, 
+                u.profile_pic as actor_pic 
+            FROM notifications n
+            JOIN users u ON n.actor_id = u.id
+            WHERE n.user_id = $1
+            ORDER BY n.created_at DESC
+            LIMIT 50
+        `, [req.user.id]);
 
-        // 1. Fetch notifications using Postgres $1 syntax
-        const result = await db.query(
-            'SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC', 
-            [userId]
-        );
-        
-        // Postgres results are always in .rows
-        const notifications = result.rows;
+        // 2. Mark them as read now that the user has seen them
+        await db.query("UPDATE notifications SET is_read = true WHERE user_id = $1", [req.user.id]);
 
-        // 2. Render the notifications.ejs file
-        res.render('notifications', {
-            user: req.user,
-            notifications: notifications,
-            search: "" // Keeping consistency with your other routes
+        res.render("notifications", { 
+            user: req.user, 
+            notifications: result.rows 
         });
-
-        // 3. Mark notifications as read using $1
-        await db.query(
-            'UPDATE notifications SET is_read = true WHERE user_id = $1 AND is_read = false',
-            [userId]
-        );
-
-    } catch (error) {
-        console.error("Notification Error:", error);
-        res.status(500).send("Error loading alerts");
+    } catch (err) {
+        console.error(err);
+        res.redirect("/feed");
     }
 });
 

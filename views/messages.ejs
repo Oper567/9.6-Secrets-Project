@@ -19,21 +19,21 @@
             overflow: hidden; 
         }
         
-        /* Mobile Slide Logic - Fixed for VW */
+        .pane-container { 
+            position: relative; 
+            display: flex; 
+            height: 100%; 
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1); 
+        }
+
         @media (max-width: 768px) {
-            .pane-container { 
-                position: relative; 
-                width: 200vw; 
-                display: flex; 
-                transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1); 
-                height: 100%; 
-            }
+            .pane-container { width: 200vw; }
             .friends-pane, .chat-pane { width: 100vw; height: 100%; }
             .show-chat { transform: translateX(-100vw); }
         }
 
         @media (min-width: 769px) {
-            .pane-container { width: 100%; display: flex; }
+            .pane-container { width: 100%; }
             .friends-pane { width: 350px; border-right: 1px solid rgba(255,255,255,0.05); }
             .chat-pane { flex: 1; }
         }
@@ -41,30 +41,28 @@
         .chat-container { 
             flex: 1; 
             overflow-y: auto; 
-            -webkit-overflow-scrolling: touch; 
             display: flex; 
             flex-direction: column; 
-            scrollbar-width: thin;
-            scrollbar-color: #1e293b transparent;
+            scrollbar-width: none;
+            padding-bottom: 20px;
         }
 
-        /* Bubble Styling */
         .bubble { 
-            max-width: 85%; 
-            padding: 12px 16px; 
+            max-width: 75%; 
+            padding: 10px 14px; 
             font-size: 14px; 
-            margin-bottom: 2px; 
-            border-radius: 1.25rem; 
-            line-height: 1.5; 
+            margin-bottom: 4px; 
+            border-radius: 1.2rem; 
+            line-height: 1.4; 
             position: relative; 
             word-wrap: break-word;
-            word-break: break-word;
         }
         .bubble-me { 
             background: #2563eb; 
             color: white; 
             border-bottom-right-radius: 4px; 
             align-self: flex-end;
+            margin-right: 8px;
         }
         .bubble-them { 
             background: #1e293b; 
@@ -72,47 +70,41 @@
             border-bottom-left-radius: 4px; 
             border: 1px solid rgba(255,255,255,0.05);
             align-self: flex-start;
+            margin-left: 8px;
         }
         
-        .friend-item.active { background-color: rgba(37, 99, 235, 0.1); border-right: 3px solid #3b82f6; }
+        .friend-item.active { background-color: rgba(37, 99, 235, 0.1); border-left: 4px solid #2563eb; }
         .glass-nav { background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(255,255,255,0.05); }
-        
-        /* Hide scrollbar for Chrome/Safari */
-        .chat-container::-webkit-scrollbar { width: 4px; }
-        .chat-container::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
+        .typing-dot { width: 4px; height: 4px; background: #3b82f6; border-radius: 50%; animation: blink 1.4s infinite; }
+        @keyframes blink { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
     </style>
 </head>
 
 <body class="text-slate-200">
 
 <nav class="glass-nav p-3 shrink-0">
-    <div class="max-w-7xl mx-auto flex justify-between items-center">
-        <div class="flex items-center gap-3 w-full">
-            <button id="mobileBack" class="hidden text-blue-500 p-2 mr-1" onclick="closeChat()">
-                <i class="fas fa-chevron-left text-lg"></i>
-            </button>
-            
-            <a href="/feed" id="navHomeLink" class="text-slate-500 hover:text-white transition p-2">
-                <i class="fas fa-arrow-left text-lg"></i>
-            </a>
+    <div class="max-w-7xl mx-auto flex items-center gap-3">
+        <button id="mobileBack" class="hidden text-slate-400 p-2" onclick="closeChat()">
+            <i class="fas fa-chevron-left text-lg"></i>
+        </button>
+        
+        <a href="/feed" id="navHomeLink" class="text-slate-400 hover:text-white p-2">
+            <i class="fas fa-arrow-left"></i>
+        </a>
 
-            <div class="flex-1 overflow-hidden">
-                <h1 id="headerTitle" class="font-black text-blue-500 italic text-lg tracking-tighter uppercase leading-none">Whispers</h1>
-                <div class="flex items-center justify-between w-full">
-                    <p id="chatStatus" class="text-[9px] text-slate-500 uppercase font-black tracking-widest truncate">Village Square</p>
-                    
-                    <div id="chatActions" class="hidden relative group ml-2">
-                        <button class="p-1 hover:bg-slate-800 rounded-lg transition text-slate-500">
-                            <i class="fas fa-ellipsis-v"></i>
-                        </button>
-                        <div class="absolute right-0 mt-2 w-44 bg-slate-900 border border-slate-800 rounded-2xl hidden group-hover:block shadow-2xl z-50 overflow-hidden">
-                            <button onclick="clearChat()" class="w-full text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 text-slate-300 transition">Burn History</button>
-                            <form id="unfriendForm" action="" method="POST" onsubmit="return confirm('Sever this kinship?')">
-                                <button type="submit" class="w-full text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest hover:bg-red-950/40 text-red-500 border-t border-slate-800 transition">End Connection</button>
-                            </form>
-                        </div>
-                    </div>
+        <div class="flex-1 min-w-0 flex items-center gap-3">
+            <div id="activeChatAvatar" class="hidden w-9 h-9 rounded-full overflow-hidden border border-slate-700 bg-slate-800 flex items-center justify-center text-[10px] font-black text-blue-500 uppercase">
                 </div>
+            <div>
+                <h1 id="chatHeaderTitle" class="font-black text-blue-500 italic text-sm uppercase tracking-tighter">Whispers</h1>
+                <p id="chatStatus" class="text-[9px] text-slate-500 uppercase font-black truncate tracking-widest">Village Square</p>
+            </div>
+        </div>
+
+        <div id="chatActions" class="hidden relative group">
+            <button class="p-2 text-slate-500"><i class="fas fa-ellipsis-v"></i></button>
+            <div class="absolute right-0 mt-2 w-48 bg-slate-900 border border-slate-800 rounded-2xl hidden group-hover:block shadow-2xl z-50 overflow-hidden">
+                <button onclick="clearChat()" class="w-full text-left px-4 py-3 text-[10px] font-black uppercase text-red-500 hover:bg-red-500/10 transition">Burn History</button>
             </div>
         </div>
     </div>
@@ -121,63 +113,74 @@
 <div class="flex-1 overflow-hidden">
     <div id="paneContainer" class="pane-container">
         
-        <aside id="friendsList" class="friends-pane bg-slate-950 flex flex-col overflow-hidden">
-            <div class="p-4 border-b border-slate-900 bg-slate-950">
+        <aside class="friends-pane bg-slate-950 flex flex-col">
+            <div class="p-4 border-b border-white/5">
                 <div class="relative">
-                    <input type="text" id="globalSearch" placeholder="Find a soul..." 
-                        class="w-full bg-slate-900 border border-slate-800 rounded-2xl py-2.5 pl-10 pr-4 text-xs outline-none focus:border-blue-600 transition-all text-white">
-                    <i class="fas fa-search absolute left-3.5 top-3.5 text-slate-600 text-xs"></i>
+                    <input type="text" id="globalSearch" placeholder="Search village..." 
+                        class="w-full bg-slate-900 border border-slate-800 rounded-2xl py-2.5 pl-10 pr-4 text-xs outline-none text-white focus:border-blue-600 transition-all">
+                    <i class="fas fa-search absolute left-4 top-3.5 text-slate-600 text-xs"></i>
                 </div>
-                <div id="searchResults" class="absolute left-4 right-4 mt-2 bg-slate-900 border border-slate-800 rounded-2xl hidden z-[60] shadow-2xl overflow-hidden"></div>
             </div>
             
-            <div id="friendsScroll" class="flex-1 overflow-y-auto divide-y divide-slate-900/50">
+            <div class="flex-1 overflow-y-auto">
                 <% if (friends && friends.length > 0) { %>
                     <% friends.forEach(f => { %>
-                        <div id="friend-<%= f.id %>" 
-                            class="friend-item p-4 flex items-center gap-4 cursor-pointer hover:bg-slate-900/40 transition-all"
-                            onclick="selectFriend('<%= f.id %>', '<%= f.email.split('@')[0] %>')">
-                            <div class="relative shrink-0">
-                                <div class="w-12 h-12 bg-slate-800 border-2 border-slate-900 rounded-full flex items-center justify-center font-black text-blue-500 uppercase">
-                                    <%= f.email[0] %>
-                                </div>
-                                <span class="absolute bottom-0 right-0 w-3.5 h-3.5 border-2 border-slate-950 rounded-full bg-green-500"></span>
+                        <div id="friend-<%= f.id %>" class="friend-item p-4 flex items-center gap-4 cursor-pointer border-b border-white/5 hover:bg-white/5 transition-all" 
+                             onclick="selectFriend('<%= f.id %>', `<%= f.email.split('@')[0] %>`, `<%= f.profile_pic %>`)">
+                            
+                            <div class="relative shrink-0 w-11 h-11 bg-slate-800 rounded-full flex items-center justify-center border border-slate-700 overflow-hidden">
+                                <% if (f.profile_pic) { %>
+                                    <img src="<%= f.profile_pic %>" class="w-full h-full object-cover">
+                                <% } else { %>
+                                    <span class="font-black text-blue-500 text-xs"><%= f.email[0].toUpperCase() %></span>
+                                <% } %>
+                                <span class="absolute bottom-0 right-0 w-3 h-3 border-2 border-slate-950 rounded-full <%= f.is_online ? 'bg-green-500' : 'bg-slate-600' %>"></span>
                             </div>
+
                             <div class="flex-1 min-w-0">
-                                <span class="text-sm font-black block truncate text-slate-100">@<%= f.email.split('@')[0] %></span>
-                                <p class="text-[9px] text-slate-600 uppercase font-black tracking-tighter mt-0.5">Active in village</p>
+                                <div class="flex justify-between items-center mb-0.5">
+                                    <span class="text-xs font-black block truncate text-slate-100 uppercase tracking-tight">@<%= f.email.split('@')[0] %></span>
+                                    <% if (f.unread_count > 0) { %>
+                                        <span class="bg-blue-600 text-[8px] font-black px-1.5 py-0.5 rounded-full animate-pulse"><%= f.unread_count %></span>
+                                    <% } %>
+                                </div>
+                                <p class="text-[10px] <%= f.unread_count > 0 ? 'text-blue-400 font-bold' : 'text-slate-500' %> truncate italic uppercase tracking-tighter">
+                                    <%= f.unread_count > 0 ? 'Incoming Whisper...' : 'Open Circle' %>
+                                </p>
                             </div>
                         </div>
                     <% }) %>
                 <% } else { %>
-                    <div class="p-16 text-center">
-                        <p class="text-[10px] font-black uppercase tracking-widest text-slate-700 italic">No connections yet</p>
-                        <p class="text-[9px] text-slate-800 mt-2">Use search to find kin</p>
+                    <div class="p-10 text-center opacity-20">
+                        <i class="fas fa-comment-slash text-2xl mb-2"></i>
+                        <p class="text-[9px] font-black uppercase tracking-widest">No connections yet</p>
                     </div>
                 <% } %>
             </div>
         </aside>
 
-        <main class="chat-pane flex flex-col bg-slate-950">
-            <div id="chatWindow" class="chat-container p-4 md:p-6 gap-3">
-                <div id="emptyState" class="my-auto text-center opacity-20">
-                    <div class="text-5xl mb-4">🌴</div>
-                    <h2 class="font-black text-white uppercase tracking-[0.2em] text-[10px]">Select a soul to whisper</h2>
+        <main class="chat-pane flex flex-col bg-slate-950 relative">
+            <div id="chatWindow" class="chat-container p-4 gap-1">
+                <div class="my-auto text-center">
+                    <div class="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center mx-auto mb-4 border border-white/5">
+                        <i class="fas fa-feather-alt text-slate-800 text-2xl"></i>
+                    </div>
+                    <h2 class="font-black text-slate-700 uppercase text-[10px] tracking-[0.3em]">Select a Soul to Whisper</h2>
                 </div>
             </div>
 
-            <div id="inputDock" class="hidden p-4 bg-slate-900/80 border-t border-slate-800 backdrop-blur-md">
+            <div id="inputDock" class="hidden p-3 bg-slate-900/50 backdrop-blur-md border-t border-white/5">
                 <% if (user.is_verified) { %>
-                    <form id="chatForm" class="flex gap-2 max-w-5xl mx-auto items-center">
+                    <form id="chatForm" class="flex gap-2 items-center max-w-4xl mx-auto">
                         <input id="msgInput" type="text" autocomplete="off" placeholder="Type a whisper..." 
-                            class="flex-1 bg-slate-950 border border-slate-800 rounded-2xl px-5 py-3 text-sm outline-none focus:border-blue-600 transition-all text-white" />
-                        <button type="submit" class="bg-blue-600 w-12 h-12 rounded-full text-white flex items-center justify-center transition active:scale-90 shadow-lg shadow-blue-900/20">
-                            <i class="fas fa-paper-plane"></i>
+                            class="flex-1 bg-slate-950 border border-slate-800 rounded-2xl px-5 py-3 text-sm outline-none text-white focus:border-blue-600 transition-all shadow-inner" />
+                        <button type="submit" class="bg-blue-600 w-11 h-11 rounded-full text-white flex items-center justify-center shadow-lg shadow-blue-600/20 active:scale-90 transition-transform">
+                            <i class="fas fa-paper-plane text-xs"></i>
                         </button>
                     </form>
                 <% } else { %>
-                    <div class="text-center p-3 bg-red-950/20 rounded-2xl border border-red-900/20">
-                        <p class="text-[10px] text-red-500 font-black uppercase tracking-widest">⚠️ Verify Email to Whisper</p>
+                    <div class="text-center p-3 text-[10px] text-red-400 font-black uppercase tracking-widest">
+                        <i class="fas fa-lock mr-2"></i> Verify email to unlock whispers
                     </div>
                 <% } %>
             </div>
@@ -187,54 +190,42 @@
 
 <script>
     const currentUserId = '<%= user.id %>';
-    const targetUserFromFeed = "<%= typeof targetUser !== 'undefined' ? targetUser : '' %>";
     let currentFriendId = null;
     let lastMessageId = null;
 
-    const paneContainer = document.getElementById('paneContainer');
-    const backBtn = document.getElementById('mobileBack');
-    const homeLink = document.getElementById('navHomeLink');
-    const chatWindow = document.getElementById('chatWindow');
-    const inputDock = document.getElementById('inputDock');
-    const chatStatus = document.getElementById('chatStatus');
-    const chatActions = document.getElementById('chatActions');
-    const msgInput = document.getElementById('msgInput');
-    const unfriendForm = document.getElementById('unfriendForm');
+    async function selectFriend(id, name, pic) {
+        currentFriendId = id;
+        
+        // Update UI Selection
+        document.querySelectorAll('.friend-item').forEach(el => el.classList.remove('active'));
+        document.getElementById(`friend-${id}`).classList.add('active');
 
-    function openChat() {
-        if (window.innerWidth <= 768) {
-            paneContainer.classList.add('show-chat');
-            backBtn.classList.remove('hidden');
-            homeLink.classList.add('hidden');
-        }
+        // Pane Transition for Mobile
+        document.getElementById('paneContainer').classList.add('show-chat');
+        document.getElementById('mobileBack').classList.remove('hidden');
+        document.getElementById('navHomeLink').classList.add('hidden');
+        document.getElementById('inputDock').classList.remove('hidden');
+        document.getElementById('chatActions').classList.remove('hidden');
+        
+        // Update Header
+        const avatarDiv = document.getElementById('activeChatAvatar');
+        avatarDiv.classList.remove('hidden');
+        avatarDiv.innerHTML = pic && pic !== 'null' && pic !== '' ? `<img src="${pic}" class="w-full h-full object-cover">` : name[0].toUpperCase();
+        
+        document.getElementById('chatHeaderTitle').innerText = `@${name}`;
+        document.getElementById('chatStatus').innerHTML = `<span class="flex items-center gap-1"><span class="typing-dot"></span> Whispering Now</span>`;
+        
+        await fetchMessages(true);
     }
 
     function closeChat() {
-        paneContainer.classList.remove('show-chat');
-        backBtn.classList.add('hidden');
-        homeLink.classList.remove('hidden');
-        chatActions.classList.add('hidden');
+        document.getElementById('paneContainer').classList.remove('show-chat');
+        document.getElementById('mobileBack').classList.add('hidden');
+        document.getElementById('navHomeLink').classList.remove('hidden');
+        document.getElementById('activeChatAvatar').classList.add('hidden');
+        document.getElementById('chatHeaderTitle').innerText = 'Whispers';
+        document.getElementById('chatStatus').innerText = 'Village Square';
         currentFriendId = null;
-        chatStatus.innerText = "Village Square";
-    }
-
-    async function selectFriend(id, name) {
-        if (currentFriendId === id) return;
-        currentFriendId = id;
-        lastMessageId = null;
-        
-        // UI Updates
-        document.querySelectorAll('.friend-item').forEach(el => el.classList.remove('active'));
-        document.getElementById(`friend-${id}`)?.classList.add('active');
-        inputDock.classList.remove('hidden');
-        chatActions.classList.remove('hidden');
-        unfriendForm.action = `/friends/unfriend/${id}`;
-        chatStatus.innerHTML = `Whispering <span class="text-blue-500 ml-1">@${name}</span>`;
-        
-        chatWindow.innerHTML = `<div class="my-auto text-center text-[9px] uppercase font-black tracking-widest text-slate-700 animate-pulse">Consulting the scroll...</div>`;
-        
-        openChat();
-        await fetchMessages(true);
     }
 
     async function fetchMessages(force = false) {
@@ -242,103 +233,57 @@
         try {
             const res = await fetch(`/api/chat/${currentFriendId}`);
             const messages = await res.json();
+            const chatWindow = document.getElementById('chatWindow');
             
-            // Optimization: Only redraw if new messages exist
-            if (!force && messages.length > 0 && messages[messages.length - 1].id === lastMessageId) return;
+            // Optimization: Only redraw if new messages or read-status change
+            const latestM = messages[messages.length - 1];
+            if (!force && latestM && latestM.id === lastMessageId && latestM.is_read) return;
             
-            chatWindow.innerHTML = ''; 
-            if (messages.length === 0) {
-                chatWindow.innerHTML = `<div class="my-auto text-center opacity-10"><p class="text-[10px] uppercase font-black tracking-widest">Start the conversation</p></div>`;
-            } else {
-                messages.forEach(m => {
-                    const isMe = m.sender_id == currentUserId;
-                    const time = new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    
-                    const div = document.createElement('div');
-                    div.className = `bubble ${isMe ? 'bubble-me' : 'bubble-them'}`;
-                    div.innerHTML = `
-                        <div class="font-medium">${m.content}</div>
-                        <div class="text-[7px] mt-1 opacity-50 text-right uppercase font-black tracking-tighter">${time}</div>
-                    `;
-                    chatWindow.appendChild(div);
-                    lastMessageId = m.id;
-                });
-                chatWindow.scrollTop = chatWindow.scrollHeight;
-            }
-        } catch (err) { console.error("Sync Error:", err); }
+            chatWindow.innerHTML = '';
+            messages.forEach(m => {
+                const isMe = m.sender_id == currentUserId;
+                const div = document.createElement('div');
+                div.className = `bubble ${isMe ? 'bubble-me' : 'bubble-them'}`;
+                
+                // Read Receipt Logic
+                let statusIcon = '';
+                if (isMe) {
+                    statusIcon = m.is_read 
+                        ? '<i class="fas fa-check-double text-blue-200 ml-1"></i>' 
+                        : '<i class="fas fa-check opacity-30 ml-1"></i>';
+                }
+
+                div.innerHTML = `
+                    <div class="font-medium">${m.content}</div>
+                    <div class="text-[7px] mt-1 opacity-60 flex items-center justify-end">
+                        ${new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        ${statusIcon}
+                    </div>
+                `;
+                chatWindow.appendChild(div);
+                lastMessageId = m.id;
+            });
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+        } catch (e) { console.error("Whisper sync error"); }
     }
 
     document.getElementById('chatForm')?.addEventListener('submit', async e => {
         e.preventDefault();
-        const content = msgInput.value.trim();
+        const input = document.getElementById('msgInput');
+        const content = input.value.trim();
         if (!content || !currentFriendId) return;
         
-        msgInput.value = '';
-        try {
-            const res = await fetch('/api/chat/send', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ receiverId: currentFriendId, content })
-            });
-            if (res.ok) fetchMessages(true);
-        } catch (err) { console.error("Send Error:", err); }
+        input.value = '';
+        await fetch('/api/chat/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ receiverId: currentFriendId, content })
+        });
+        fetchMessages(true);
     });
 
-    async function clearChat() {
-        if (confirm("Burn all whispers in this scroll? This cannot be undone.")) {
-            await fetch(`/api/chat/delete/${currentFriendId}`, { method: 'POST' });
-            fetchMessages(true);
-        }
-    }
-
-    // Search logic for finding new users
-    const globalSearch = document.getElementById('globalSearch');
-    const searchResults = document.getElementById('searchResults');
-
-    globalSearch.addEventListener('input', async (e) => {
-        const name = e.target.value.trim();
-        if (name.length < 2) { searchResults.classList.add('hidden'); return; }
-        
-        const res = await fetch(`/users/search?query=${name}`);
-        const users = await res.json();
-        
-        if (users.length > 0) {
-            searchResults.innerHTML = users.map(u => `
-                <div onclick="initiateAdd('${u.id}')" class="p-4 hover:bg-slate-800 cursor-pointer border-b border-slate-800 last:border-0 flex justify-between items-center transition">
-                    <span class="text-xs font-black text-slate-200">@${u.email.split('@')[0]}</span>
-                    <span class="text-[9px] bg-blue-600 px-3 py-1.5 rounded-lg text-white font-black uppercase tracking-widest">Connect +</span>
-                </div>
-            `).join('');
-            searchResults.classList.remove('hidden');
-        } else {
-            searchResults.innerHTML = `<div class="p-4 text-[10px] text-slate-500 text-center font-black uppercase">None found</div>`;
-            searchResults.classList.remove('hidden');
-        }
-    });
-
-    function initiateAdd(userId) {
-        const form = document.createElement('form');
-        form.method = 'POST'; 
-        form.action = `/friends/request/${userId}`;
-        document.body.appendChild(form); 
-        form.submit();
-    }
-
-    // Auto-select friend if coming from profile/feed
-    window.addEventListener('load', () => {
-        if (targetUserFromFeed && targetUserFromFeed !== 'null') {
-            const friendEl = document.getElementById(`friend-${targetUserFromFeed}`);
-            if (friendEl) friendEl.click();
-        }
-    });
-
-    // Refresh interval
-    const chatPoller = setInterval(() => { if (currentFriendId) fetchMessages(); }, 3000);
-
-    // Click outside to hide search
-    document.addEventListener('click', e => { 
-        if (!globalSearch.contains(e.target)) searchResults.classList.add('hidden'); 
-    });
+    // Sync Whispers every 3 seconds
+    setInterval(() => { if (currentFriendId) fetchMessages(); }, 3000);
 </script>
 </body>
 </html>
