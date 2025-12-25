@@ -24,6 +24,7 @@
             border-color: #3b82f6;
             background: rgba(2, 6, 23, 0.8);
         }
+        .strength-bar { transition: width 0.5s ease, background-color 0.5s ease; }
     </style>
 </head>
 <body class="flex items-center justify-center min-h-screen p-6 overflow-hidden">
@@ -54,13 +55,24 @@
                         class="input-field w-full px-6 py-4 rounded-2xl outline-none transition-all font-medium placeholder:text-slate-600">
                 </div>
 
-                <div>
-                    <input type="password" name="password" placeholder="Password" required
-                        class="input-field w-full px-6 py-4 rounded-2xl outline-none transition-all font-medium placeholder:text-slate-600">
+                <div class="relative">
+                    <input type="password" name="password" id="password" placeholder="Password" required
+                        class="input-field w-full px-6 py-4 rounded-2xl outline-none transition-all font-medium placeholder:text-slate-600 pr-14">
+                    
+                    <button type="button" onclick="togglePassword()" class="absolute right-5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors">
+                        <i id="eyeIcon" class="fa-solid fa-eye"></i>
+                    </button>
+
+                    <div id="strengthContainer" class="hidden mt-3 px-1">
+                        <div class="h-1 w-full bg-slate-800 rounded-full overflow-hidden">
+                            <div id="strengthBar" class="strength-bar h-full w-0 bg-red-500"></div>
+                        </div>
+                        <p id="strengthText" class="text-[9px] uppercase font-black tracking-widest mt-1 text-slate-500">Analyzing...</p>
+                    </div>
                 </div>
 
                 <div class="flex justify-end px-2">
-                    <a href="#" class="text-xs font-bold text-blue-500 hover:text-blue-400 transition">Recover Password</a>
+                    <a href="/forgot-password" class="text-xs font-bold text-blue-500 hover:text-blue-400 transition">Recover Password</a>
                 </div>
 
                 <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-5 rounded-2xl font-bold text-lg shadow-xl shadow-blue-600/20 transition-all transform active:scale-95">
@@ -91,5 +103,56 @@
         </div>
     </div>
 
+    <script>
+        // Password Visibility Toggle
+        function togglePassword() {
+            const passwordInput = document.getElementById('password');
+            const eyeIcon = document.getElementById('eyeIcon');
+            
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                eyeIcon.classList.replace('fa-eye', 'fa-eye-slash');
+            } else {
+                passwordInput.type = 'password';
+                eyeIcon.classList.replace('fa-eye-slash', 'fa-eye');
+            }
+        }
+
+        // Password Strength Analysis
+        const passwordInput = document.getElementById('password');
+        const strengthBar = document.getElementById('strengthBar');
+        const strengthText = document.getElementById('strengthText');
+        const strengthContainer = document.getElementById('strengthContainer');
+
+        passwordInput.addEventListener('input', () => {
+            const val = passwordInput.value;
+            if (val.length > 0) {
+                strengthContainer.classList.remove('hidden');
+            } else {
+                strengthContainer.classList.add('hidden');
+            }
+
+            let score = 0;
+            if (val.length >= 8) score++;
+            if (/[A-Z]/.test(val)) score++;
+            if (/[0-9]/.test(val)) score++;
+            if (/[^A-Za-z0-9]/.test(val)) score++;
+
+            // Update UI based on score
+            const levels = [
+                { width: '25%', color: 'bg-red-500', text: 'Weak', textColor: 'text-red-500' },
+                { width: '50%', color: 'bg-yellow-500', text: 'Fair', textColor: 'text-yellow-500' },
+                { width: '75%', color: 'bg-blue-500', text: 'Good', textColor: 'text-blue-500' },
+                { width: '100%', color: 'bg-emerald-500', text: 'Strong', textColor: 'text-emerald-500' }
+            ];
+
+            const current = levels[Math.max(0, score - 1)];
+            
+            strengthBar.style.width = current.width;
+            strengthBar.className = `strength-bar h-full ${current.color}`;
+            strengthText.innerText = current.text;
+            strengthText.className = `text-[9px] uppercase font-black tracking-widest mt-1 ${current.textColor}`;
+        });
+    </script>
 </body>
 </html>

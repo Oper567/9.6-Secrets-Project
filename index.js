@@ -24,26 +24,22 @@ const app = express();
 const port = process.env.PORT || 3000;
 const saltRounds = 10;
 
-/* ---------------- DATABASE (FIXED FOR TIMEOUTS) ---------------- */
+/* ---------------- DATABASE ---------------- */
 const db = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
-  // These 3 lines fix the "Unable to check out connection" timeout error
-  connectionTimeoutMillis: 10000, // Give it 10 seconds to connect
-  idleTimeoutMillis: 30000,       // Keep idle connections open for 30s
-  max: 10                         // Limit total connections to avoid overloading the pooler
+  connectionTimeoutMillis: 10000, 
+  idleTimeoutMillis: 30000,       
+  max: 10                         
 });
 
-// Test the connection on startup to log specific errors
 db.connect((err, client, release) => {
-  if (err) {
-    return console.error('❌ Database connection error:', err.stack);
-  }
+  if (err) return console.error('❌ Database connection error:', err.stack);
   console.log('✅ Connected to Supabase Database');
   release();
 });
 
-/* ---------------- SUPABASE STORAGE ---------------- */
+/* ---------------- SUPABASE STORAGE & AUTH ---------------- */
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -59,7 +55,7 @@ app.use(session({
     pool: db, 
     tableName: 'session', 
     createTableIfMissing: true,
-    pruneSessionInterval: 60 * 30 // Prune every 30 mins
+    pruneSessionInterval: 60 * 30 
   }),
   secret: process.env.SESSION_SECRET || "apugo_secret",
   resave: false,
@@ -141,21 +137,73 @@ app.get("/register", (req, res) => res.render("register"));
 app.get("/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
 app.get("/auth/google/callback", passport.authenticate("google", { failureRedirect: "/login" }), (req, res) => res.redirect("/feed"));
 
+/* --- REGISTER (UPDATED WITH STRENGTH CHECK) --- */
 app.post("/register", async (req, res) => {
+  const { email, password } = req.body;
+  
+  // Backend validation matching your UI
+  if (password.length < 8) {
+    req.flash("error", "Password must be at least 8 characters long.");
+    return res.redirect("/register");
+  }
+
   try {
-    const hash = await bcrypt.hash(req.body.password, saltRounds);
-    const user = await db.query("INSERT INTO users (email, password, role) VALUES ($1,$2,$3) RETURNING *", [req.body.email, hash, "user"]);
+    const hash = await bcrypt.hash(password, saltRounds);
+    const user = await db.query("INSERT INTO users (email, password, role) VALUES ($1,$2,$3) RETURNING *", [email, hash, "user"]);
     await sendWelcomeNote(user.rows[0].id);
     req.login(user.rows[0], () => res.redirect("/feed"));
   } catch (err) { 
     console.error(err);
+    req.flash("error", "Email already registered or server error.");
     res.redirect("/register"); 
+  }
+});
+
+/* --- FORGOT PASSWORD FLOW --- */
+app.get("/forgot-password", (req, res) => res.render("forgot-password", { search: "" }));
+
+app.post("/auth/reset-password", async (req, res) => {
+  const { email } = req.body;
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${process.env.SITE_URL || 'http://localhost:3000'}/update-password`,
+    });
+    if (error) throw error;
+    req.flash("success", "Reset link sent! Please check your village email.");
+    res.redirect("/login");
+  } catch (err) {
+    console.error(err);
+    req.flash("error", "Failed to send reset email.");
+    res.redirect("/forgot-password");
+  }
+});
+
+app.get("/update-password", (req, res) => res.render("update-password", { search: "" }));
+
+app.post("/auth/update-password", async (req, res) => {
+  const { email, newPassword } = req.body;
+  try {
+    const hash = await bcrypt.hash(newPassword, saltRounds);
+    const result = await db.query("UPDATE users SET password = $1 WHERE email = $2", [hash, email]);
+    
+    if (result.rowCount === 0) {
+      req.flash("error", "User not found.");
+      return res.redirect("/update-password");
+    }
+    
+    req.flash("success", "Password updated successfully! Welcome back.");
+    res.redirect("/login");
+  } catch (err) {
+    console.error(err);
+    req.flash("error", "Failed to update password.");
+    res.redirect("/update-password");
   }
 });
 
 app.post("/login", passport.authenticate("local", { successRedirect: "/feed", failureRedirect: "/login", failureFlash: true }));
 app.get("/logout", (req, res) => req.logout(() => res.redirect("/")));
 
+/* --- FEED & POSTS --- */
 app.get("/feed", async (req, res) => {
   if (!req.isAuthenticated()) return res.redirect("/login");
   const search = req.query.search || "";
@@ -186,6 +234,7 @@ app.get("/feed", async (req, res) => {
   }
 });
 
+/* --- OTHER ROUTES --- */
 app.get("/settings", (req, res) => {
   if (!req.isAuthenticated()) return res.redirect("/login");
   res.render("settings", { user: req.user, search: "" });
@@ -229,7 +278,7 @@ app.get("/api/notifications", async (req, res) => {
   } catch (e) { res.json([]); }
 });
 
-/* ---------------- UPDATED CREATE POST (SUPABASE) ---------------- */
+/* --- CREATE POST (SUPABASE) --- */
 app.post("/event/create", upload.single("localMedia"), async (req, res) => {
   if (!req.isAuthenticated()) return res.redirect("/login");
   try {
