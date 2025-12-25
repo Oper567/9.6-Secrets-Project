@@ -1,171 +1,241 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Apugo | Messages</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body { background-color: #020617; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
-        .chat-container { flex: 1; overflow-y: auto; scroll-behavior: smooth; }
-        .bubble { max-width: 85%; padding: 10px 14px; font-size: 13px; font-weight: 500; line-height: 1.4; margin-bottom: 8px; }
-        .bubble-me { 
-            background: #2563eb; color: white; align-self: flex-end; 
-            border-radius: 18px 18px 4px 18px; 
-        }
-        .bubble-them { 
-            background: #1e293b; color: #cbd5e1; align-self: flex-start; 
-            border-radius: 18px 18px 18px 4px; 
-        }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        #inputDock { padding-bottom: env(safe-area-inset-bottom, 12px); }
-        .friend-item.active { background-color: #0f172a; border-left: 4px solid #2563eb; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Apugo | Messages</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    body {
+      background-color: #020617;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .chat-container {
+      flex: 1;
+      overflow-y: auto;
+      scroll-behavior: smooth;
+    }
+
+    .bubble {
+      max-width: 85%;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 8px;
+      word-wrap: break-word;
+    }
+
+    .bubble-me {
+      background: #2563eb;
+      color: white;
+      align-self: flex-end;
+      border-radius: 18px 18px 4px 18px;
+    }
+
+    .bubble-them {
+      background: #1e293b;
+      color: #cbd5e1;
+      align-self: flex-start;
+      border-radius: 18px 18px 18px 4px;
+    }
+
+    .friend-item.active {
+      background-color: #0f172a;
+      border-left: 4px solid #2563eb;
+    }
+
+    #inputDock {
+      position: sticky;
+      bottom: 0;
+    }
+  </style>
 </head>
+
 <body class="text-slate-200">
 
-    <nav class="bg-slate-900 border-b border-slate-800 p-3 flex items-center justify-between shrink-0">
-        <div class="flex items-center gap-3">
-            <a href="/feed" class="text-slate-400 hover:text-white transition-all">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-            </a>
-            <div>
-                <h1 class="font-black text-blue-500 italic text-lg leading-none">MESSAGES</h1>
-                <p id="chatStatus" class="text-[9px] text-slate-500 uppercase font-black tracking-widest mt-1">Village Square</p>
-            </div>
+<!-- NAV -->
+<nav class="bg-slate-900 border-b border-slate-800 p-3 flex items-center gap-3">
+  <a href="/feed" class="text-slate-400 hover:text-white">←</a>
+  <div>
+    <h1 class="font-black text-blue-500 italic text-lg">MESSAGES</h1>
+    <p id="chatStatus" class="text-[9px] text-slate-500 uppercase font-black tracking-widest">
+      Village Square
+    </p>
+  </div>
+</nav>
+
+<div class="flex flex-1 overflow-hidden">
+
+  <!-- FRIEND LIST -->
+  <aside id="friendsList"
+    class="w-20 md:w-64 bg-slate-950 border-r border-slate-800 overflow-y-auto shrink-0">
+
+    <% friends.forEach(f => { %>
+      <div
+        id="friend-<%= f.id %>"
+        class="friend-item p-3 md:p-4 flex flex-col md:flex-row items-center gap-3 cursor-pointer border-b border-slate-900/50 hover:bg-slate-900"
+        data-id="<%= f.id %>"
+        data-name="<%= f.email.split('@')[0] %>"
+      >
+        <div class="w-10 h-10 bg-gradient-to-tr from-blue-700 to-blue-500 rounded-full flex items-center justify-center font-bold uppercase text-sm">
+          <%= f.email[0] %>
         </div>
-    </nav>
+        <span class="hidden md:block text-xs font-bold truncate">
+          @<%= f.email.split('@')[0] %>
+        </span>
+      </div>
+    <% }) %>
 
-    <div class="flex flex-1 overflow-hidden">
-        <aside class="w-20 md:w-64 border-r border-slate-800 overflow-y-auto no-scrollbar bg-slate-950 shrink-0">
-            <% friends.forEach(f => { %>
-                <div onclick="selectFriend('<%= f.id %>', '<%= f.email.split('@')[0] %>')" 
-                     id="friend-<%= f.id %>"
-                     class="friend-item p-3 md:p-4 flex flex-col md:flex-row items-center gap-3 cursor-pointer hover:bg-slate-900 transition border-b border-slate-900/50">
-                    <div class="relative">
-                        <div class="w-10 h-10 bg-gradient-to-tr from-blue-700 to-blue-500 rounded-full flex items-center justify-center font-bold uppercase text-sm shadow-lg">
-                            <%= f.email[0] %>
-                        </div>
-                    </div>
-                    <span class="hidden md:block text-xs font-bold truncate">@<%= f.email.split('@')[0] %></span>
-                </div>
-            <% }) %>
-        </aside>
+  </aside>
 
-        <main class="flex-1 flex flex-col bg-slate-950 relative">
-            <div id="chatWindow" class="chat-container p-4 flex flex-col no-scrollbar">
-                <div id="emptyState" class="mt-20 text-center">
-                    <div class="w-16 h-16 bg-slate-900 rounded-3xl mx-auto flex items-center justify-center text-2xl mb-4">🌴</div>
-                    <h2 class="font-black text-slate-400">Select a villager to chat</h2>
-                    <p class="text-xs text-slate-600 mt-1">Chat is private between you two.</p>
-                </div>
-            </div>
+  <!-- CHAT -->
+  <main class="flex-1 flex flex-col bg-slate-950">
 
-            <div id="inputDock" class="hidden p-3 bg-slate-900/50 border-t border-slate-800 backdrop-blur-md">
-                <form id="chatForm" class="flex gap-2 max-w-4xl mx-auto">
-                    <input type="text" id="msgInput" placeholder="Write something..." autocomplete="off"
-                        class="flex-1 bg-slate-950 border border-slate-800 rounded-2xl px-4 py-3 text-sm outline-none focus:border-blue-600 transition-all text-white">
-                    <button type="submit" class="bg-blue-600 hover:bg-blue-500 w-12 h-12 rounded-2xl flex items-center justify-center transition-transform active:scale-95 shadow-lg">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                        </svg>
-                    </button>
-                </form>
-            </div>
-        </main>
+    <div id="chatWindow" class="chat-container p-4 flex flex-col">
+      <div id="emptyState" class="mt-20 text-center">
+        <div class="text-2xl mb-4">🌴</div>
+        <h2 class="font-black text-slate-400">Select a villager to chat</h2>
+        <p class="text-xs text-slate-600">Chat is private between you two.</p>
+      </div>
     </div>
 
-    <script>
-        // 1. Core Data injected from Backend
-        const currentUserId = '<%= user.id %>';
-        const targetUserFromFeed = '<%= targetUser %>'; // This is the ID passed in URL query
-        let currentFriendId = null;
-        let lastMessageCount = 0;
+    <!-- INPUT -->
+    <div id="inputDock" class="hidden p-3 bg-slate-900/50 border-t border-slate-800">
+      <form id="chatForm" class="flex gap-2 max-w-4xl mx-auto">
+        <input
+          id="msgInput"
+          type="text"
+          placeholder="Write something..."
+          class="flex-1 bg-slate-950 border border-slate-800 rounded-2xl px-4 py-3 text-sm outline-none focus:border-blue-600"
+        />
+        <button
+          class="bg-blue-600 hover:bg-blue-500 w-12 h-12 rounded-2xl text-white"
+        >
+          ➤
+        </button>
+      </form>
+    </div>
 
-        // 2. Load Chat Function
-        async function selectFriend(id, name) {
-            if (!id) return;
-            currentFriendId = id;
-            lastMessageCount = 0; // Force re-render
-            
-            // UI Styling updates
-            document.querySelectorAll('.friend-item').forEach(el => el.classList.remove('active'));
-            const activeFriendEl = document.getElementById(`friend-${id}`);
-            if (activeFriendEl) activeFriendEl.classList.add('active');
-            
-            document.getElementById('emptyState').classList.add('hidden');
-            document.getElementById('inputDock').classList.remove('hidden');
-            document.getElementById('chatStatus').innerText = `Chatting with @${name}`;
-            
-            fetchMessages();
-        }
+  </main>
+</div>
 
-        // 3. Fetch History via API
-        async function fetchMessages() {
-            if (!currentFriendId) return;
-            try {
-                const res = await fetch(`/api/chat/${currentFriendId}`);
-                const messages = await res.json();
-                
-                // Only update DOM if new messages exist to save battery/performance
-                if (messages.length !== lastMessageCount) {
-                    const chatWindow = document.getElementById('chatWindow');
-                    chatWindow.innerHTML = ''; // Clear window
-                    
-                    messages.forEach(m => {
-                        const isMe = m.sender_id == currentUserId;
-                        const div = document.createElement('div');
-                        div.className = `bubble ${isMe ? 'bubble-me' : 'bubble-them'}`;
-                        div.innerText = m.content;
-                        chatWindow.appendChild(div);
-                    });
-                    
-                    // Auto-scroll to latest message
-                    chatWindow.scrollTop = chatWindow.scrollHeight;
-                    lastMessageCount = messages.length;
-                }
-            } catch (err) { console.error("Chat fetch error:", err); }
-        }
+<script>
+/* =============================
+   STATE
+============================= */
+const currentUserId = '<%= user.id %>';
+const targetUserFromFeed = '<%= targetUser %>';
+let currentFriendId = null;
+let lastMessageId = null;
 
-        // 4. Send Message Logic
-        document.getElementById('chatForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const input = document.getElementById('msgInput');
-            const content = input.value.trim();
-            
-            if (!content || !currentFriendId) return;
+/* =============================
+   FRIEND CLICK (EVENT DELEGATION)
+============================= */
+document.getElementById('friendsList').addEventListener('click', e => {
+  const item = e.target.closest('.friend-item');
+  if (!item) return;
 
-            try {
-                const res = await fetch('/api/chat/send', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ receiverId: currentFriendId, content })
-                });
+  const id = item.dataset.id;
+  const name = item.dataset.name;
 
-                if (res.ok) {
-                    input.value = '';
-                    fetchMessages(); // Instant refresh
-                }
-            } catch (err) { console.error("Send failed"); }
-        });
+  if (currentFriendId === id) return;
 
-        // 5. THE BRIDGE: Tally with Feed Click
-        window.onload = () => {
-            if (targetUserFromFeed && targetUserFromFeed !== 'null' && targetUserFromFeed !== '') {
-                // Find the friend in the sidebar and trigger click
-                const friendBtn = document.getElementById(`friend-${targetUserFromFeed}`);
-                if (friendBtn) {
-                    friendBtn.click();
-                } else {
-                    console.log("User is not in friend list. Cannot auto-open chat.");
-                }
-            }
-        };
+  selectFriend(id, name);
+});
 
-        // 6. Polling: Check for new messages every 3 seconds
-        setInterval(fetchMessages, 3000);
-    </script>
+/* =============================
+   SELECT FRIEND
+============================= */
+async function selectFriend(id, name) {
+  currentFriendId = id;
+  lastMessageId = null;
+
+  document.querySelectorAll('.friend-item').forEach(el =>
+    el.classList.remove('active')
+  );
+  document.getElementById(`friend-${id}`)?.classList.add('active');
+
+  document.getElementById('emptyState')?.remove();
+  document.getElementById('inputDock').classList.remove('hidden');
+  document.getElementById('chatStatus').innerText = `Chatting with @${name}`;
+
+  document.getElementById('chatWindow').innerHTML =
+    '<p class="text-xs text-slate-600 text-center mt-6">Loading messages...</p>';
+
+  await fetchMessages(true);
+}
+
+/* =============================
+   FETCH MESSAGES
+============================= */
+async function fetchMessages(force = false) {
+  if (!currentFriendId) return;
+
+  const res = await fetch(`/api/chat/${currentFriendId}`);
+  const messages = await res.json();
+
+  if (!messages.length) return;
+
+  const last = messages[messages.length - 1];
+  if (!force && last.id === lastMessageId) return;
+
+  const chat = document.getElementById('chatWindow');
+  chat.innerHTML = '';
+
+  messages.forEach(m => {
+    const div = document.createElement('div');
+    div.className = `bubble ${m.sender_id == currentUserId ? 'bubble-me' : 'bubble-them'}`;
+    div.innerText = m.content;
+    chat.appendChild(div);
+    lastMessageId = m.id;
+  });
+
+  chat.scrollTop = chat.scrollHeight;
+}
+
+/* =============================
+   SEND MESSAGE
+============================= */
+document.getElementById('chatForm').addEventListener('submit', async e => {
+  e.preventDefault();
+
+  const input = document.getElementById('msgInput');
+  const content = input.value.trim();
+  if (!content || !currentFriendId) return;
+
+  input.value = '';
+
+  await fetch('/api/chat/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ receiverId: currentFriendId, content })
+  });
+
+  fetchMessages(true);
+});
+
+/* =============================
+   AUTO OPEN FROM FEED
+============================= */
+window.addEventListener('load', () => {
+  if (targetUserFromFeed && targetUserFromFeed !== 'null') {
+    document.getElementById(`friend-${targetUserFromFeed}`)?.click();
+  }
+});
+
+/* =============================
+   SAFE POLLING
+============================= */
+setInterval(() => {
+  if (currentFriendId) fetchMessages();
+}, 3000);
+</script>
+
 </body>
 </html>
