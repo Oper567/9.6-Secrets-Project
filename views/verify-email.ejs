@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apugo | Verification Sent</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: #020617; min-height: 100vh; display: flex; align-items: center; justify-content: center; color: white; }
+        .glass-panel { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.08); }
+    </style>
+</head>
+<body class="p-6">
+    <div class="max-w-md w-full text-center">
+        <div class="glass-panel p-8 md:p-12 rounded-[2.5rem] shadow-2xl">
+            <div class="inline-block bg-blue-600/20 p-4 rounded-full mb-6">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+            </div>
+            <h1 class="text-2xl font-800 tracking-tighter mb-4">Check your scroll.</h1>
+            <p class="text-slate-400 text-sm leading-relaxed mb-8">
+                We've sent a verification link to <span class="text-white font-bold"><%= email %></span>. 
+                Please click the link to enter the village square.
+            </p>
+            <div class="pt-6 border-t border-slate-800">
+                <p class="text-xs text-slate-500 uppercase font-black tracking-widest mb-4">Didn't receive it?</p>
+                <form action="/auth/resend-verification" method="POST">
+                    <button type="submit" class="text-blue-500 font-bold hover:text-blue-400 transition text-sm underline underline-offset-4">Resend Link</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

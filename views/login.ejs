@@ -2,110 +2,114 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
     <title>Apugo | Sign In</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap');
-        body { font-family: 'Plus Jakarta Sans', sans-serif; background: #020617; }
-        .glass-card { 
-            background: rgba(15, 23, 42, 0.7); 
-            backdrop-filter: blur(16px); 
-            border: 1px solid rgba(255, 255, 255, 0.1); 
+        
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            background: #020617; 
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
+
+        .glass-card { 
+            background: rgba(15, 23, 42, 0.75); 
+            backdrop-filter: blur(20px); 
+            border: 1px solid rgba(255, 255, 255, 0.08); 
+        }
+
         .input-field {
             background: rgba(2, 6, 23, 0.5);
             border: 1px solid rgba(255, 255, 255, 0.05);
             color: white;
+            transition: all 0.3s ease;
         }
+
         .input-field:focus {
             border-color: #3b82f6;
             background: rgba(2, 6, 23, 0.8);
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
         }
-        .strength-bar { transition: width 0.5s ease, background-color 0.5s ease; }
     </style>
 </head>
-<body class="flex items-center justify-center min-h-screen p-6 overflow-hidden">
+<body class="p-4 md:p-6">
 
-    <div class="fixed top-0 left-0 w-96 h-96 bg-blue-600/20 rounded-full blur-[120px] -translate-x-1/2 -translate-y-1/2"></div>
-    <div class="fixed bottom-0 right-0 w-96 h-96 bg-indigo-600/20 rounded-full blur-[120px] translate-x-1/2 translate-y-1/2"></div>
+    <div class="fixed top-0 left-0 w-64 h-64 md:w-96 md:h-96 bg-blue-600/10 rounded-full blur-[80px] md:blur-[120px] -translate-x-1/2 -translate-y-1/2 pointer-events-none"></div>
+    <div class="fixed bottom-0 right-0 w-64 h-64 md:w-96 md:h-96 bg-indigo-600/10 rounded-full blur-[80px] md:blur-[120px] translate-x-1/2 translate-y-1/2 pointer-events-none"></div>
 
     <div class="w-full max-w-md animate__animated animate__zoomIn">
-        <div class="glass-card p-10 md:p-12 rounded-[2.5rem] shadow-2xl">
+        <div class="glass-card p-6 md:p-12 rounded-[2.5rem] md:rounded-[3rem] shadow-2xl relative z-10">
             
-            <div class="mb-10 text-center">
-                <div class="inline-block bg-blue-600/20 p-3 rounded-2xl mb-4">
-                    <span class="text-2xl font-black italic text-blue-500">A.</span>
+            <div class="mb-6 md:mb-8 text-center">
+                <div class="inline-block bg-blue-600/20 p-2.5 rounded-xl mb-3">
+                    <span class="text-xl font-black italic text-blue-500">A.</span>
                 </div>
-                <h1 class="text-4xl font-800 text-white tracking-tighter mb-2">Welcome Home.</h1>
-                <p class="text-slate-400 font-medium text-sm">Reconnect with the Apugo community.</p>
+                <h1 class="text-2xl md:text-3xl font-[800] text-white tracking-tighter mb-1">Welcome Home</h1>
+                <p class="text-slate-400 text-xs md:text-sm font-medium">Reconnect with the community.</p>
             </div>
 
             <% if (messages.error) { %>
-                <div class="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-2xl mb-8 text-xs font-bold animate__animated animate__shakeX flex items-center">
-                    <i class="fa-solid fa-circle-exclamation mr-3 text-lg"></i> <%= messages.error %>
+                <div class="bg-red-500/10 border border-red-500/20 text-red-400 p-3.5 rounded-xl mb-6 text-[11px] md:text-xs font-bold animate__animated animate__shakeX flex items-center">
+                    <i class="fa-solid fa-circle-exclamation mr-3 text-base"></i> <%= messages.error %>
                 </div>
             <% } %>
 
-            <form action="/login" method="POST" class="space-y-5">
+            <form action="/login" method="POST" class="space-y-4">
                 <div>
                     <input type="email" name="email" placeholder="Village Email" required
-                        class="input-field w-full px-6 py-4 rounded-2xl outline-none transition-all font-medium placeholder:text-slate-600">
+                        class="input-field w-full px-5 py-3.5 rounded-xl outline-none text-sm font-medium placeholder:text-slate-600">
                 </div>
 
                 <div class="relative">
                     <input type="password" name="password" id="password" placeholder="Password" required
-                        class="input-field w-full px-6 py-4 rounded-2xl outline-none transition-all font-medium placeholder:text-slate-600 pr-20">
+                        class="input-field w-full px-5 py-3.5 rounded-xl outline-none text-sm font-medium placeholder:text-slate-600 pr-16">
                     
                     <button type="button" onclick="togglePassword()" id="toggleBtn" 
-                        class="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] uppercase font-black tracking-widest text-slate-500 hover:text-blue-400 transition-colors">
+                        class="absolute right-5 top-1/2 -translate-y-1/2 text-[9px] uppercase font-black tracking-widest text-slate-500 hover:text-blue-400 transition-colors">
                         Show
                     </button>
-
-                    <div id="strengthContainer" class="hidden mt-3 px-1">
-                        <div class="h-1 w-full bg-slate-800 rounded-full overflow-hidden">
-                            <div id="strengthBar" class="strength-bar h-full w-0 bg-red-500"></div>
-                        </div>
-                        <p id="strengthText" class="text-[9px] uppercase font-black tracking-widest mt-1 text-slate-500">Analyzing...</p>
-                    </div>
                 </div>
 
-                <div class="flex justify-end px-2">
-                    <a href="/forgot-password" class="text-xs font-bold text-blue-500 hover:text-blue-400 transition">Recover Password</a>
+                <div class="flex justify-end px-1">
+                    <a href="/forgot-password" class="text-[11px] font-bold text-blue-500 hover:text-blue-400 transition">Forgot Password?</a>
                 </div>
 
-                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-5 rounded-2xl font-bold text-lg shadow-xl shadow-blue-600/20 transition-all transform active:scale-95">
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-xl font-bold text-base shadow-lg shadow-blue-600/20 transition-all transform active:scale-95">
                     Sign In
                 </button>
             </form>
 
             <div class="mt-8 relative">
-                <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-800"></div></div>
-                <div class="relative flex justify-center text-[10px] uppercase tracking-widest">
-                    <span class="bg-[#0f172a] px-4 text-slate-500 font-black">Continue With</span>
+                <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-800/50"></div></div>
+                <div class="relative flex justify-center text-[9px] uppercase tracking-[0.2em]">
+                    <span class="bg-[#050b1d] px-3 text-slate-500 font-black">Continue With</span>
                 </div>
             </div>
 
             <div class="mt-6">
-                <a href="/auth/google" class="flex items-center justify-center gap-3 w-full py-4 glass-card rounded-2xl hover:bg-white/5 transition border-white/5 group">
+                <a href="/auth/google" class="flex items-center justify-center gap-3 w-full py-3.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition group">
                     <i class="fa-brands fa-google text-slate-400 group-hover:text-white transition"></i>
                     <span class="text-sm font-bold text-slate-400 group-hover:text-white">Google Account</span>
                 </a>
             </div>
 
-            <div class="mt-10 text-center">
-                <p class="text-slate-500 text-sm font-medium">
+            <div class="mt-8 text-center">
+                <p class="text-slate-500 text-xs font-medium">
                     New villager? 
-                    <a href="/register" class="text-white font-800 hover:underline ml-1">Request Access</a>
+                    <a href="/register" class="text-white font-bold hover:text-blue-400 transition ml-1 underline underline-offset-4 decoration-slate-700">Request Access</a>
                 </p>
             </div>
         </div>
     </div>
 
     <script>
-        // Password Visibility Toggle
         function togglePassword() {
             const passwordInput = document.getElementById('password');
             const toggleBtn = document.getElementById('toggleBtn');
@@ -120,41 +124,6 @@
                 toggleBtn.classList.remove('text-blue-500');
             }
         }
-
-        // Password Strength Analysis
-        const passwordInput = document.getElementById('password');
-        const strengthBar = document.getElementById('strengthBar');
-        const strengthText = document.getElementById('strengthText');
-        const strengthContainer = document.getElementById('strengthContainer');
-
-        passwordInput.addEventListener('input', () => {
-            const val = passwordInput.value;
-            if (val.length > 0) {
-                strengthContainer.classList.remove('hidden');
-            } else {
-                strengthContainer.classList.add('hidden');
-            }
-
-            let score = 0;
-            if (val.length >= 8) score++;
-            if (/[A-Z]/.test(val)) score++;
-            if (/[0-9]/.test(val)) score++;
-            if (/[^A-Za-z0-9]/.test(val)) score++;
-
-            const levels = [
-                { width: '25%', color: 'bg-red-500', text: 'Weak', textColor: 'text-red-500' },
-                { width: '50%', color: 'bg-yellow-500', text: 'Fair', textColor: 'text-yellow-500' },
-                { width: '75%', color: 'bg-blue-500', text: 'Good', textColor: 'text-blue-500' },
-                { width: '100%', color: 'bg-emerald-500', text: 'Strong', textColor: 'text-emerald-500' }
-            ];
-
-            const current = levels[Math.max(0, score - 1)];
-            
-            strengthBar.style.width = current.width;
-            strengthBar.className = `strength-bar h-full ${current.color}`;
-            strengthText.innerText = current.text;
-            strengthText.className = `text-[9px] uppercase font-black tracking-widest mt-1 ${current.textColor}`;
-        });
     </script>
 </body>
 </html>

@@ -127,7 +127,14 @@ passport.use(new LocalStrategy({ usernameField: "email" }, async (email, passwor
   try {
     const result = await db.query("SELECT * FROM users WHERE email=$1", [email.toLowerCase()]);
     if (!result.rows.length) return done(null, false, { message: "User not found" });
+    
     const user = result.rows[0];
+    
+    // Check if verified
+    if (!user.is_verified) {
+        return done(null, false, { message: "Please verify your email first." });
+    }
+
     if (user.password === "google-oauth") return done(null, false, { message: "Use Google Sign-In" });
     const valid = await bcrypt.compare(password, user.password);
     return valid ? done(null, user) : done(null, false, { message: "Wrong password" });
@@ -168,20 +175,48 @@ app.get("/login", (req, res) => res.render("login"));
 app.get("/register", (req, res) => res.render("register"));
 
 app.post("/register", async (req, res) => {
-  const { email, password } = req.body;
-  if (password.length < 8) {
-    req.flash("error", "Password must be at least 8 characters long.");
-    return res.redirect("/register");
-  }
-  try {
-    const hash = await bcrypt.hash(password, saltRounds);
-    const user = await db.query("INSERT INTO users (email, password, role, is_verified) VALUES ($1,$2,$3,$4) RETURNING *", [email.toLowerCase(), hash, "user", true]);
-    await sendWelcomeNote(user.rows[0].id);
-    req.login(user.rows[0], () => res.redirect("/feed"));
-  } catch (err) { 
-    req.flash("error", "Email already registered.");
-    res.redirect("/register"); 
-  }
+    const { email, password } = req.body;
+    if (password.length < 8) {
+        req.flash("error", "Password must be at least 8 characters long.");
+        return res.redirect("/register");
+    }
+
+    try {
+        const hash = await bcrypt.hash(password, saltRounds);
+        // 1. Generate a verification token
+        const verificationToken = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
+        
+        // 2. Insert user with is_verified = false and store the token
+        const user = await db.query(
+            "INSERT INTO users (email, password, role, is_verified, verification_token) VALUES ($1,$2,$3,$4,$5) RETURNING *", 
+            [email.toLowerCase(), hash, "user", false, verificationToken]
+        );
+
+        // 3. Send the Verification Email
+        const verifyLink = `https://${req.get('host')}/auth/verify/${verificationToken}`;
+        await transporter.sendMail({
+            to: email.toLowerCase(),
+            subject: "Verify your Apugo Village Account",
+            html: `
+                <div style="font-family: sans-serif; text-align: center; padding: 20px;">
+                    <h2>Welcome to the Village!</h2>
+                    <p>Click the button below to verify your email and join the square.</p>
+                    <a href="${verifyLink}" style="background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; display: inline-block;">Verify Email</a>
+                    <p style="margin-top: 20px; color: #64748b; font-size: 12px;">If you didn't request this, please ignore this email.</p>
+                </div>
+            `
+        });
+
+        await sendWelcomeNote(user.rows[0].id);
+
+        // 4. Redirect to a "Check your email" page instead of feeding them in
+        res.render("verify-email-notice", { email: email.toLowerCase() });
+
+    } catch (err) { 
+        console.error(err);
+        req.flash("error", "Email already registered.");
+        res.redirect("/register"); 
+    }
 });
 
 app.post("/login", passport.authenticate("local", { successRedirect: "/feed", failureRedirect: "/login", failureFlash: true }));
@@ -205,6 +240,26 @@ app.get("/users/search", async (req, res) => {
         res.json(result.rows);
     } catch (err) {
         res.status(500).json({ error: "Search failed" });
+    }
+});
+
+app.get("/auth/verify/:token", async (req, res) => {
+    const { token } = req.params;
+    try {
+        const result = await db.query(
+            "UPDATE users SET is_verified = true, verification_token = NULL WHERE verification_token = $1 RETURNING *",
+            [token]
+        );
+
+        if (result.rows.length > 0) {
+            req.flash("success", "Village access granted! You can now sign in.");
+            res.redirect("/login");
+        } else {
+            res.status(400).send("Invalid or expired verification link.");
+        }
+    } catch (err) {
+        console.error(err);
+        res.redirect("/login");
     }
 });
 
@@ -485,23 +540,76 @@ app.post("/event/:id/delete", async (req, res) => {
 });
 
 /* --- PROFILE & ADMIN --- */
-
-// index.js (approx line 493 based on your error)
 app.get('/profile', async (req, res) => {
     try {
-        // ... your existing logic to get user and posts ...
-        
-        // 1. Get the count of friends (example query)
-        const friendCount = await db.query('SELECT COUNT(*) FROM connections WHERE user_id = ?', [req.user.id]);
+        const userId = req.user.id;
 
+        // 1. Fetch User Posts (Secrets)
+        // Adjust the query based on your DB (MySQL uses ? , PostgreSQL uses $1)
+        const postsResult = await db.query(
+            'SELECT * FROM posts WHERE user_id = ? ORDER BY created_at DESC', 
+            [userId]
+        );
+        const posts = postsResult.rows || postsResult || [];
+
+        // 2. Fetch Kinship Count (Accepted Friends)
+        const friendResult = await db.query(
+            'SELECT COUNT(*) as count FROM friends WHERE (user_id = ? OR friend_id = ?) AND status = "accepted"', 
+            [userId, userId]
+        );
+        // Extract count safely regardless of DB driver format
+        const friendCount = friendResult[0]?.count || friendResult.rows?.[0]?.count || 0;
+
+        // 3. Fetch Unread Alerts Count
+        const alertResult = await db.query(
+            'SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = false', 
+            [userId]
+        );
+        const unreadCount = alertResult[0]?.count || alertResult.rows?.[0]?.count || 0;
+
+        // 4. Render with ALL keys the EJS expects
         res.render('profile', {
             user: req.user,
-            posts: userPosts,
-            // MAKE SURE THIS IS SENT:
-            friendCount: friendCount[0].count || 0 
+            posts: posts,
+            friendCount: friendCount,
+            unreadCount: unreadCount
         });
-    } catch (err) {
-        res.status(500).send("Error loading profile");
+
+    } catch (error) {
+        console.error("Critical Profile Error:", error);
+        // Instead of just a string, send the error to see what's wrong in the browser during dev
+        res.status(500).send(`Error loading profile: ${error.message}`);
+    }
+});
+app.get('/notifications', async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        // 1. Fetch notifications for the logged-in user
+        // Adjust query based on your table/DB (e.g., db.query for MySQL, pool.query for PG)
+        const result = await db.query(
+            'SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC', 
+            [userId]
+        );
+        
+        // Handle different DB result formats (rows for PG, direct array for MySQL)
+        const notifications = result.rows || result || [];
+
+        // 2. Render the notifications.ejs file
+        res.render('notifications', {
+            user: req.user,
+            notifications: notifications
+        });
+
+        // 3. (Optional) Mark notifications as read once they are viewed
+        await db.query(
+            'UPDATE notifications SET is_read = true WHERE user_id = ? AND is_read = false',
+            [userId]
+        );
+
+    } catch (error) {
+        console.error("Notification Error:", error);
+        res.status(500).send("Error loading alerts");
     }
 });
 

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apugo | Verify Email</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: #020617; color: white; }
+        .glass-panel { background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.05); }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-6">
+    <div class="max-w-md w-full text-center animate__animated animate__fadeIn">
+        <div class="glass-panel p-10 rounded-[3rem] shadow-2xl">
+            <div class="bg-blue-600/20 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <i class="fa-solid fa-paper-plane text-blue-500 text-2xl"></i>
+            </div>
+            <h1 class="text-3xl font-800 tracking-tighter mb-4">Check your scroll.</h1>
+            <p class="text-slate-400 font-medium mb-8">
+                A verification link has been sent to <span class="text-white"><%= email %></span>. 
+                Please follow the link to join the square.
+            </p>
+            <a href="/login" class="text-sm font-black uppercase tracking-widest text-blue-500 hover:text-blue-400 transition">Back to Sign In</a>
+        </div>
+    </div>
+</body>
+</html>
