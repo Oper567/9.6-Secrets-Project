@@ -190,12 +190,16 @@ app.get("/logout", (req, res, next) => {
 /* --- FRIENDSHIP SYSTEM --- */
 
 app.post("/friends/request/:id", async (req, res) => {
-  if (!req.isAuthenticated() || req.user.id == req.params.id) return res.redirect("back");
+  if (!req.isAuthenticated() || req.user.id == req.params.id) {
+      return res.redirect("/feed");
+  }
   try {
     await db.query("INSERT INTO friendships (sender_id, receiver_id, status) VALUES ($1, $2, 'pending') ON CONFLICT DO NOTHING", [req.user.id, req.params.id]);
     await db.query("INSERT INTO notifications (user_id, sender_id, message) VALUES ($1, $2, $3)", [req.params.id, req.user.id, "Sent you a village friend request! 🤝"]);
-    res.redirect("back");
-  } catch (err) { res.redirect("back"); }
+    res.redirect(req.get("Referrer") || "/feed"); // Fixed line
+  } catch (err) { 
+    res.redirect(req.get("Referrer") || "/feed"); 
+  }
 });
 
 app.post("/friends/accept/:senderId", async (req, res) => {
