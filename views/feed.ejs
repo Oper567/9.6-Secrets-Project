@@ -15,30 +15,24 @@
             color: #e2e8f0; 
             -webkit-tap-highlight-color: transparent;
         }
-
         .glass-nav {
             background: rgba(15, 23, 42, 0.85);
             backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
             border-bottom: 1px solid rgba(255,255,255,0.05);
         }
-
         .status-online { background-color: #22c55e; box-shadow: 0 0 10px #22c55e; }
         .status-offline { background-color: #64748b; }
-
         ::-webkit-scrollbar { width: 0px; background: transparent; }
-
         .post-card { transition: transform 0.2s ease, border-color 0.2s ease; }
         .post-card:hover { border-color: rgba(59, 130, 246, 0.3); }
-
         #nav-dropdown:not(.hidden) { animation: slideDown 0.2s ease-out forwards; }
         @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
-
         .media-container { background: radial-gradient(circle at center, #0f172a 0%, #020617 100%); }
     </style>
 </head>
 <body class="min-h-screen pb-24">
 
-    <!-- NAVBAR -->
     <nav class="glass-nav sticky top-0 z-50">
         <div class="max-w-6xl mx-auto px-4 py-3 flex flex-col lg:flex-row justify-between items-center gap-4">
             <div class="flex items-center justify-between w-full lg:w-auto">
@@ -46,11 +40,10 @@
                     <button id="menu-btn" class="lg:hidden text-slate-400 p-1"><i class="fas fa-bars text-xl"></i></button>
                     <h1 class="text-xl md:text-2xl font-black text-blue-500 italic tracking-tighter cursor-pointer" onclick="window.location.href='/feed'">APUGO</h1>
                 </div>
-
                 <div class="flex lg:hidden items-center gap-4">
                     <div class="relative cursor-pointer" onclick="window.location.href='/notifications'">
                         <i class="far fa-bell text-xl text-slate-400"></i>
-                        <% if (typeof unreadCount !== 'undefined' && unreadCount > 0) { %>
+                        <% if (locals.unreadCount && unreadCount > 0) { %>
                             <span class="absolute -top-1 -right-1 bg-red-600 text-[8px] min-w-[14px] h-[14px] flex items-center justify-center rounded-full border border-slate-900 font-black"><%= unreadCount %></span>
                         <% } %>
                     </div>
@@ -59,7 +52,7 @@
 
             <div id="nav-dropdown" class="hidden lg:flex flex-col lg:flex-row items-center gap-4 w-full lg:max-w-md">
                 <form action="/feed" method="GET" class="relative w-full">
-                    <input type="text" name="search" placeholder="Search the square..." value="<%= (typeof search !== 'undefined') ? search : '' %>" 
+                    <input type="text" name="search" placeholder="Search the square..." value="<%= locals.search || '' %>" 
                         class="w-full bg-slate-950 border border-slate-800 rounded-2xl py-3 px-12 text-xs outline-none focus:border-blue-600 transition-all text-white placeholder-slate-600">
                     <i class="fas fa-search absolute left-4 top-3.5 text-slate-600 text-xs"></i>
                 </form>
@@ -68,17 +61,16 @@
             <div class="hidden lg:flex items-center gap-5">
                 <div class="relative cursor-pointer group" onclick="window.location.href='/notifications'">
                     <i class="far fa-bell text-xl text-slate-400 group-hover:text-blue-400 transition"></i>
-                    <% if (typeof unreadCount !== 'undefined' && unreadCount > 0) { %>
+                    <% if (locals.unreadCount && unreadCount > 0) { %>
                         <span class="absolute -top-1 -right-1 bg-red-600 text-[8px] min-w-[14px] h-[14px] flex items-center justify-center rounded-full border border-slate-900 font-black"><%= unreadCount %></span>
                     <% } %>
                 </div>
-
                 <a href="/profile" class="w-9 h-9 rounded-full overflow-hidden border-2 border-slate-800 hover:border-blue-500 transition-all duration-300">
-                    <% if (typeof user !== 'undefined' && user && user.profile_pic) { %>
+                    <% if (locals.user && user.profile_pic) { %>
                         <img src="<%= user.profile_pic %>" class="w-full h-full object-cover">
                     <% } else { %>
                         <div class="w-full h-full bg-slate-800 flex items-center justify-center text-xs font-bold text-blue-500 uppercase">
-                            <%= (typeof user !== 'undefined' && user && user.email) ? user.email[0] : '?' %>
+                            <%= (locals.user && user.email) ? user.email[0] : '?' %>
                         </div>
                     <% } %>
                 </a>
@@ -87,10 +79,8 @@
     </nav>
 
     <main class="max-w-6xl mx-auto px-4 pt-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
-
         <div class="lg:col-span-2 space-y-8">
-
-            <% if (typeof announcements !== 'undefined' && announcements && announcements.length > 0) { %>
+            <% if (locals.announcements && announcements.length > 0) { %>
                 <div class="space-y-3">
                     <div class="flex items-center gap-2 mb-1">
                         <div class="h-1 w-4 bg-blue-600"></div>
@@ -99,7 +89,7 @@
                     <% announcements.forEach(a => { %>
                         <div class="bg-blue-600/5 border border-blue-500/20 rounded-[2rem] p-5 flex gap-4 items-center backdrop-blur-md">
                             <div class="w-10 h-10 bg-blue-600/20 rounded-2xl flex items-center justify-center text-lg">📢</div>
-                            <p class="text-xs text-blue-100 font-semibold leading-relaxed tracking-tight"><%= a.description || 'New announcement from the elders.' %></p>
+                            <p class="text-xs text-blue-100 font-semibold leading-relaxed tracking-tight"><%= a.description || '' %></p>
                         </div>
                     <% }) %>
                 </div>
@@ -109,11 +99,11 @@
                 <form action="/event/create" method="POST" enctype="multipart/form-data" id="postForm" class="space-y-5">
                     <div class="flex gap-4">
                         <div class="w-11 h-11 shrink-0 rounded-full overflow-hidden bg-slate-800 border-2 border-slate-800 shadow-lg">
-                            <% if (typeof user !== 'undefined' && user && user.profile_pic) { %>
+                            <% if (locals.user && user.profile_pic) { %>
                                 <img src="<%= user.profile_pic %>" class="w-full h-full object-cover">
                             <% } else { %>
                                 <div class="w-full h-full flex items-center justify-center font-bold text-blue-500 uppercase">
-                                    <%= (typeof user !== 'undefined' && user && user.email) ? user.email[0] : '?' %>
+                                    <%= (locals.user && user.email) ? user.email[0] : '?' %>
                                 </div>
                             <% } %>
                         </div>
@@ -134,13 +124,13 @@
                 </form>
             </div>
 
-            <% if (typeof posts !== 'undefined' && posts && posts.length > 0) { %>
+            <% if (locals.posts && posts.length > 0) { %>
                 <% posts.forEach(p => { %>
                     <article class="post-card bg-slate-900 border border-slate-800 rounded-[2.5rem] overflow-hidden shadow-2xl">
                         <div class="p-5 flex justify-between items-center">
                             <div class="flex items-center gap-4">
                                 <div class="relative">
-                                    <div class="w-11 h-11 bg-slate-800 border-2 border-slate-800 rounded-full overflow-hidden flex items-center justify-center font-bold text-blue-500 text-sm uppercase shadow-md">
+                                    <div class="w-11 h-11 bg-slate-800 border-2 border-slate-800 rounded-full overflow-hidden flex items-center justify-center font-bold text-blue-500 text-sm uppercase">
                                         <% if (p.profile_pic) { %>
                                             <img src="<%= p.profile_pic %>" class="w-full h-full object-cover">
                                         <% } else { %>
@@ -161,8 +151,7 @@
                                     </p>
                                 </div>
                             </div>
-
-                            <% if (typeof user !== 'undefined' && user && user.id !== p.created_by) { %>
+                            <% if (locals.user && user.id !== p.created_by) { %>
                                 <form action="/friends/request/<%= p.created_by %>" method="POST">
                                     <button class="text-[9px] border border-slate-800 px-4 py-2 rounded-xl text-slate-400 uppercase font-black tracking-widest hover:text-white hover:border-blue-500 transition-all">Add +</button>
                                 </form>
@@ -198,7 +187,6 @@
                                     <span><%= (p.comments_list) ? p.comments_list.length : 0 %> Whispers</span>
                                 </button>
                             </div>
-
                             <div class="mt-6 space-y-3 border-t border-slate-800/50 pt-5">
                                 <% if (p.comments_list && p.comments_list.length > 0) { %>
                                     <% p.comments_list.slice(0,2).forEach(c => { %>
@@ -208,11 +196,10 @@
                                         </div>
                                     <% }) %>
                                 <% } %>
-
                                 <form action="/event/<%= p.id %>/comment" method="POST" class="mt-4 flex gap-3">
                                     <input type="text" name="content" placeholder="Whisper back..." required 
-                                        class="flex-1 bg-slate-950/50 border border-slate-800 rounded-2xl px-5 py-3 text-xs outline-none focus:border-blue-600 transition-all text-white">
-                                    <button type="submit" class="text-blue-500 text-[10px] font-black uppercase px-2 hover:text-white tracking-widest">Send</button>
+                                        class="flex-1 bg-slate-950/50 border border-slate-800 rounded-2xl px-5 py-3 text-xs outline-none focus:border-blue-600 text-white">
+                                    <button type="submit" class="text-blue-500 text-[10px] font-black uppercase px-2 hover:text-white">Send</button>
                                 </form>
                             </div>
                         </div>
@@ -225,35 +212,34 @@
             <% } %>
         </div>
 
-        <!-- SIDEBAR -->
         <aside class="hidden lg:block">
             <div class="bg-slate-900 border border-slate-800 rounded-[2.5rem] p-8 sticky top-28 shadow-2xl">
                 <h3 class="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] mb-8 flex items-center gap-3">
                     <i class="fas fa-bolt text-xs"></i> Hot Whispers
                 </h3>
-
-                <% if (typeof trending !== 'undefined' && trending && trending.length > 0) { %>
+                <% if (locals.trending && trending.length > 0) { %>
                     <div class="space-y-8">
                         <% trending.forEach(t => { %>
-                            <div class="group cursor-pointer" onclick="window.location.href='/feed?search=<%= t.description ? encodeURIComponent(t.description.split(\" \")[0]) : '' %>'">
+                            <div class="group cursor-pointer" onclick="window.location.href='/feed?search=<%= t.description ? encodeURIComponent(t.description.split(' ')[0]) : '' %>'">
                                 <p class="text-sm font-black text-slate-200 group-hover:text-blue-400 transition leading-snug">#<%= t.description || 'Unknown' %></p>
                                 <p class="text-[9px] text-slate-600 font-black uppercase mt-2 tracking-widest"><%= t.likes_count || 0 %> Soul Reactions</p>
                             </div>
                         <% }) %>
                     </div>
-                </div>
+                <% } else { %>
+                    <p class="text-[10px] text-slate-600 uppercase font-black italic tracking-widest">Silence in the trends...</p>
+                <% } %>
                 <div class="mt-12 pt-8 border-t border-slate-800">
                     <div class="flex items-center gap-3 opacity-30 grayscale">
                         <h1 class="text-lg font-black text-white italic tracking-tighter">APUGO</h1>
                         <span class="h-px w-full bg-slate-700"></span>
                     </div>
-                    <p class="text-[8px] text-slate-700 uppercase font-black mt-4 tracking-[0.4em]">Resident ID: <%= (typeof user !== 'undefined' && user && user.id) ? user.id.toString().substring(0,8) : '--------' %></p>
+                    <p class="text-[8px] text-slate-700 uppercase font-black mt-4 tracking-[0.4em]">Resident ID: <%= (locals.user && user.id) ? user.id.toString().substring(0,8) : '--------' %></p>
                 </div>
             </div>
         </aside>
     </main>
 
-    <!-- MOBILE NAV -->
     <div class="lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-xl border border-white/10 px-8 py-4 rounded-full flex gap-12 shadow-2xl z-50">
         <a href="/feed" class="text-blue-500"><i class="fas fa-home text-xl"></i></a>
         <a href="/discover" class="text-slate-500 hover:text-blue-400"><i class="fas fa-compass text-xl"></i></a>
@@ -261,9 +247,7 @@
         <a href="/profile" class="text-slate-500 hover:text-blue-400"><i class="fas fa-user-circle text-xl"></i></a>
     </div>
 
-    <!-- JAVASCRIPT -->
     <script>
-        // MOBILE MENU TOGGLE
         const menuBtn = document.getElementById('menu-btn');
         const navDropdown = document.getElementById('nav-dropdown');
 
@@ -272,7 +256,6 @@
                 e.stopPropagation();
                 navDropdown.classList.toggle('hidden');
             });
-        }
 
             document.addEventListener('click', function(e) {
                 if (!navDropdown.classList.contains('hidden') && !navDropdown.contains(e.target)) {
@@ -281,7 +264,6 @@
             });
         }
 
-        // POST FORM LOADING STATE
         const postForm = document.getElementById('postForm');
         if (postForm) {
             postForm.addEventListener('submit', function() {
@@ -291,6 +273,5 @@
             });
         }
     </script>
-
 </body>
 </html>
