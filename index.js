@@ -190,15 +190,28 @@ app.get("/logout", (req, res, next) => {
 /* --- FRIENDSHIP SYSTEM --- */
 
 app.post("/friends/request/:id", async (req, res) => {
+  // 1. Prevent adding yourself
   if (!req.isAuthenticated() || req.user.id == req.params.id) {
       return res.redirect("/feed");
   }
+  
   try {
-    await db.query("INSERT INTO friendships (sender_id, receiver_id, status) VALUES ($1, $2, 'pending') ON CONFLICT DO NOTHING", [req.user.id, req.params.id]);
-    await db.query("INSERT INTO notifications (user_id, sender_id, message) VALUES ($1, $2, $3)", [req.params.id, req.user.id, "Sent you a village friend request! 🤝"]);
-    res.redirect(req.get("Referrer") || "/feed"); // Fixed line
+    // 2. Insert request using the ID from the URL (:id)
+    await db.query(
+      "INSERT INTO friendships (sender_id, receiver_id, status) VALUES ($1, $2, 'pending') ON CONFLICT DO NOTHING", 
+      [req.user.id, req.params.id]
+    );
+
+    // 3. Send notification to the person BEING added (req.params.id)
+    await db.query(
+      "INSERT INTO notifications (user_id, sender_id, message) VALUES ($1, $2, $3)", 
+      [req.params.id, req.user.id, "Sent you a village friend request! 🤝"]
+    );
+
+    res.redirect(req.get("Referrer") || "/feed");
   } catch (err) { 
-    res.redirect(req.get("Referrer") || "/feed"); 
+    console.error("Add Friend Error:", err);
+    res.redirect("/feed"); 
   }
 });
 
