@@ -121,6 +121,22 @@ app.use(async (req, res, next) => {
   next();
 });
 
+function checkVerified(req, res, next) {
+    if (req.isAuthenticated() && req.user.is_verified) {
+        return next();
+    }
+    // If logged in but not verified, show the notice
+    if (req.isAuthenticated() && !req.user.is_verified) {
+        return res.render("verify-email-notice", { email: req.user.email });
+    }
+    res.redirect("/login");
+}
+
+// Apply it to your routes
+app.get("/feed", checkVerified, (req, res) => {
+    // only verified users see this
+});
+
 /* ---------------- PASSPORT ---------------- */
 
 passport.use(new LocalStrategy({ usernameField: "email" }, async (email, password, done) => {
@@ -229,6 +245,27 @@ app.get("/logout", (req, res, next) => {
     res.redirect("/");
   });
 });
+// 1. The Verification Route
+app.get("/verify", async (req, res) => {
+    const { token } = req.query;
+
+    try {
+        const result = await db.query(
+            "UPDATE users SET is_verified = true, verification_token = NULL WHERE verification_token = $1 RETURNING *",
+            [token]
+        );
+
+        if (result.rows.length > 0) {
+            // Success!
+            res.render("login", { message: "Account verified! You can now login." });
+        } else {
+            res.status(400).send("Invalid or expired token.");
+        }
+    } catch (err) {
+        console.error(err);
+        res.redirect("/register");
+    }
+});
 
 app.get("/users/search", async (req, res) => {
     const { query } = req.query;
@@ -243,6 +280,38 @@ app.get("/users/search", async (req, res) => {
     }
 });
 
+app.get("/forgot-password", (req, res) => {
+    res.render("forgot-password", { message: null, error: null });
+});
+
+app.post("/forgot-password", async (req, res) => {
+    const { email } = req.body;
+    try {
+        const user = await db.query("SELECT * FROM users WHERE email = $1", [email.toLowerCase()]);
+        
+        if (user.rows.length > 0) {
+            // 1. Generate a temporary reset token
+            const resetToken = Math.random().toString(36).substring(2, 15);
+            
+            // 2. Save token to DB with an expiry (optional but recommended)
+            await db.query("UPDATE users SET verification_token = $1 WHERE email = $2", [resetToken, email.toLowerCase()]);
+
+            // 3. Send Email (Replace with your actual nodemailer transport)
+            const resetLink = `https://${req.get('host')}/reset-password/${resetToken}`;
+            // await transporter.sendMail({ ... }); 
+            
+            console.log("Reset Link:", resetLink); // For testing
+        }
+
+        // Always show success to prevent email fishing
+        res.render("forgot-password", { 
+            message: "If that email exists in our village, a reset link is on its way.", 
+            error: null 
+        });
+    } catch (err) {
+        res.render("forgot-password", { message: null, error: "Something went wrong." });
+    }
+});
 app.get("/auth/verify/:token", async (req, res) => {
     const { token } = req.params;
     try {
