@@ -13,6 +13,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import multer from "multer";
 import { createClient } from '@supabase/supabase-js';
+import nodemailer from "nodemailer";
 
 dotenv.config();
 
@@ -37,6 +38,13 @@ db.on('error', (err) => {
   console.error('Unexpected error on idle client', err);
 });
 
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+    }
+});
 /* ---------------- SUPABASE STORAGE & AUTH ---------------- */
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 const upload = multer({ storage: multer.memoryStorage() });
@@ -187,6 +195,92 @@ app.get("/logout", (req, res, next) => {
   });
 });
 
+app.get("/users/search", async (req, res) => {
+    const { query } = req.query;
+    try {
+        const result = await db.query(
+            "SELECT id, email FROM users WHERE email ILIKE $1 AND id != $2 LIMIT 5",
+            [`%${query}%`, req.user.id]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Search failed" });
+    }
+});
+
+  // UNFRIEND: Remove connection and all related messages
+  app.post("/friends/unfriend/:id", async (req, res) => {
+    try {
+        await db.query(
+            "DELETE FROM friendships WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)",
+            [req.user.id, req.params.id]
+        );
+        // Optional: Delete messages too if you want a clean break
+        await db.query(
+            "DELETE FROM messages WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)",
+            [req.user.id, req.params.id]
+        );
+        res.redirect("/messages");
+    } catch (err) {
+        res.redirect("back");
+    }
+});
+
+// DELETE ENTIRE CHAT HISTORY
+app.post("/api/chat/delete/:friendId", async (req, res) => {
+    await db.query(
+        "DELETE FROM messages WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)",
+        [req.user.id, req.params.friendId]
+    );
+    res.json({ success: true });
+});
+
+// ROUTE: Forgot Password
+app.post("/auth/forgot-password", async (req, res) => {
+    const token = Math.random().toString(36).substring(2);
+    await db.query("UPDATE users SET reset_token = $1, reset_expires = NOW() + INTERVAL '1 hour' WHERE email = $2", [token, req.body.email]);
+    
+    const resetLink = `https://${req.get('host')}/reset-password/${token}`;
+    await transporter.sendMail({
+        to: req.body.email,
+        subject: "Apugo Village Password Reset",
+        text: `Click here to reset: ${resetLink}`
+    });
+    res.send("Reset link sent!");
+});
+// GET: Show the page where user types new password
+app.get("/reset-password/:token", async (req, res) => {
+    const { token } = req.params;
+    const result = await db.query(
+        "SELECT * FROM users WHERE reset_token = $1 AND reset_expires > NOW()", 
+        [token]
+    );
+    if (result.rows.length === 0) {
+        req.flash("error", "Reset link is invalid or has expired.");
+        return res.redirect("/login");
+    }
+    res.render("reset-password", { token }); // You'll need to create this EJS
+});
+
+// POST: Handle the new password submission
+app.post("/reset-password/:token", async (req, res) => {
+    const { token } = req.params;
+    const { password } = req.body;
+    try {
+        const hash = await bcrypt.hash(password, saltRounds);
+        const result = await db.query(
+            "UPDATE users SET password = $1, reset_token = NULL, reset_expires = NULL WHERE reset_token = $2 RETURNING *",
+            [hash, token]
+        );
+        if (result.rows.length > 0) {
+            req.flash("success", "Password updated! You can now login.");
+            res.redirect("/login");
+        } else {
+            res.status(400).send("Invalid token.");
+        }
+    } catch (err) { res.redirect("/login"); }
+});
+
 /* --- FRIENDSHIP SYSTEM --- */
 
 app.post("/friends/request/:id", async (req, res) => {
@@ -293,6 +387,15 @@ app.get("/api/chat/:friendId", async (req, res) => {
       OR (sender_id = $2 AND receiver_id = $1)
       ORDER BY created_at ASC`, [req.user.id, req.params.friendId]);
   res.json(result.rows);
+});
+
+app.get("/users/search", async (req, res) => {
+    const { name } = req.query;
+    const result = await db.query(
+        "SELECT id, email FROM users WHERE email ILIKE $1 LIMIT 10",
+        [`%${name}%`]
+    );
+    res.json(result.rows);
 });
 
 app.post("/api/chat/send", async (req, res) => {
