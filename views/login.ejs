@@ -57,10 +57,11 @@
 
                 <div class="relative">
                     <input type="password" name="password" id="password" placeholder="Password" required
-                        class="input-field w-full px-6 py-4 rounded-2xl outline-none transition-all font-medium placeholder:text-slate-600 pr-14">
+                        class="input-field w-full px-6 py-4 rounded-2xl outline-none transition-all font-medium placeholder:text-slate-600 pr-20">
                     
-                    <button type="button" onclick="togglePassword()" class="absolute right-5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors">
-                        <i id="eyeIcon" class="fa-solid fa-eye"></i>
+                    <button type="button" onclick="togglePassword()" id="toggleBtn" 
+                        class="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] uppercase font-black tracking-widest text-slate-500 hover:text-blue-400 transition-colors">
+                        Show
                     </button>
 
                     <div id="strengthContainer" class="hidden mt-3 px-1">
@@ -107,14 +108,16 @@
         // Password Visibility Toggle
         function togglePassword() {
             const passwordInput = document.getElementById('password');
-            const eyeIcon = document.getElementById('eyeIcon');
+            const toggleBtn = document.getElementById('toggleBtn');
             
             if (passwordInput.type === 'password') {
                 passwordInput.type = 'text';
-                eyeIcon.classList.replace('fa-eye', 'fa-eye-slash');
+                toggleBtn.innerText = 'Hide';
+                toggleBtn.classList.add('text-blue-500');
             } else {
                 passwordInput.type = 'password';
-                eyeIcon.classList.replace('fa-eye-slash', 'fa-eye');
+                toggleBtn.innerText = 'Show';
+                toggleBtn.classList.remove('text-blue-500');
             }
         }
 
@@ -138,7 +141,6 @@
             if (/[0-9]/.test(val)) score++;
             if (/[^A-Za-z0-9]/.test(val)) score++;
 
-            // Update UI based on score
             const levels = [
                 { width: '25%', color: 'bg-red-500', text: 'Weak', textColor: 'text-red-500' },
                 { width: '50%', color: 'bg-yellow-500', text: 'Fair', textColor: 'text-yellow-500' },
