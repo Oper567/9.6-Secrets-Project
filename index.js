@@ -285,33 +285,65 @@ app.post("/reset-password/:token", async (req, res) => {
 app.get("/feed", checkVerified, async (req, res) => {
     const search = req.query.search || "";
     try {
-        const announcements = await db.query(`SELECT e.*, u.email AS author FROM events e JOIN users u ON e.created_by=u.id WHERE is_announcement=true AND is_deleted=false ORDER BY created_at DESC`);
-        const trending = await db.query(`SELECT e.id, e.description, COUNT(l.id) as likes_count FROM events e LEFT JOIN likes l ON e.id = l.event_id WHERE e.is_deleted = false GROUP BY e.id ORDER BY likes_count DESC LIMIT 3`);
+        // 1. Fetch Announcements
+        const announcements = await db.query(`
+            SELECT e.*, u.email AS author FROM events e 
+            JOIN users u ON e.created_by=u.id 
+            WHERE is_announcement=true AND is_deleted=false 
+            ORDER BY created_at DESC
+        `);
+
+        // 2. Fetch Trending
+        const trending = await db.query(`
+            SELECT e.id, e.description, COUNT(l.id) as likes_count 
+            FROM events e LEFT JOIN likes l ON e.id = l.event_id 
+            WHERE e.is_deleted = false 
+            GROUP BY e.id ORDER BY likes_count DESC LIMIT 3
+        `);
         
-        // Inside app.get("/feed" ...)
-    let postsQuery = `
-    // Check this part of your SQL in index.js:
-    (SELECT JSON_AGG(json_build_object(
-    'id', c.id, 
-    'content', c.content, 
-    'author', cu.email, 
-    'user_id', c.user_id  // <--- VERY IMPORTANT
-    )) FROM comments c JOIN users cu ON c.user_id = cu.id WHERE c.event_id = e.id) as comments_list
-` ;
+        // 3. Main Posts Query (Fixed the logic here)
+        let postsQuery = `
+            SELECT e.*, u.email AS author, u.profile_pic, u.is_verified,
+            (SELECT COUNT(*) FROM likes WHERE event_id=e.id) AS likes_count,
+            (SELECT EXISTS (SELECT 1 FROM likes WHERE event_id=e.id AND user_id=$1)) AS liked_by_me,
+            (SELECT JSON_AGG(json_build_object(
+                'id', c.id, 
+                'content', c.content, 
+                'author', cu.email, 
+                'user_id', c.user_id
+            )) FROM comments c JOIN users cu ON c.user_id = cu.id WHERE c.event_id = e.id) as comments_list
+            FROM events e 
+            JOIN users u ON e.created_by=u.id 
+            WHERE is_announcement=false AND is_deleted=false
+        `;
         
         const params = [req.user.id];
+
         if (search) { 
             postsQuery += ` AND (e.description ILIKE $2)`; 
             params.push(`%${search}%`); 
         }
+
         postsQuery += ` ORDER BY e.is_pinned DESC, e.created_at DESC`;
         
         const posts = await db.query(postsQuery, params);
-        res.render("feed", { announcements: announcements.rows, posts: posts.rows, trending: trending.rows });
+
+        // 4. Render with ALL required locals
+        res.render("feed", { 
+            announcements: announcements.rows, 
+            posts: posts.rows, 
+            trending: trending.rows,
+            search: search,
+            unreadCount: res.locals.unreadCount,
+            user: req.user
+        });
+
     } catch (err) { 
-        res.status(500).send("Village Feed Error"); 
+        console.error("FEED ERROR:", err);
+        res.status(500).send("Village Feed Error: " + err.message); 
     }
 });
+       
 
 // ADD THIS: Discover Route (Random media gallery)
 app.get("/discover", checkVerified, async (req, res) => {
