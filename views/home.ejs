@@ -2,90 +2,167 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Apugo | Village Square</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
     <style>
-        body { background-color: #020617; }
-        .glass-card {
-            background: rgba(15, 23, 42, 0.6);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+        
+        :root {
+            font-family: 'Plus Jakarta Sans', sans-serif;
         }
+
+        body { 
+            background-color: #020617; 
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .glass-card {
+            background: rgba(15, 23, 42, 0.4);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .glass-card:hover {
+            border-color: rgba(96, 165, 250, 0.4);
+            background: rgba(15, 23, 42, 0.6);
+            transform: translateY(-8px);
+        }
+
         .text-gradient {
-            background: linear-gradient(to right, #60a5fa, #a855f7);
+            background: linear-gradient(135deg, #60a5fa 0%, #a855f7 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
+
+        .shimmer {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .shimmer::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(
+                to bottom right,
+                rgba(255, 255, 255, 0) 0%,
+                rgba(255, 255, 255, 0.1) 50%,
+                rgba(255, 255, 255, 0) 100%
+            );
+            transform: rotate(45deg);
+            animation: shimmer 3s infinite linear;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translate(-100%, -100%) rotate(45deg); }
+            100% { transform: translate(100%, 100%) rotate(45deg); }
+        }
+
+        /* Prevent content jump on mobile */
+        .min-h-screen { min-height: 100dvh; }
     </style>
 </head>
-<body class="text-slate-200 overflow-x-hidden">
-    <div class="fixed top-0 left-1/2 -translate-x-1/2 w-full h-full">
-        <div class="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-blue-600/10 rounded-full blur-[120px] animate-pulse"></div>
-        <div class="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-indigo-600/10 rounded-full blur-[120px] animate-pulse delay-700"></div>
+<body class="text-slate-200 overflow-x-hidden selection:bg-blue-500/30">
+    
+    <div class="fixed inset-0 -z-10 overflow-hidden">
+        <div class="absolute top-[-15%] left-[-10%] w-[70%] h-[60%] bg-blue-600/15 rounded-full blur-[120px] animate-pulse"></div>
+        <div class="absolute bottom-[-15%] right-[-10%] w-[70%] h-[60%] bg-indigo-600/15 rounded-full blur-[120px] animate-pulse" style="animation-delay: 1.5s"></div>
     </div>
+
+    <nav class="sticky top-0 w-full z-[100] border-b border-white/5 bg-slate-950/50 backdrop-blur-md">
+        <div class="max-w-7xl mx-auto px-6 h-16 flex justify-between items-center">
+            <div class="flex items-center gap-1">
+                <span class="text-xl font-extrabold italic tracking-tighter text-white">APUGO<span class="text-blue-500">.</span></span>
+            </div>
+            <div class="flex items-center gap-3">
+                <a href="/login" class="text-xs font-bold text-slate-400 hover:text-white px-3 py-2 transition">Login</a>
+                <a href="/register" class="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-500 active:scale-95 transition-all shadow-lg shadow-blue-500/20">
+                    Join
+                </a>
+            </div>
+        </div>
+    </nav>
 
     <div class="relative min-h-screen flex flex-col items-center">
         
-        <nav class="w-full max-w-7xl p-6 flex justify-between items-center z-50">
-            <div class="flex items-center gap-2">
-                <span class="text-2xl font-black italic tracking-tighter text-white">APUGO<span class="text-blue-500">.</span></span>
-            </div>
-            <div class="flex items-center gap-4">
-                <a href="/login" class="text-sm font-bold text-slate-400 hover:text-white transition">Login</a>
-                <a href="/register" class="bg-white text-black px-6 py-2 rounded-full text-sm font-bold hover:bg-blue-500 hover:text-white transition shadow-xl">Join the Village</a>
-            </div>
-        </nav>
-
-        <main class="flex-1 flex flex-col items-center justify-center text-center px-4 z-10 max-w-5xl">
-            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-black uppercase tracking-widest mb-8 animate__animated animate__fadeInDown">
+        <main class="w-full max-w-5xl px-6 pt-12 md:pt-24 pb-16 text-center z-10">
+            <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-bold uppercase tracking-[0.15em] mb-8 animate__animated animate__fadeInDown">
                 <span class="relative flex h-2 w-2">
                     <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
                     <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
                 </span>
-                Village Pulse: 24 New Updates
+                Village Pulse: Live Updates
             </div>
 
-            <h1 class="text-6xl md:text-8xl font-black tracking-tighter text-white mb-6 animate__animated animate__fadeInUp">
+            <h1 class="text-5xl md:text-8xl font-extrabold tracking-tighter text-white mb-6 animate__animated animate__fadeInUp leading-[1.1]">
                 The heartbeat of <br>
                 <span class="text-gradient italic">Apugo Village.</span>
             </h1>
 
-            <p class="text-slate-400 text-lg md:text-xl max-w-2xl mb-12 animate__animated animate__fadeInUp animate__delay-1s leading-relaxed">
-                A private, high-speed social network built exclusively for our community. Share events, stay updated, and connect with your neighbors instantly.
+            <p class="text-slate-400 text-base md:text-xl max-w-2xl mx-auto mb-10 animate__animated animate__fadeInUp animate__delay-1s leading-relaxed font-medium">
+                A private, high-speed digital sanctuary for our community. Share whispers, stay updated, and bridge the gap with your neighbors.
             </p>
 
-            <div class="flex flex-wrap justify-center gap-4 animate__animated animate__fadeInUp animate__delay-1s">
-                <a href="/register" class="bg-blue-600 px-10 py-4 rounded-2xl font-black text-lg hover:bg-blue-500 transition shadow-2xl shadow-blue-500/20">
+            <div class="flex flex-col sm:flex-row items-center justify-center gap-6 animate__animated animate__fadeInUp animate__delay-1s">
+                <a href="/register" class="shimmer w-full sm:w-auto bg-blue-600 px-10 py-4 rounded-2xl font-extrabold text-lg hover:bg-blue-500 active:scale-95 transition-all shadow-2xl shadow-blue-500/30">
                     Enter the Square
                 </a>
-                <div class="flex -space-x-3 items-center ml-4">
-                    <div class="w-10 h-10 rounded-full border-2 border-slate-950 bg-slate-800 flex items-center justify-center text-xs font-bold">JD</div>
-                    <div class="w-10 h-10 rounded-full border-2 border-slate-950 bg-blue-600 flex items-center justify-center text-xs font-bold">MK</div>
-                    <div class="w-10 h-10 rounded-full border-2 border-slate-950 bg-indigo-600 flex items-center justify-center text-xs font-bold">SA</div>
-                    <span class="pl-6 text-xs text-slate-500 font-bold tracking-tight">Joined by 200+ villagers</span>
+                
+                <div class="flex items-center gap-3 bg-white/5 border border-white/5 px-4 py-2 rounded-2xl">
+                    <div class="flex -space-x-2">
+                        <div class="w-8 h-8 rounded-full border-2 border-slate-950 bg-slate-800 flex items-center justify-center text-[10px] font-bold">JD</div>
+                        <div class="w-8 h-8 rounded-full border-2 border-slate-950 bg-blue-600 flex items-center justify-center text-[10px] font-bold">MK</div>
+                        <div class="w-8 h-8 rounded-full border-2 border-slate-950 bg-indigo-600 flex items-center justify-center text-[10px] font-bold">SA</div>
+                    </div>
+                    <span class="text-[11px] text-slate-400 font-bold uppercase tracking-tight">200+ Active Neighbors</span>
                 </div>
             </div>
         </main>
 
-        <section class="w-full max-w-6xl grid grid-cols-1 md:grid-cols-3 gap-6 px-4 pb-20 animate__animated animate__fadeInUp animate__delay-1s">
-            <div class="glass-card p-8 rounded-3xl">
-                <div class="text-3xl mb-4">📢</div>
-                <h3 class="text-xl font-bold text-white mb-2">Live News</h3>
-                <p class="text-slate-400 text-sm leading-relaxed">Instant announcements from village elders and event organizers.</p>
+        <section class="w-full max-w-6xl grid grid-cols-1 md:grid-cols-3 gap-4 px-6 pb-24 animate__animated animate__fadeInUp animate__delay-1s">
+            <div class="glass-card p-8 rounded-[2rem] flex flex-col items-start">
+                <div class="w-12 h-12 bg-blue-500/20 rounded-2xl flex items-center justify-center text-2xl mb-6">📢</div>
+                <h3 class="text-lg font-bold text-white mb-2">Live News</h3>
+                <p class="text-slate-400 text-sm leading-relaxed font-medium">Instant announcements from village elders and event organizers, pinned to your feed.</p>
             </div>
-            <div class="glass-card p-8 rounded-3xl">
-                <div class="text-3xl mb-4">🤝</div>
-                <h3 class="text-xl font-bold text-white mb-2">Community</h3>
-                <p class="text-slate-400 text-sm leading-relaxed">Find and connect with neighbors, family, and friends in the digital square.</p>
+            
+            <div class="glass-card p-8 rounded-[2rem] flex flex-col items-start">
+                <div class="w-12 h-12 bg-indigo-500/20 rounded-2xl flex items-center justify-center text-2xl mb-6">🤝</div>
+                <h3 class="text-lg font-bold text-white mb-2">Kinship</h3>
+                <p class="text-slate-400 text-sm leading-relaxed font-medium">Build a verified network of neighbors. Your square, your family, your rules.</p>
             </div>
-            <div class="glass-card p-8 rounded-3xl">
-                <div class="text-3xl mb-4">⚡</div>
-                <h3 class="text-xl font-bold text-white mb-2">Real-time</h3>
-                <p class="text-slate-400 text-sm leading-relaxed">Powered by high-speed tech for zero-lag interactions and notifications.</p>
+
+            <div class="glass-card p-8 rounded-[2rem] flex flex-col items-start">
+                <div class="w-12 h-12 bg-purple-500/20 rounded-2xl flex items-center justify-center text-2xl mb-6">⚡</div>
+                <h3 class="text-lg font-bold text-white mb-2">Whispers</h3>
+                <p class="text-slate-400 text-sm leading-relaxed font-medium">Real-time messaging with ultra-low latency. Stay connected even on weak signals.</p>
             </div>
         </section>
+
+        <footer class="w-full py-12 border-t border-white/5 flex flex-col items-center gap-4 text-center">
+            <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.4em]">Apugo Village Digital &copy; 2025</p>
+            <div class="flex gap-4">
+                <div class="w-2 h-2 rounded-full bg-green-500/50"></div>
+                <span class="text-[9px] font-bold text-slate-600 uppercase tracking-widest">All Systems Operational</span>
+            </div>
+        </footer>
     </div>
+
+    <script>
+        // Simple script to handle mobile view height issues
+        const setVh = () => {
+            let vh = window.innerHeight * 0.01;
+            document.documentElement.style.setProperty('--vh', `${vh}px`);
+        };
+        window.addEventListener('resize', setVh);
+        setVh();
+    </script>
 </body>
 </html>
