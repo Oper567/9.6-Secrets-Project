@@ -15,7 +15,7 @@ import multer from "multer";
 import { createClient } from '@supabase/supabase-js';
 import nodemailer from "nodemailer";
 import { Resend } from 'resend';
-import { PrismaClient } from '@prisma/client';
+import pkg from '@prisma/client';
 dotenv.config();
 
 /* ---------------- INITIAL SETUP ---------------- */
@@ -23,11 +23,13 @@ const PostgresStore = pgSession(session);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const { PrismaClient } = pkg;
 const app = express();
 const port = process.env.PORT || 3000;
 const saltRounds = 10;
 const router = express.Router();
 const prisma = new PrismaClient();
+
 
 /* ---------------- SERVICES (DB, SUPABASE, MAIL) ---------------- */
 const db = new pg.Pool({

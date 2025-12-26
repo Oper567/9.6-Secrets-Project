@@ -1,0 +1,28 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" // or "mysql" / "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Post {
+  id           Int       @id @default(autoincrement())
+  description  String
+  image_url    String?
+  author       String
+  created_at   DateTime  @default(now())
+  comments     Comment[]
+}
+
+model Comment {
+  id           Int      @id @default(autoincrement())
+  comment_text String
+  post_id      Int
+  post         Post     @relation(fields: [post_id], references: [id])
+  user_id      Int
+  created_at   DateTime @default(now())
+}
