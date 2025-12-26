@@ -83,6 +83,12 @@ app.use((req, res, next) => {
     next();
 });
 
+app.use((req, res, next) => {
+    // This makes 'user' available in every .ejs file automatically
+    res.locals.user = req.session.user || null;
+    next();
+});
+
 app.use(session({
     store: new PostgresStore({
         pool: db,
