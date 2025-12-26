@@ -501,10 +501,24 @@ app.post("/api/friends/unfriend/:friendId", isAuth, async (req, res) => {
 
 app.post("/api/chat/send", isAuth, async (req, res) => {
     const { receiverId, content } = req.body;
+    
+    // Basic validation
+    if (!content || !receiverId) {
+        return res.status(400).json({ error: "Empty whisper or no recipient." });
+    }
+
     try {
-        const msg = await db.query("INSERT INTO messages (sender_id, receiver_id, content) VALUES ($1, $2, $3) RETURNING *", [req.user.id, receiverId, content]);
-        res.json(msg.rows[0]);
-    } catch (err) { res.status(500).json({ error: "Send failed" }); }
+        const result = await db.query(
+            "INSERT INTO messages (sender_id, receiver_id, content) VALUES ($1, $2, $3) RETURNING *", 
+            [req.user.id, receiverId, content]
+        );
+        
+        // We MUST return the message as JSON so the frontend script can update the UI
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error("SEND ERROR:", err);
+        res.status(500).json({ error: "Whisper lost in the wind." });
+    }
 });
 
 app.delete("/api/chat/clear/:friendId", isAuth, async (req, res) => {
@@ -580,14 +594,14 @@ app.get("/notifications", isAuth, async (req, res) => {
 // ADD THIS: Clear Notifications Route
 app.post("/notifications/clear", isAuth, async (req, res) => {
     try {
-        // We use user_id because that's what your middleware uses
+        // Use user_id (matches your middleware)
         await db.query("UPDATE notifications SET is_read = true WHERE user_id = $1", [req.user.id]);
         
-        // Use back() to keep the user on the same page, or redirect to notifications
-        res.redirect("back"); 
+        // This stops the infinite loading and refreshes the page
+        res.redirect("/notifications"); 
     } catch (err) {
         console.error("NOTIFICATION CLEAR ERROR:", err);
-        res.redirect("/notifications?error=true");
+        res.status(500).send("The spirits failed to clear the echoes.");
     }
 });
 
