@@ -41,17 +41,18 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
     port: 465,
-    secure: true, // Use SSL/TLS
+    secure: true, // Use SSL
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
     },
-    // Add these timeout settings to give Render more time to connect
+    // Adding specific timeouts so the request doesn't hang
     connectionTimeout: 10000, // 10 seconds
     greetingTimeout: 10000,
-    socketTimeout: 10000,
+    socketTimeout: 15000,
     tls: {
-        rejectUnauthorized: false // Helps bypass network handshake blocks
+        // This helps if the Render network has issues with certificate handshakes
+        rejectUnauthorized: false
     }
 });
 // Verification Function
