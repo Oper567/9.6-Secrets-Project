@@ -28,10 +28,11 @@ model Comment {
   created_at   DateTime @default(now())
 }
 model User {
-  id       Int    @id @default(autoincrement())
-  email    String @unique
-  password String
-  role     String @default("user") // <--- Add this line
+  id          Int      @id @default(autoincrement())
+  email       String   @unique
+  password    String
+  role        String   @default("user")
+  is_verified Boolean  @default(false) // <--- Add this line
 
   @@map("users") 
 }
