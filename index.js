@@ -577,31 +577,28 @@ app.post("/event/:id/report", async (req, res) => {
 app.post("/event/:id/comment", isAuth, async (req, res) => {
     try {
         const { content } = req.body;
-        if (!content || content.trim() === "") return res.redirect("back");
+        if (!content || content.trim() === "") return goBack(req, res); // FIX
 
         await db.query(
             "INSERT INTO comments (event_id, user_id, content) VALUES ($1, $2, $3)", 
             [req.params.id, req.user.id, content]
         );
         
-        res.redirect("back"); // This brings them right back to the feed
+        goBack(req, res); // FIX
     } catch (err) { 
         console.error(err);
-        res.redirect("back"); 
+        goBack(req, res); // FIX
     }
 });
-
 app.post("/comment/:id/delete", isAuth, async (req, res) => {
     try {
-        // Only allow owner or admin to delete
         const comment = await db.query("SELECT user_id FROM comments WHERE id = $1", [req.params.id]);
-        
         if (comment.rows.length > 0 && (comment.rows[0].user_id === req.user.id || req.user.role === 'admin')) {
             await db.query("DELETE FROM comments WHERE id = $1", [req.params.id]);
         }
-        res.redirect("back");
+        goBack(req, res); // FIX
     } catch (err) {
-        res.redirect("back");
+        goBack(req, res); // FIX
     }
 });
 
