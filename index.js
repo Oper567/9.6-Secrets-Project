@@ -626,6 +626,7 @@ app.delete("/api/chat/clear/:friendId", isAuth, async (req, res) => {
 });
 
 /* ---------------- FRIENDSHIP SYSTEM ---------------- */
+// 1. CONNECT / REQUEST KINSHIP
 app.post("/friends/request/:id", isAuth, async (req, res) => {
     const senderId = req.user.id;
     const receiverId = req.params.id;
@@ -633,33 +634,69 @@ app.post("/friends/request/:id", isAuth, async (req, res) => {
     if (parseInt(senderId) === parseInt(receiverId)) return res.redirect("/feed");
 
     try {
-        // Change 'pending' to 'accepted' if you want immediate whispering
-        const status = 'accepted'; 
-
-        await db.query(
-            "INSERT INTO friendships (sender_id, receiver_id, status) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
-            [senderId, receiverId, status]
+        // We check if any relationship exists (either way)
+        const check = await db.query(
+            "SELECT * FROM friendships WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)",
+            [senderId, receiverId]
         );
 
-        await db.query(
-            "INSERT INTO notifications (user_id, sender_id, message) VALUES ($1, $2, $3)",
-            [receiverId, senderId, "added you as kin!"]
-        );
+        if (check.rows.length === 0) {
+            // Option A: Instant Friends (status='accepted')
+            // Option B: Needs approval (status='pending')
+            const status = 'accepted'; 
+
+            await db.query(
+                "INSERT INTO friendships (sender_id, receiver_id, status) VALUES ($1, $2, $3)",
+                [senderId, receiverId, status]
+            );
+
+            await db.query(
+                "INSERT INTO notifications (user_id, sender_id, message) VALUES ($1, $2, $3)",
+                [receiverId, senderId, "added you as kin!"]
+            );
+        }
         
-        res.redirect("/feed");
+        res.redirect(req.get("Referrer") || "/feed");
     } catch (err) {
         console.error("KINSHIP ERROR:", err);
         res.status(500).send("Error connecting souls.");
     }
 });
 
-app.post("/friends/accept/:senderId", isAuth, async (req, res) => {
+// 2. SEVER KINSHIP (UNFRIEND)
+app.post("/friends/unfriend/:id", isAuth, async (req, res) => {
+    const targetId = req.params.id;
+    const userId = req.user.id;
     try {
-        await db.query("UPDATE friendships SET status = 'accepted' WHERE sender_id = $1 AND receiver_id = $2", [req.params.senderId, req.user.id]);
-        await db.query("INSERT INTO notifications (user_id, sender_id, actor_id, message) VALUES ($1, $2, $2, $3)", [req.params.senderId, req.user.id, "Accepted your friend request! 🌴"]);
-        res.redirect("back");
-    } catch (err) { res.redirect("back"); }
+        // Matches the sender_id/receiver_id naming convention
+        await db.query(
+            "DELETE FROM friendships WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)",
+            [userId, targetId]
+        );
+        res.redirect(req.get("Referrer") || "/feed");
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Failed to sever kinship.");
+    }
 });
+
+// FIX: Delete Chat (Assuming it deletes the message history between two users)
+app.post("/messages/delete/:userId", checkVerified, async (req, res) => {
+    const otherUserId = req.params.userId;
+    const myId = req.user.id;
+    try {
+        await db.query(
+            "DELETE FROM messages WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)",
+            [myId, otherUserId]
+        );
+        res.redirect("/messages");
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Failed to clear scrolls.");
+    }
+});
+ 
+
 
 /* ---------------- PROFILE & SETTINGS ---------------- */
 app.get('/profile', isAuth, async (req, res) => {
@@ -734,7 +771,32 @@ app.post("/user/:id/follow", isAuth, async (req, res) => {
         res.redirect("back");
     }
 });
+app.get("/villagers", checkVerified, async (req, res) => {
+    const search = req.query.search || "";
+    try {
+        const query = `
+            SELECT u.id, u.email, u.profile_pic, u.is_verified,
+            (SELECT status FROM friendships 
+             WHERE (sender_id = $1 AND receiver_id = u.id) 
+                OR (sender_id = u.id AND receiver_id = $1) 
+             LIMIT 1) as friend_status
+            FROM users u 
+            WHERE u.id != $1 
+            ${search ? "AND u.email ILIKE $2" : ""}
+            ORDER BY u.is_verified DESC, u.email ASC`;
 
+        const params = search ? [req.user.id, `%${search}%`] : [req.user.id];
+        const result = await db.query(query, params);
+
+        res.render("villagers", {
+            villagers: result.rows,
+            user: req.user,
+            search: search
+        });
+    } catch (err) {
+        res.redirect("/feed");
+    }
+});
 app.get("/admin", isAdmin, async (req, res) => {
     const users = await db.query("SELECT id, email, role, is_verified FROM users ORDER BY id DESC");
     res.render("admin-dashboard", { users: users.rows });
