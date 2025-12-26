@@ -1,13 +1,12 @@
-// prisma/schema.prisma
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  password     String
+  role         String   @default("user")
+  is_verified  Boolean  @default(false)
+  last_active  DateTime @default(now()) // <--- Add this for the Middleware error
 
-generator client {
-  provider = "prisma-client-js"
-}
-
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL") // Add this line
+  @@map("users")
 }
 
 model Post {
@@ -17,6 +16,8 @@ model Post {
   author       String
   created_at   DateTime  @default(now())
   comments     Comment[]
+
+  @@map("events") // <--- This maps the "Post" model to the "events" table for the Feed error
 }
 
 model Comment {
@@ -26,13 +27,6 @@ model Comment {
   post         Post     @relation(fields: [post_id], references: [id])
   user_id      Int
   created_at   DateTime @default(now())
-}
-model User {
-  id          Int      @id @default(autoincrement())
-  email       String   @unique
-  password    String
-  role        String   @default("user")
-  is_verified Boolean  @default(false) // <--- Add this line
 
-  @@map("users") 
+  @@map("comments")
 }
