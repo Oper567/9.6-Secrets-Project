@@ -32,13 +32,6 @@
         }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         
-        .vibe-pop { animation: heartPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-        @keyframes heartPop {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.5); }
-            100% { transform: scale(1); }
-        }
-
         .comment-section {
             max-height: 0;
             overflow: hidden;
@@ -46,6 +39,15 @@
         }
         .comment-section.open {
             max-height: 1000px;
+        }
+        .user-initial {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            color: white;
+            text-transform: uppercase;
         }
     </style>
 </head>
@@ -76,9 +78,9 @@
                         <span class="absolute -top-1 -right-1 bg-blue-600 text-[8px] w-4 h-4 flex items-center justify-center rounded-full font-black border-2 border-[#020617]"><%= unreadCount %></span>
                     <% } %>
                 </a>
-                <a href="/profile" class="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/5 hover:bg-white/10 transition-all">
-                    <i class="fas fa-user-circle text-blue-500"></i>
-                    <span class="text-[10px] font-black uppercase tracking-widest text-slate-300">Profile</span>
+                <a href="/profile" class="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/5 text-slate-300">
+                    <i class="fas fa-user-circle"></i>
+                    <span class="text-[9px] font-black uppercase tracking-widest">Profile</span>
                 </a>
             </div>
         </div>
@@ -90,15 +92,17 @@
             
             <section class="bg-slate-900/50 border border-white/5 rounded-[2.5rem] p-6 lg:p-8 shadow-2xl">
                 <form action="/event/create" method="POST" enctype="multipart/form-data" id="postForm">
-                    <div class="w-full">
-                        <textarea name="description" id="postContent" placeholder="What's the word in the square?" required 
-                            class="w-full bg-transparent outline-none h-20 resize-none text-[16px] text-slate-200 placeholder-slate-600 mt-1 leading-relaxed font-medium"></textarea>
-                        
-                        <div id="mediaPreviewContainer" class="hidden mt-4 relative w-32 h-32 rounded-2xl overflow-hidden border border-white/10 group">
-                            <img id="imagePreview" class="w-full h-full object-cover">
-                            <button type="button" onclick="clearMedia()" class="absolute top-2 right-2 bg-black/60 text-white w-6 h-6 rounded-full text-[10px] hover:bg-red-500 transition-colors">
-                                <i class="fas fa-times"></i>
-                            </button>
+                    <div class="flex gap-4">
+                        <div class="w-full">
+                            <textarea name="description" id="postContent" placeholder="What's the word in the square?" required 
+                                class="w-full bg-transparent outline-none h-20 resize-none text-[16px] text-slate-200 placeholder-slate-600 mt-1 leading-relaxed font-medium"></textarea>
+                            
+                            <div id="mediaPreviewContainer" class="hidden mt-4 relative w-32 h-32 rounded-2xl overflow-hidden border border-white/10 group">
+                                <img id="imagePreview" class="w-full h-full object-cover">
+                                <button type="button" onclick="clearMedia()" class="absolute top-2 right-2 bg-black/60 text-white w-6 h-6 rounded-full text-[10px] hover:bg-red-500 transition-colors">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                     
@@ -109,7 +113,7 @@
                                 <i class="fas fa-camera text-blue-500"></i> Media
                             </label>
                         </div>
-                        <button type="submit" id="publishBtn" class="bg-blue-600 hover:bg-blue-500 px-10 py-3.5 rounded-2xl font-black text-[10px] text-white uppercase tracking-[0.2em] transition-all shadow-lg shadow-blue-600/20">
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-500 px-10 py-3.5 rounded-2xl font-black text-[10px] text-white uppercase tracking-[0.2em] transition-all">
                             Publish
                         </button>
                     </div>
@@ -121,25 +125,16 @@
                     <% posts.forEach(p => { %>
                         <article class="post-card rounded-[2.5rem] overflow-hidden" id="post-<%= p.id %>">
                             <div class="p-6 flex justify-between items-center">
-                                <div class="flex items-center gap-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-2xl user-initial text-sm">
+                                        <%= p.author ? p.author.charAt(0) : 'V' %>
+                                    </div>
                                     <div>
                                         <div class="flex items-center gap-2">
                                             <p class="font-bold text-[14px] text-white">@<%= p.author ? p.author.split('@')[0] : 'villager' %></p>
                                             <% if (p.is_verified) { %> <i class="fas fa-certificate text-blue-500 text-[9px]"></i> <% } %>
                                         </div>
                                         <p class="text-[8px] text-slate-600 uppercase font-black tracking-widest"><%= new Date(p.created_at).toLocaleDateString() %></p>
-                                    </div>
-                                </div>
-                                
-                                <div class="relative group">
-                                    <button class="text-slate-700 hover:text-white p-2 transition-colors"><i class="fas fa-ellipsis-h"></i></button>
-                                    <div class="hidden group-hover:block absolute right-0 top-8 bg-slate-900 border border-white/10 rounded-xl w-36 overflow-hidden z-20 shadow-2xl">
-                                        <% if (locals.user && p.created_by === user.id) { %>
-                                            <form action="/event/<%= p.id %>/delete" method="POST" onsubmit="return confirm('Erase this whisper?')">
-                                                <button class="w-full text-left px-4 py-3 text-[9px] font-black uppercase text-red-500 hover:bg-red-500/10 border-b border-white/5">Delete Whisper</button>
-                                            </form>
-                                        <% } %>
-                                        <button class="w-full text-left px-4 py-3 text-[9px] font-black uppercase text-slate-400 hover:bg-white/5">Report Content</button>
                                     </div>
                                 </div>
                             </div>
@@ -161,9 +156,8 @@
                             <% } %>
 
                             <div class="px-8 py-5 border-t border-white/5 bg-white/[0.01] flex gap-8">
-                                <button type="button" 
-                                    onclick="sendVibe(this, '<%= p.id %>')" 
-                                    class="vibe-btn flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all <%= p.liked_by_me ? 'text-red-500' : 'text-slate-500 hover:text-red-400' %>">
+                                <button type="button" onclick="sendVibe(this, '<%= p.id %>')" 
+                                    class="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all <%= p.liked_by_me ? 'text-red-500' : 'text-slate-500' %>">
                                     <i class="<%= p.liked_by_me ? 'fas' : 'far' %> fa-heart text-lg"></i> 
                                     <span class="vibe-count"><%= p.likes_count || 0 %></span>
                                 </button>
@@ -178,7 +172,10 @@
                                 <div class="p-6 space-y-4 max-h-64 overflow-y-auto no-scrollbar">
                                     <% if (p.comments_list && p.comments_list.length > 0) { %>
                                         <% p.comments_list.forEach(c => { %>
-                                            <div class="flex gap-3">
+                                            <div class="flex items-start gap-3">
+                                                <div class="w-7 h-7 rounded-lg user-initial text-[10px] flex-shrink-0">
+                                                    <%= c.username ? c.username.charAt(0) : '?' %>
+                                                </div>
                                                 <div class="bg-white/5 rounded-2xl p-3 flex-1">
                                                     <p class="text-[9px] font-black text-blue-500 uppercase">@<%= c.username %></p>
                                                     <p class="text-xs text-slate-300 mt-1"><%= c.comment_text %></p>
@@ -186,71 +183,44 @@
                                             </div>
                                         <% }) %>
                                     <% } else { %>
-                                        <p class="text-center text-[10px] text-slate-600 font-bold italic py-4">The echoes are silent...</p>
+                                        <p class="text-center text-[10px] text-slate-600 font-bold italic py-4">No echoes yet...</p>
                                     <% } %>
                                 </div>
                                 <form action="/event/<%= p.id %>/comment" method="POST" class="p-4 flex gap-3 border-t border-white/5">
-                                    <input type="text" name="comment" placeholder="Add an echo..." required class="flex-1 bg-slate-900 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-blue-500/40">
-                                    <button type="submit" class="bg-blue-600 w-10 h-10 rounded-xl text-[10px] flex items-center justify-center">
-                                        <i class="fas fa-paper-plane text-white"></i>
-                                    </button>
+                                    <input type="text" name="comment" placeholder="Add an echo..." required 
+                                        class="flex-1 bg-slate-900 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-blue-500/40">
+                                    <button class="bg-blue-600 w-10 h-10 rounded-xl flex items-center justify-center"><i class="fas fa-paper-plane text-xs"></i></button>
                                 </form>
                             </div>
                         </article>
                     <% }) %>
-                <% } else { %>
-                    <div class="text-center py-20 bg-slate-900/20 rounded-[3rem] border border-dashed border-white/5">
-                        <i class="fas fa-wind text-4xl text-slate-800 mb-4"></i>
-                        <p class="text-slate-600 font-black uppercase tracking-widest text-xs">The Square is quiet...</p>
-                    </div>
                 <% } %>
             </div>
         </div>
 
         <aside class="hidden lg:block lg:col-span-4 space-y-8">
-            <div class="bg-gradient-to-br from-blue-600 to-blue-800 rounded-[2.5rem] p-7 shadow-xl shadow-blue-900/20 group cursor-pointer overflow-hidden relative transition-all hover:scale-[1.02]" onclick="window.location.href='/forum'">
-                <div class="relative z-10">
-                    <p class="text-[10px] font-black text-blue-200 uppercase tracking-widest mb-1">Formal Matters</p>
-                    <h3 class="text-xl font-black text-white italic tracking-tighter">TOWN HALL</h3>
-                    <p class="text-blue-100/70 text-[11px] mt-2 font-medium leading-tight">Engage in village trade, debates, and town decrees.</p>
-                </div>
-                <i class="fas fa-landmark absolute -right-4 -bottom-4 text-7xl text-black/10 transition-transform group-hover:rotate-12 group-hover:scale-110"></i>
-            </div>
-
             <div class="bg-slate-900/40 border border-white/5 rounded-[2.5rem] p-8">
-                <div class="flex items-center justify-between mb-6">
-                    <h3 class="text-[10px] font-black text-blue-500 uppercase tracking-[0.4em]">Your Kin</h3>
-                    <a href="/villagers" class="text-[8px] font-black text-slate-600 uppercase hover:text-blue-500 transition-colors">View All</a>
-                </div>
+                <h3 class="text-[10px] font-black text-blue-500 uppercase tracking-[0.4em] mb-6">Your Kin</h3>
                 <div class="space-y-4">
                     <% if (locals.friends && friends.length > 0) { %>
                         <% friends.slice(0, 5).forEach(f => { %>
-                            <div class="flex items-center justify-between group cursor-pointer" onclick="window.location.href='/messages?userId=<%= f.id %>'">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center border border-white/10">
-                                        <i class="fas fa-user text-[10px] text-slate-500"></i>
-                                    </div>
-                                    <p class="text-[11px] font-bold text-slate-300 group-hover:text-blue-400">@<%= (f.email || f.username).split('@')[0] %></p>
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-500">
+                                    <%= (f.username || f.email).charAt(0).toUpperCase() %>
                                 </div>
-                                <span class="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]"></span>
+                                <p class="text-[11px] font-bold text-slate-300">@<%= (f.username || f.email).split('@')[0] %></p>
                             </div>
                         <% }) %>
-                    <% } else { %>
-                        <div class="text-center py-4">
-                            <p class="text-[10px] text-slate-600 font-black uppercase italic mb-3">No kin found yet</p>
-                            <a href="/villagers" class="text-[9px] text-blue-500 font-black uppercase underline tracking-widest">Find Neighbors</a>
-                        </div>
                     <% } %>
                 </div>
             </div>
         </aside>
     </main>
 
-    <div class="lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-2xl border border-white/10 px-8 py-4 rounded-full flex gap-10 shadow-2xl z-50">
-        <a href="/feed" class="text-blue-500"><i class="fas fa-home text-lg"></i></a>
-        <a href="/forum" class="text-slate-500"><i class="fas fa-landmark text-lg"></i></a>
-        <a href="/villagers" class="text-slate-500"><i class="fas fa-users text-lg"></i></a>
-        <a href="/profile" class="text-slate-500"><i class="fas fa-user text-lg"></i></a>
+    <div class="lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-2xl border border-white/10 px-8 py-4 rounded-full flex gap-10 shadow-2xl z-50 text-slate-500">
+        <a href="/feed" class="text-blue-500"><i class="fas fa-home"></i></a>
+        <a href="/forum"><i class="fas fa-landmark"></i></a>
+        <a href="/profile"><i class="fas fa-user"></i></a>
     </div>
 
     <script>
@@ -266,137 +236,80 @@
             const icon = btn.querySelector('i');
             const countSpan = btn.querySelector('.vibe-count');
             const isLiked = icon.classList.contains('fas');
-            let count = parseInt(countSpan.innerText);
-
-            // Optimistic Update
-            if (isLiked) {
-                icon.classList.replace('fas', 'far');
-                btn.classList.replace('text-red-500', 'text-slate-500');
-                countSpan.innerText = Math.max(0, count - 1);
-            } else {
-                icon.classList.replace('far', 'fas');
-                btn.classList.replace('text-slate-500', 'text-red-500');
-                countSpan.innerText = count + 1;
-                btn.classList.add('vibe-pop');
-                setTimeout(() => btn.classList.remove('vibe-pop'), 400);
-            }
+            
+            icon.classList.toggle('fas');
+            icon.classList.toggle('far');
+            btn.classList.toggle('text-red-500');
+            btn.classList.toggle('text-slate-500');
 
             try {
-                const response = await fetch(`/event/${postId}/like`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
+                const response = await fetch(`/event/${postId}/like`, { method: 'POST' });
                 const data = await response.json();
                 if (data.success) countSpan.innerText = data.newCount;
-            } catch (err) { console.error("Vibe sync failed", err); }
+            } catch (err) { console.error(err); }
         }
 
-        // --- INFINITE SCROLL ---
         window.onscroll = async function() {
             if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 800 && !loading && hasMore) {
                 loading = true;
                 page++;
-                
                 try {
-                    const response = await fetch(`/feed?page=${page}`, {
-                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                    });
-                    const data = await response.json();
-
-                    if (!data.posts || data.posts.length === 0) {
-                        hasMore = false;
-                        return;
-                    }
-
-                    data.posts.forEach(post => appendPostToFeed(post));
+                    const res = await fetch(`/feed?page=${page}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                    const data = await res.json();
+                    if (!data.posts || data.posts.length === 0) hasMore = false;
+                    else data.posts.forEach(p => appendPostToFeed(p));
                     loading = false;
-                } catch (err) {
-                    console.error("Scroll fetch failed", err);
-                    loading = false;
-                }
+                } catch (e) { loading = false; }
             }
         };
 
         function appendPostToFeed(p) {
             const container = document.getElementById('feedContainer');
-            const date = new Date(p.created_at).toLocaleDateString();
-            const authorHandle = p.author ? p.author.split('@')[0] : 'villager';
+            const authorInitial = p.author ? p.author.charAt(0).toUpperCase() : 'V';
             
-            const postHTML = `
+            let commentsHTML = '';
+            if (p.comments_list && p.comments_list.length > 0) {
+                p.comments_list.forEach(c => {
+                    commentsHTML += `
+                        <div class="flex items-start gap-3 mb-3">
+                            <div class="w-7 h-7 rounded-lg user-initial text-[10px] flex-shrink-0">${c.username ? c.username.charAt(0).toUpperCase() : '?'}</div>
+                            <div class="bg-white/5 rounded-2xl p-3 flex-1">
+                                <p class="text-[9px] font-black text-blue-500 uppercase">@${c.username}</p>
+                                <p class="text-xs text-slate-300 mt-1">${c.comment_text}</p>
+                            </div>
+                        </div>`;
+                });
+            } else {
+                commentsHTML = '<p class="text-center text-[10px] text-slate-600 font-bold italic py-4">No echoes yet...</p>';
+            }
+
+            const html = `
                 <article class="post-card rounded-[2.5rem] overflow-hidden mb-6" id="post-${p.id}">
-                    <div class="p-6 flex justify-between items-center">
-                        <div class="flex items-center gap-4">
-                            <div>
-                                <div class="flex items-center gap-2">
-                                    <p class="font-bold text-[14px] text-white">@${authorHandle}</p>
-                                    ${p.is_verified ? '<i class="fas fa-certificate text-blue-500 text-[9px]"></i>' : ''}
-                                </div>
-                                <p class="text-[8px] text-slate-600 uppercase font-black tracking-widest">${date}</p>
-                            </div>
+                    <div class="p-6 flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-2xl user-initial text-sm">${authorInitial}</div>
+                        <div>
+                            <p class="font-bold text-[14px] text-white">@${p.author ? p.author.split('@')[0] : 'villager'}</p>
+                            <p class="text-[8px] text-slate-600 uppercase font-black">${new Date(p.created_at).toLocaleDateString()}</p>
                         </div>
                     </div>
-
-                    <div class="px-8 pb-5 text-slate-300 text-[15px] leading-relaxed">
-                        ${p.description}
-                    </div>
-
-                    ${p.image_url ? `
-                        <div class="px-4 pb-4">
-                            <div class="rounded-[2rem] overflow-hidden bg-black/20 border border-white/5">
-                                ${(p.media_type === 'video' || p.image_url.includes('.mp4')) 
-                                    ? `<video controls class="w-full max-h-[500px] object-cover"><source src="${p.image_url}" type="video/mp4"></video>`
-                                    : `<img src="${p.image_url}" class="w-full h-auto max-h-[600px] object-cover" loading="lazy">`
-                                }
-                            </div>
-                        </div>
-                    ` : ''}
-
-                    <div class="px-8 py-5 border-t border-white/5 bg-white/[0.01] flex gap-8">
-                        <button type="button" onclick="sendVibe(this, '${p.id}')" 
-                            class="vibe-btn flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all ${p.liked_by_me ? 'text-red-500' : 'text-slate-500 hover:text-red-400'}">
-                            <i class="${p.liked_by_me ? 'fas' : 'far'} fa-heart text-lg"></i> 
-                            <span class="vibe-count">${p.likes_count || 0}</span>
+                    <div class="px-8 pb-5 text-slate-300 text-[15px]">${p.description}</div>
+                    <div class="px-8 py-5 border-t border-white/5 flex gap-8">
+                        <button onclick="sendVibe(this, '${p.id}')" class="flex items-center gap-2 text-[10px] font-black text-slate-500">
+                            <i class="far fa-heart text-lg"></i> <span class="vibe-count">${p.likes_count || 0}</span>
                         </button>
-                        
-                        <button onclick="toggleEchoes('${p.id}')" class="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-blue-400">
-                            <i class="far fa-comment-dots text-lg"></i> 
-                            <span>Comment / Echo</span>
+                        <button onclick="toggleEchoes('${p.id}')" class="text-[10px] font-black text-slate-500">
+                            <i class="far fa-comment-dots text-lg"></i> Echoes
                         </button>
                     </div>
-
                     <div id="echoes-${p.id}" class="comment-section bg-black/20 border-t border-white/5">
+                        <div class="p-6">${commentsHTML}</div>
                         <form action="/event/${p.id}/comment" method="POST" class="p-4 flex gap-3">
-                            <input type="text" name="comment" placeholder="Add an echo..." required
-                                class="flex-1 bg-slate-900 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none">
-                            <button type="submit" class="bg-blue-600 w-10 h-10 rounded-xl text-[10px] flex items-center justify-center">
-                                <i class="fas fa-paper-plane"></i>
-                            </button>
+                            <input type="text" name="comment" placeholder="Add an echo..." required class="flex-1 bg-slate-900 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none">
+                            <button class="bg-blue-600 w-10 h-10 rounded-xl flex items-center justify-center"><i class="fas fa-paper-plane text-xs"></i></button>
                         </form>
                     </div>
-                </article>
-            `;
-            container.insertAdjacentHTML('beforeend', postHTML);
-        }
-
-        // Media Preview Logic
-        const fileInput = document.getElementById('fileInput');
-        if(fileInput) {
-            fileInput.addEventListener('change', function(e) {
-                const file = e.target.files[0];
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onload = function(event) {
-                        document.getElementById('imagePreview').src = event.target.result;
-                        document.getElementById('mediaPreviewContainer').classList.remove('hidden');
-                    }
-                    reader.readAsDataURL(file);
-                }
-            });
-        }
-
-        function clearMedia() {
-            document.getElementById('fileInput').value = '';
-            document.getElementById('mediaPreviewContainer').classList.add('hidden');
+                </article>`;
+            container.insertAdjacentHTML('beforeend', html);
         }
     </script>
 </body>

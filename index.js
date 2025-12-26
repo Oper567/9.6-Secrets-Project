@@ -465,6 +465,32 @@ app.get("/feed", checkVerified, async (req, res) => {
         res.status(500).send("Village Feed Error: " + err.message); 
     }
 });
+function appendPostToFeed(p) {
+    // ... (previous logic for post body)
+
+    // Generate the HTML for existing comments on this post
+    let commentsHTML = '';
+    if (p.comments_list && p.comments_list.length > 0) {
+        p.comments_list.forEach(c => {
+            commentsHTML += `
+                <div class="flex items-start gap-3 mb-3">
+                    <div class="w-7 h-7 rounded-lg bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                        <span class="text-[10px] font-bold text-blue-400">${c.username ? c.username.charAt(0).toUpperCase() : '?'}</span>
+                    </div>
+                    <div class="bg-white/5 rounded-2xl p-3 flex-1">
+                        <p class="text-[9px] font-black text-blue-400 uppercase">@${c.username}</p>
+                        <p class="text-xs text-slate-300 mt-0.5">${c.comment_text}</p>
+                    </div>
+                </div>`;
+        });
+    } else {
+        commentsHTML = '<p class="text-center text-[10px] text-slate-600 font-bold italic py-4">No echoes yet...</p>';
+    }
+
+    // Insert into the echoes div
+    const echoesDiv = document.querySelector(`#echoes-${p.id} .p-6`);
+    if(echoesDiv) echoesDiv.innerHTML = commentsHTML;
+}
        
 
 // ADD THIS: Discover Route (Random media gallery)

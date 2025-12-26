@@ -43,9 +43,16 @@
         }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         
-        .avatar-sq {
-            aspect-ratio: 1/1;
-            object-fit: cover;
+        /* Initial Avatar Styling */
+        .initial-avatar {
+            background: linear-gradient(135deg, #1e293b, #0f172a);
+            color: #3b82f6;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-transform: uppercase;
+            border: 1px solid rgba(59, 130, 246, 0.2);
         }
     </style>
 </head>
@@ -62,8 +69,12 @@
             </div>
             <div class="flex items-center gap-6">
                 <a href="/feed" class="text-slate-400 hover:text-white text-[10px] font-black uppercase tracking-widest transition-colors">Back to Square</a>
-                <a href="/profile" class="w-8 h-8 rounded-full overflow-hidden border border-white/10 aspect-square">
-                    <img src="<%= user.profile_pic || '/default-avatar.png' %>" class="w-full h-full object-cover">
+                <a href="/profile" class="w-8 h-8 rounded-xl overflow-hidden border border-white/10 aspect-square initial-avatar">
+                    <% if (user.profile_pic) { %>
+                        <img src="<%= user.profile_pic %>" class="w-full h-full object-cover">
+                    <% } else { %>
+                        <span class="text-[10px]"><%= (user.username || user.email)[0] %></span>
+                    <% } %>
                 </a>
             </div>
         </div>
@@ -103,9 +114,14 @@
                     <div class="forum-card rounded-[2.5rem] p-6 cursor-pointer group" onclick="window.location.href='/forum/thread/<%= topic.id %>'">
                         <div class="flex items-start justify-between gap-4">
                             <div class="flex gap-5 flex-1">
-                                <div class="w-14 h-14 rounded-2xl bg-slate-800 flex items-center justify-center shrink-0 border border-white/5 overflow-hidden aspect-square">
-                                    <img src="<%= topic.author_pic || '/default-avatar.png' %>" class="w-full h-full object-cover">
+                                <div class="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border border-white/5 overflow-hidden aspect-square initial-avatar">
+                                    <% if (topic.author_pic && topic.author_pic !== 'null') { %>
+                                        <img src="<%= topic.author_pic %>" class="w-full h-full object-cover">
+                                    <% } else { %>
+                                        <span class="text-lg"><%= (topic.author_username || "V")[0] %></span>
+                                    <% } %>
                                 </div>
+
                                 <div class="flex-1">
                                     <div class="flex items-center gap-3 mb-2">
                                         <span class="text-[8px] font-black uppercase px-2.5 py-1 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/10 tracking-widest">
@@ -170,7 +186,7 @@
                         </select>
                     </div>
                     <div class="col-span-2 sm:col-span-1">
-                        <label class="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Visual Proof</label>
+                        <label class="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Visual Proof (Optional)</label>
                         <label class="flex items-center justify-center w-full bg-white/5 border border-dashed border-white/20 rounded-2xl px-5 py-4 cursor-pointer hover:border-blue-500/50 transition-all">
                             <span id="fileNameDisplay" class="text-[10px] text-slate-500 font-bold truncate">Upload Media</span>
                             <input type="file" name="media" id="forumFile" class="hidden" accept="image/*">
@@ -199,11 +215,9 @@
         function toggleModal() {
             const modal = document.getElementById('topicModal');
             modal.classList.toggle('hidden');
-            // Prevent scrolling when modal is open
             document.body.style.overflow = modal.classList.contains('hidden') ? 'auto' : 'hidden';
         }
 
-        // File name display logic
         document.getElementById('forumFile').addEventListener('change', function(e) {
             const fileName = e.target.files[0]?.name || "Upload Media";
             const display = document.getElementById('fileNameDisplay');
@@ -211,7 +225,6 @@
             display.classList.add('text-blue-400');
         });
 
-        // Loading state
         document.getElementById('forumForm').addEventListener('submit', function() {
             const btn = document.getElementById('submitBtn');
             btn.innerHTML = '<i class="fas fa-spinner animate-spin mr-2"></i> Sounding the Horn...';

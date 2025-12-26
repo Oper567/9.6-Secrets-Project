@@ -93,6 +93,16 @@
         
         .typing-dot { width: 4px; height: 4px; background: #3b82f6; border-radius: 50%; animation: blink 1.4s infinite; }
         @keyframes blink { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
+
+        .initial-avatar {
+            background: linear-gradient(135deg, #3b82f6, #1e40af);
+            color: white;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-transform: uppercase;
+        }
     </style>
 </head>
 
@@ -110,7 +120,7 @@
         </div>
 
         <div class="flex-1 flex items-center justify-center gap-2 px-2 overflow-hidden">
-            <div id="activeChatAvatar" class="hidden shrink-0 w-8 h-8 md:w-10 md:h-10 rounded-xl md:rounded-2xl overflow-hidden border border-slate-700 bg-slate-800 flex items-center justify-center text-[10px] font-black text-blue-500 uppercase"></div>
+            <div id="activeChatAvatar" class="hidden shrink-0 w-8 h-8 md:w-10 md:h-10 rounded-xl md:rounded-2xl overflow-hidden border border-slate-700 flex items-center justify-center text-[12px] font-black text-white uppercase initial-avatar"></div>
             <div class="min-w-0 text-center md:text-left">
                 <h1 id="chatHeaderTitle" class="font-black text-blue-500 italic text-[13px] md:text-sm uppercase tracking-tighter truncate">Whispers</h1>
                 <p id="chatStatus" class="text-[7px] md:text-[8px] text-slate-500 uppercase font-black tracking-[0.2em]">Village Square</p>
@@ -139,21 +149,22 @@
             <div id="friendsList" class="flex-1 overflow-y-auto px-2 pb-24 md:pb-4 no-scrollbar">
                 <% if (locals.friends && friends.length > 0) { %>
                     <% friends.forEach(f => { %>
+                        <% const displayUsername = f.username || f.email.split('@')[0]; %>
                         <div id="friend-<%= f.id %>" class="friend-item p-4 flex items-center gap-4 cursor-pointer rounded-2xl hover:bg-white/5 transition-all group" 
-                             onclick="selectFriend('<%= f.id %>', `<%= f.email.split('@')[0] %>`, `<%= f.profile_pic %>`)">
+                             onclick="selectFriend('<%= f.id %>', `<%= displayUsername %>`, `<%= f.profile_pic %>`)">
                             
-                            <div class="relative shrink-0 w-12 h-12 bg-slate-800 rounded-2xl flex items-center justify-center border border-slate-700 overflow-hidden shadow-lg">
-                                <% if (f.profile_pic) { %>
+                            <div class="relative shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center border border-slate-700 overflow-hidden shadow-lg initial-avatar">
+                                <% if (f.profile_pic && f.profile_pic !== 'null') { %>
                                     <img src="<%= f.profile_pic %>" class="w-full h-full object-cover">
                                 <% } else { %>
-                                    <span class="font-black text-blue-500 text-sm"><%= f.email[0].toUpperCase() %></span>
+                                    <span class="text-sm"><%= displayUsername[0] %></span>
                                 <% } %>
                                 <span class="absolute -bottom-1 -right-1 w-4 h-4 border-[3px] border-slate-950 rounded-full <%= f.is_online ? 'bg-green-500' : 'bg-slate-700' %>"></span>
                             </div>
 
                             <div class="flex-1 min-w-0">
                                 <div class="flex justify-between items-center mb-0.5">
-                                    <span class="text-[12px] font-black block truncate text-slate-200 uppercase group-hover:text-blue-400 transition-colors">@<%= f.email.split('@')[0] %></span>
+                                    <span class="text-[12px] font-black block truncate text-slate-200 uppercase group-hover:text-blue-400 transition-colors">@<%= displayUsername %></span>
                                     <% if (f.unread_count > 0) { %>
                                         <span id="unread-<%= f.id %>" class="bg-blue-600 text-[9px] font-black px-2 py-0.5 rounded-full shadow-lg shadow-blue-600/20"><%= f.unread_count %></span>
                                     <% } %>
@@ -173,7 +184,7 @@
         <main class="chat-pane flex flex-col bg-slate-950 h-full overflow-hidden">
             <div id="chatWindow" class="chat-container">
                 <div id="emptyState" class="my-auto text-center opacity-10">
-                    <i class="fas fa-feather-alt text-6xl mb-4"></i>
+                    <i class="fas fa-feather-alt text-6xl mb-4 text-blue-500"></i>
                     <p class="text-[12px] font-black uppercase tracking-[0.5em]">Ancient Grounds</p>
                 </div>
             </div>
@@ -216,10 +227,14 @@
         actions.classList.remove('invisible');
         actions.classList.add('visible');
         
-        // Header Update
+        // Header Avatar Logic
         const avatarDiv = document.getElementById('activeChatAvatar');
         avatarDiv.classList.remove('hidden');
-        avatarDiv.innerHTML = pic && pic !== 'null' && pic !== '' ? `<img src="${pic}" class="w-full h-full object-cover">` : `<span>${name[0].toUpperCase()}</span>`;
+        if (pic && pic !== 'null' && pic !== '') {
+            avatarDiv.innerHTML = `<img src="${pic}" class="w-full h-full object-cover">`;
+        } else {
+            avatarDiv.innerHTML = `<span>${name[0].toUpperCase()}</span>`;
+        }
         
         document.getElementById('chatHeaderTitle').innerText = `@${name}`;
         document.getElementById('chatStatus').innerHTML = `<span class="flex items-center gap-1"><span class="typing-dot"></span> Whispering</span>`;
@@ -237,6 +252,7 @@
             const messages = await res.json();
             const chatWindow = document.getElementById('chatWindow');
             
+            // Only re-render if message count changed to save performance
             if (messages.length === lastMessageCount) return;
 
             chatWindow.innerHTML = '';
@@ -301,7 +317,7 @@
         lastMessageCount = 0;
     }
 
-    // Auto-open if redirected from profile/feed
+    // Auto-open logic
     window.addEventListener('load', () => {
         const urlParams = new URLSearchParams(window.location.search);
         const userId = urlParams.get('userId');
