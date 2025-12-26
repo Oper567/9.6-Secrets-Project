@@ -10,12 +10,7 @@ datasource db {
 
 model User {
   id           Int      @id @default(autoincrement())
-  email        String   @unique
-  password     String
-  role         String   @default("user")
-  is_verified  Boolean  @default(false)
-  last_active  DateTime @default(now())
-
+  // ... other fields
   @@map("users")
 }
 
@@ -23,7 +18,10 @@ model Post {
   id           Int       @id @default(autoincrement())
   description  String
   image_url    String?
-  author       String    @map("created_by") // <--- This links "author" in code to "created_by" in DB
+  
+  // CHANGE THIS: Change String to Int so it matches User.id
+  author       Int       @map("created_by") 
+  
   created_at   DateTime  @default(now())
   comments     Comment[]
 
