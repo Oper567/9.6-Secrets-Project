@@ -121,9 +121,13 @@ app.use(async (req, res, next) => {
 });
 
 /* ---------------- AUTHENTICATION HELPERS ---------------- */
+// Example of a safe isAuth middleware
 function isAuth(req, res, next) {
-    if (req.isAuthenticated()) return next();
-    res.redirect("/login");
+    if (req.isAuthenticated && req.isAuthenticated()) {
+        return next();
+    }
+    // Instead of goBack, send them to login
+    res.redirect('/login');
 }
 
 function checkVerified(req, res, next) {
@@ -139,6 +143,7 @@ function isAdmin(req, res, next) {
     req.flash("error", "Access denied. Elders only!");
     res.redirect("/feed");
 }
+
 
 async function sendWelcomeNote(userId) {
     try {
@@ -574,20 +579,18 @@ app.post("/event/:id/report", async (req, res) => {
     }
 });
 
-app.post("/event/:id/comment", isAuth, async (req, res) => {
+app.post('/event/:id/comment', async (req, res) => {
     try {
-        const { content } = req.body;
-        if (!content || content.trim() === "") return goBack(req, res); // FIX
+        const postId = req.params.id;
+        const commentText = req.body.comment;
 
-        await db.query(
-            "INSERT INTO comments (event_id, user_id, content) VALUES ($1, $2, $3)", 
-            [req.params.id, req.user.id, content]
-        );
-        
-        goBack(req, res); // FIX
-    } catch (err) { 
-        console.error(err);
-        goBack(req, res); // FIX
+        // ... Your database logic to save the comment ...
+
+        // DO NOT use goBack(req, res). Use this instead:
+        res.redirect('/feed'); 
+    } catch (error) {
+        console.error(error);
+        res.redirect('/feed'); // Redirect even if it fails to prevent 502
     }
 });
 app.post("/comment/:id/delete", isAuth, async (req, res) => {
@@ -992,6 +995,33 @@ app.post("/forum/new", checkVerified, async (req, res) => {
     await db.query("INSERT INTO forum_topics (title, category, creator_id) VALUES ($1, $2, $3)", 
         [title, category, req.user.id]);
     res.redirect("/forum");
+});
+// index.js or routes/forum.js
+
+// This handles the form submission
+app.post('/forum/create', async (req, res) => {
+    try {
+        const { title, content, category } = req.body;
+        
+        // 1. Validate user is logged in
+        if (!req.user) return res.redirect('/login');
+
+        // 2. Save to Database (Example using Prisma/Mongoose)
+        await prisma.forumPost.create({
+            data: {
+                title: title,
+                content: content,
+                category: category || 'General',
+                authorId: req.user.id
+            }
+        });
+
+        // 3. Redirect back to the forum page
+        res.redirect('/forum');
+    } catch (error) {
+        console.error(error);
+        res.status(500).send("The Town Hall is closed due to a server error.");
+    }
 });
 // POST /event/:id/like
 router.post('/event/:id/like', async (req, res) => {
