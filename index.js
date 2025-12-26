@@ -14,7 +14,7 @@ import { fileURLToPath } from "url";
 import multer from "multer";
 import { createClient } from '@supabase/supabase-js';
 import nodemailer from "nodemailer";
-
+import { Resend } from 'resend';
 dotenv.config();
 
 /* ---------------- INITIAL SETUP ---------------- */
@@ -39,15 +39,7 @@ db.on('error', (err) => console.error('Unexpected error on idle client', err));
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 /* ---------------- MAIL SERVICE (RESEND) ---------------- */
-const transporter = nodemailer.createTransport({
-    host: 'smtp.resend.com',
-    port: 465,
-    secure: true,
-    auth: {
-        user: 'resend',
-        pass: process.env.EMAIL_PASS
-    }
-});
+const resend = new Resend(process.env.EMAIL_PASS);
 // Verification Function
 const sendVerificationEmail = async (toEmail, token) => {
     const mailOptions = {
@@ -284,18 +276,25 @@ app.post("/forgot-password", async (req, res) => {
         
         const resetLink = `${req.protocol}://${req.get('host')}/reset-password/${token}`;
 
-        await transporter.sendMail({
-            from: 'onboarding@resend.dev', // Required for Resend Free Tier
-            to: email.toLowerCase(),
-            subject: "Apugo Village Password Reset",
-            html: `<p>Reset your password by clicking here: <a href="${resetLink}">${resetLink}</a></p>`
+        // USE THE API METHOD INSTEAD OF SMTP
+        const { data, error } = await resend.emails.send({
+            from: 'Apugo <onboarding@resend.dev>',
+            to: [email.toLowerCase()],
+            subject: 'Apugo Village | Password Reset',
+            html: `<p>Reset your password here: <a href="${resetLink}">${resetLink}</a></p>`
         });
 
-        console.log("✅ Reset link sent to:", email);
+        if (error) {
+            console.error("Resend API Error:", error);
+            throw new Error(error.message);
+        }
+
+        console.log("✅ API Email sent successfully:", data.id);
         res.render("forgot-password", { message: "Reset link sent!", error: null });
+
     } catch (err) {
-        console.error("Forgot Password Error:", err);
-        res.render("forgot-password", { message: null, error: "Failed to send email." });
+        console.error("FORGOT PASSWORD ERROR:", err.message);
+        res.render("forgot-password", { message: null, error: "The village spirits are blocked. Try again." });
     }
 });
 
