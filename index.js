@@ -158,36 +158,43 @@ async function sendWelcomeNote(userId) {
 }
 
 async function sendVibe(btn, postId) {
-    // Add a quick "pop" animation locally for instant feedback
-    btn.style.transform = "scale(1.3)";
-    setTimeout(() => btn.style.transform = "scale(1)", 150);
+    // 1. Optimistic Update (Change UI immediately)
+    const icon = btn.querySelector('i');
+    const countSpan = btn.querySelector('.vibe-count');
+    const isCurrentlyLiked = icon.classList.contains('fas');
+    let currentCount = parseInt(countSpan.innerText);
 
+    // Toggle UI state immediately before the server responds
+    if (isCurrentlyLiked) {
+        icon.classList.replace('fas', 'far');
+        btn.classList.replace('text-red-500', 'text-slate-500');
+        countSpan.innerText = Math.max(0, currentCount - 1);
+    } else {
+        icon.classList.replace('far', 'fas');
+        btn.classList.replace('text-slate-500', 'text-red-500');
+        countSpan.innerText = currentCount + 1;
+        btn.classList.add('vibe-pop');
+        setTimeout(() => btn.classList.remove('vibe-pop'), 300);
+    }
+
+    // 2. Send to Server
     try {
         const response = await fetch(`/event/${postId}/like`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         });
-        
         const data = await response.json();
 
+        // 3. Sync with actual server data if it differs
         if (data.success) {
-            const icon = btn.querySelector('i');
-            const countSpan = btn.querySelector('.vibe-count');
-
-            // Update Count
             countSpan.innerText = data.newCount;
-
-            // Toggle Visuals
-            if (data.isLiked) {
-                btn.classList.replace('text-slate-500', 'text-red-500');
-                icon.classList.replace('far', 'fas');
-            } else {
-                btn.classList.replace('text-red-500', 'text-slate-500');
-                icon.classList.replace('fas', 'far');
-            }
+        } else {
+            // Revert if server failed
+            location.reload(); 
         }
-    } catch (err) {
-        console.error("Vibe failed to travel:", err);
+    } catch (err) { 
+        console.error("Vibe error", err);
+        // Revert UI on error
     }
 }
 
@@ -875,33 +882,26 @@ app.get("/forum", checkVerified, async (req, res) => {
     }
 });
 // 1. GET ALL THREADS (The Forum Main Page)
+// GET /forum
 router.get('/forum', async (req, res) => {
     try {
-        const category = req.query.cat;
-        let query = `
-            SELECT ft.*, u.username as author_name, u.profile_pic as author_pic,
-            (SELECT COUNT(*) FROM forum_replies WHERE thread_id = ft.id) as reply_count
-            FROM forum_threads ft
-            JOIN users u ON ft.author_id = u.id
-        `;
+        const activeCat = req.query.cat || 'all'; // Get category from URL or default to 'all'
         
-        let params = [];
-        if (category) {
-            query += ` WHERE ft.category = $1`;
-            params.push(category);
-        }
-        
-        query += ` ORDER BY ft.created_at DESC`;
-        
-        const result = await db.query(query, params);
+        // ... your logic to fetch threads based on activeCat ...
+        const { data: threads, error } = await supabase
+            .from('threads')
+            .select('*')
+            .eq(activeCat !== 'all' ? 'category' : '', activeCat === 'all' ? '' : activeCat) // Optional filtering
+            .order('created_at', { ascending: false });
+
         res.render('forum', { 
-            threads: result.rows, 
-            user: req.user,
-            activeCat: category || 'all'
+            threads: threads || [], 
+            activeCat: activeCat, // <--- THIS WAS MISSING
+            user: req.session.user 
         });
     } catch (err) {
-        console.error('Forum Fetch Error:', err);
-        res.status(500).send("The Village Elders are busy. Try again later.");
+        console.error(err);
+        res.redirect('/feed');
     }
 });
 

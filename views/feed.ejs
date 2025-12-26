@@ -32,11 +32,10 @@
         }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         
-        /* Animation for AJAX liking */
-        .vibe-pop { animation: heartPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .vibe-pop { animation: heartPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
         @keyframes heartPop {
             0% { transform: scale(1); }
-            50% { transform: scale(1.4); }
+            50% { transform: scale(1.5); }
             100% { transform: scale(1); }
         }
 
@@ -46,7 +45,16 @@
             transition: max-height 0.4s ease-out;
         }
         .comment-section.open {
-            max-height: 800px;
+            max-height: 1000px;
+        }
+
+        /* Fix for images not being cut in half */
+        .avatar-container {
+            width: 44px;
+            height: 44px;
+            flex-shrink: 0;
+            aspect-ratio: 1/1;
+            overflow: hidden;
         }
     </style>
 </head>
@@ -60,7 +68,7 @@
                 </h1>
                 <div class="hidden lg:block w-80 relative group">
                     <form action="/feed" method="GET">
-                        <input type="text" name="search" placeholder="Search whispers..." value="<%= search %>" 
+                        <input type="text" name="search" placeholder="Search whispers..." value="<%= locals.search || '' %>" 
                             class="w-full bg-white/5 border border-white/5 rounded-2xl py-2 px-10 text-[11px] font-bold uppercase tracking-widest outline-none focus:border-blue-500/50 transition-all text-white">
                         <i class="fas fa-search absolute left-4 top-2.5 text-slate-600 text-[10px]"></i>
                     </form>
@@ -78,7 +86,7 @@
                     <% } %>
                 </a>
                 <a href="/profile" class="flex items-center gap-3 bg-white/5 p-1 rounded-full border border-white/5">
-                    <div class="w-8 h-8 rounded-full overflow-hidden">
+                    <div class="w-8 h-8 rounded-full overflow-hidden aspect-square">
                         <img src="<%= user.profile_pic || '/default-avatar.png' %>" class="w-full h-full object-cover">
                     </div>
                 </a>
@@ -93,7 +101,7 @@
             <section class="bg-slate-900/50 border border-white/5 rounded-[2.5rem] p-6 lg:p-8 shadow-2xl">
                 <form action="/event/create" method="POST" enctype="multipart/form-data" id="postForm">
                     <div class="flex gap-4 lg:gap-6">
-                        <div class="w-12 h-12 shrink-0 rounded-2xl overflow-hidden bg-slate-800 ring-2 ring-white/5">
+                        <div class="avatar-container rounded-2xl bg-slate-800 ring-2 ring-white/5">
                             <img src="<%= user.profile_pic || '/default-avatar.png' %>" class="w-full h-full object-cover">
                         </div>
                         <div class="w-full">
@@ -129,7 +137,7 @@
                         <article class="post-card rounded-[2.5rem] overflow-hidden" id="post-<%= p.id %>">
                             <div class="p-6 flex justify-between items-center">
                                 <div class="flex items-center gap-4">
-                                    <div class="w-11 h-11 bg-slate-800 rounded-2xl overflow-hidden ring-1 ring-white/10">
+                                    <div class="avatar-container bg-slate-800 rounded-2xl overflow-hidden ring-1 ring-white/10">
                                         <img src="<%= p.profile_pic || '/default-avatar.png' %>" class="w-full h-full object-cover">
                                     </div>
                                     <div>
@@ -164,7 +172,7 @@
                                         <% if (p.media_type === 'video' || p.image_url.includes('.mp4')) { %>
                                             <video controls class="w-full max-h-[500px] object-cover"><source src="<%= p.image_url %>" type="video/mp4"></video>
                                         <% } else { %>
-                                            <img src="<%= p.image_url %>" class="w-full h-auto max-h-[600px] object-contain" loading="lazy">
+                                            <img src="<%= p.image_url %>" class="w-full h-auto max-h-[600px] object-cover" loading="lazy">
                                         <% } %>
                                     </div>
                                 </div>
@@ -189,7 +197,7 @@
                                     <% if (p.comments_list && p.comments_list.length > 0) { %>
                                         <% p.comments_list.forEach(c => { %>
                                             <div class="flex gap-3">
-                                                <img src="<%= c.user_pic || '/default-avatar.png' %>" class="w-7 h-7 rounded-lg object-cover">
+                                                <img src="<%= c.user_pic || '/default-avatar.png' %>" class="w-7 h-7 rounded-lg object-cover aspect-square">
                                                 <div class="bg-white/5 rounded-2xl p-3 flex-1">
                                                     <p class="text-[9px] font-black text-blue-500 uppercase">@<%= c.username %></p>
                                                     <p class="text-xs text-slate-300 mt-1"><%= c.comment_text %></p>
@@ -217,7 +225,6 @@
         </div>
 
         <aside class="hidden lg:block lg:col-span-4 space-y-8">
-            
             <div class="bg-gradient-to-br from-blue-600 to-blue-800 rounded-[2.5rem] p-7 shadow-xl shadow-blue-900/20 group cursor-pointer overflow-hidden relative transition-all hover:scale-[1.02]" onclick="window.location.href='/forum'">
                 <div class="relative z-10">
                     <p class="text-[10px] font-black text-blue-200 uppercase tracking-widest mb-1">Formal Matters</p>
@@ -237,7 +244,7 @@
                         <% friends.slice(0, 5).forEach(f => { %>
                             <div class="flex items-center justify-between group cursor-pointer" onclick="window.location.href='/messages?userId=<%= f.id %>'">
                                 <div class="flex items-center gap-3">
-                                    <div class="w-9 h-9 rounded-full bg-slate-800 overflow-hidden border border-white/10">
+                                    <div class="w-9 h-9 rounded-full bg-slate-800 overflow-hidden border border-white/10 aspect-square">
                                         <img src="<%= f.profile_pic || '/default-avatar.png' %>" class="w-full h-full object-cover">
                                     </div>
                                     <p class="text-[11px] font-bold text-slate-300 group-hover:text-blue-400">@<%= f.email.split('@')[0] %></p>
@@ -257,7 +264,7 @@
             <div class="bg-slate-900/40 border border-white/5 rounded-[2.5rem] p-8 sticky top-24">
                 <h3 class="text-[10px] font-black text-blue-500 uppercase tracking-[0.4em] mb-8">Hot Whispers</h3>
                 <div class="space-y-6">
-                    <% if (trending && trending.length > 0) { %>
+                    <% if (locals.trending && trending.length > 0) { %>
                         <% trending.slice(0, 4).forEach((t, i) => { %>
                             <div class="group cursor-pointer relative pl-8" onclick="window.location.href='/event/<%= t.id %>'">
                                 <span class="absolute left-0 top-0 text-[20px] font-black text-white/5 group-hover:text-blue-500/20 transition-colors">0<%= i+1 %></span>
@@ -278,10 +285,25 @@
     </div>
 
     <script>
-        // 1. AJAX VIBE SYSTEM
+        // 1. IMPROVED OPTIMISTIC VIBE SYSTEM
         async function sendVibe(btn, postId) {
-            btn.classList.add('vibe-pop');
-            setTimeout(() => btn.classList.remove('vibe-pop'), 300);
+            const icon = btn.querySelector('i');
+            const countSpan = btn.querySelector('.vibe-count');
+            const isLiked = icon.classList.contains('fas');
+            let count = parseInt(countSpan.innerText);
+
+            // OPTIMISTIC UPDATE: Change UI immediately
+            if (isLiked) {
+                icon.classList.replace('fas', 'far');
+                btn.classList.replace('text-red-500', 'text-slate-500');
+                countSpan.innerText = Math.max(0, count - 1);
+            } else {
+                icon.classList.replace('far', 'fas');
+                btn.classList.replace('text-slate-500', 'text-red-500');
+                countSpan.innerText = count + 1;
+                btn.classList.add('vibe-pop');
+                setTimeout(() => btn.classList.remove('vibe-pop'), 400);
+            }
 
             try {
                 const response = await fetch(`/event/${postId}/like`, {
@@ -289,30 +311,20 @@
                     headers: { 'Content-Type': 'application/json' }
                 });
                 const data = await response.json();
-
+                // Sync with server in case count changed by others
                 if (data.success) {
-                    const icon = btn.querySelector('i');
-                    const countSpan = btn.querySelector('.vibe-count');
                     countSpan.innerText = data.newCount;
-
-                    if (data.isLiked) {
-                        btn.classList.replace('text-slate-500', 'text-red-500');
-                        icon.classList.replace('far', 'fas');
-                    } else {
-                        btn.classList.replace('text-red-500', 'text-slate-500');
-                        icon.classList.replace('fas', 'far');
-                    }
                 }
-            } catch (err) { console.error("Vibe error", err); }
+            } catch (err) { 
+                console.error("Vibe sync failed", err);
+            }
         }
 
-        // 2. TOGGLE ECHOES (COMMENTS)
         function toggleEchoes(postId) {
-            const section = document.getElementById(`echoes-${postId}`);
-            section.classList.toggle('open');
+            document.getElementById(`echoes-${postId}`).classList.toggle('open');
         }
 
-        // 3. MEDIA PREVIEW
+        // MEDIA PREVIEW
         const fileInput = document.getElementById('fileInput');
         const imgPreview = document.getElementById('imagePreview');
         const previewContainer = document.getElementById('mediaPreviewContainer');
@@ -336,7 +348,6 @@
             document.querySelector('label[for="fileInput"]').innerHTML = `<i class="fas fa-camera text-blue-500"></i> Media`;
         }
 
-        // 4. PUBLISH BUTTON LOADING
         document.getElementById('postForm').addEventListener('submit', function() {
             const btn = document.getElementById('publishBtn');
             btn.innerHTML = '<i class="fas fa-circle-notch animate-spin"></i>';
