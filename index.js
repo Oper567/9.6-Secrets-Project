@@ -583,14 +583,20 @@ app.post('/event/:id/comment', async (req, res) => {
     try {
         const postId = req.params.id;
         const commentText = req.body.comment;
+        const userId = req.user.id; // Assuming you have user sessions
 
-        // ... Your database logic to save the comment ...
+        if (!commentText) return res.redirect('/feed');
 
-        // DO NOT use goBack(req, res). Use this instead:
+        // Replace this with your actual Database query (e.g., PostgreSQL or MongoDB)
+        // Example: await db.query('INSERT INTO comments (post_id, user_id, comment_text) VALUES ($1, $2, $3)', [postId, userId, commentText]);
+
+        console.log(`New echo on post ${postId}: ${commentText}`);
+
+        // IMPORTANT: Always redirect to avoid the 502/Timeout error
         res.redirect('/feed'); 
-    } catch (error) {
-        console.error(error);
-        res.redirect('/feed'); // Redirect even if it fails to prevent 502
+    } catch (err) {
+        console.error("Comment Error:", err);
+        res.redirect('/feed'); 
     }
 });
 app.post("/comment/:id/delete", isAuth, async (req, res) => {
