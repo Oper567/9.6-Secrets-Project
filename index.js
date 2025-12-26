@@ -288,14 +288,16 @@ app.get("/feed", checkVerified, async (req, res) => {
         const announcements = await db.query(`SELECT e.*, u.email AS author FROM events e JOIN users u ON e.created_by=u.id WHERE is_announcement=true AND is_deleted=false ORDER BY created_at DESC`);
         const trending = await db.query(`SELECT e.id, e.description, COUNT(l.id) as likes_count FROM events e LEFT JOIN likes l ON e.id = l.event_id WHERE e.is_deleted = false GROUP BY e.id ORDER BY likes_count DESC LIMIT 3`);
         
-        let postsQuery = `
-            SELECT e.*, u.email AS author, u.profile_pic, u.is_verified, 
-            (SELECT COUNT(*) FROM likes WHERE event_id=e.id) AS likes_count,
-            (SELECT status FROM friendships WHERE (sender_id = $1 AND receiver_id = e.created_by) OR (sender_id = e.created_by AND receiver_id = $1) LIMIT 1) as friend_status,
-            (SELECT JSON_AGG(json_build_object('content', c.content, 'author', cu.email)) FROM comments c JOIN users cu ON c.user_id = cu.id WHERE c.event_id = e.id) as comments_list
-            FROM events e JOIN users u ON e.created_by=u.id 
-            WHERE is_announcement=false AND is_deleted=false
-        `;
+        // Inside app.get("/feed" ...)
+    let postsQuery = `
+    // Check this part of your SQL in index.js:
+    (SELECT JSON_AGG(json_build_object(
+    'id', c.id, 
+    'content', c.content, 
+    'author', cu.email, 
+    'user_id', c.user_id  // <--- VERY IMPORTANT
+    )) FROM comments c JOIN users cu ON c.user_id = cu.id WHERE c.event_id = e.id) as comments_list
+` ;
         
         const params = [req.user.id];
         if (search) { 
@@ -369,21 +371,35 @@ app.post("/event/:id/like", checkVerified, async (req, res) => {
     } catch (err) { res.redirect("back"); }
 });
 
-app.post("/event/:id/comment", checkVerified, async (req, res) => {
+app.post("/event/:id/comment", isAuth, async (req, res) => {
     try {
-        await db.query("INSERT INTO comments (event_id, user_id, content) VALUES ($1, $2, $3)", [req.params.id, req.user.id, req.body.content]);
-        res.redirect("back");
-    } catch (err) { res.redirect("back"); }
+        const { content } = req.body;
+        if (!content || content.trim() === "") return res.redirect("back");
+
+        await db.query(
+            "INSERT INTO comments (event_id, user_id, content) VALUES ($1, $2, $3)", 
+            [req.params.id, req.user.id, content]
+        );
+        
+        res.redirect("back"); // This brings them right back to the feed
+    } catch (err) { 
+        console.error(err);
+        res.redirect("back"); 
+    }
 });
 
-app.post("/event/:id/delete", isAuth, async (req, res) => {
+app.post("/comment/:id/delete", isAuth, async (req, res) => {
     try {
-        const post = await db.query("SELECT created_by FROM events WHERE id = $1", [req.params.id]);
-        if (post.rows.length > 0 && (post.rows[0].created_by === req.user.id || req.user.role === 'admin')) {
-            await db.query("UPDATE events SET is_deleted = true WHERE id = $1", [req.params.id]);
+        // Only allow owner or admin to delete
+        const comment = await db.query("SELECT user_id FROM comments WHERE id = $1", [req.params.id]);
+        
+        if (comment.rows.length > 0 && (comment.rows[0].user_id === req.user.id || req.user.role === 'admin')) {
+            await db.query("DELETE FROM comments WHERE id = $1", [req.params.id]);
         }
         res.redirect("back");
-    } catch (err) { res.redirect("/feed"); }
+    } catch (err) {
+        res.redirect("back");
+    }
 });
 
 /* ---------------- CHAT SYSTEM ---------------- */

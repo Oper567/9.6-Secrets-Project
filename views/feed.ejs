@@ -25,8 +25,6 @@
             background-color: #22c55e; 
             box-shadow: 0 0 12px rgba(34, 197, 94, 0.6); 
         }
-        
-        /* Post Card Styling */
         .post-card {
             background: rgba(15, 23, 42, 0.4);
             border: 1px solid rgba(255, 255, 255, 0.05);
@@ -37,13 +35,10 @@
             background: rgba(15, 23, 42, 0.6);
             transform: translateY(-2px);
         }
-
-        /* Publishers "Glow" */
         .publish-box:focus-within {
             box-shadow: 0 0 40px -10px rgba(59, 130, 246, 0.15);
             border-color: rgba(59, 130, 246, 0.2);
         }
-
         ::-webkit-scrollbar { width: 0px; }
     </style>
 </head>
@@ -151,7 +146,7 @@
                                                 <%= p.author ? p.author[0] : '?' %>
                                             <% } %>
                                         </div>
-                                        <span class="absolute -bottom-1 -right-1 w-4 h-4 border-[3px] border-[#020617] rounded-full <%= p.is_online ? 'status-online' : 'status-offline' %>"></span>
+                                        <span class="absolute -bottom-1 -right-1 w-4 h-4 border-[3px] border-[#020617] rounded-full <%= p.is_online ? 'status-online' : 'bg-slate-700' %>"></span>
                                     </div>
                                     <div>
                                         <div class="flex items-center gap-2">
@@ -186,8 +181,8 @@
                                 </div>
                             <% } %>
 
-                            <div class="p-8">
-                                <div class="flex gap-10">
+                            <div class="p-8 border-t border-white/5 mt-4 bg-white/[0.01]">
+                                <div class="flex gap-10 mb-6">
                                     <form action="/event/<%= p.id %>/like" method="POST">
                                         <button type="submit" class="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest transition-all <%= p.liked_by_me ? 'text-red-500' : 'text-slate-500 hover:text-red-400' %>">
                                             <i class="<%= p.liked_by_me ? 'fas' : 'far' %> fa-heart text-lg"></i>
@@ -196,9 +191,48 @@
                                     </form>
                                     <button onclick="window.location.href='/event/<%= p.id %>'" class="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-blue-400 transition-all">
                                         <i class="far fa-comment-dots text-lg"></i>
-                                        <span><%= (p.comments_list) ? p.comments_list.length : 0 %> Whispers</span>
+                                        <span><%= (p.comments_list) ? p.comments_list.length : 0 %> Comments</span>
                                     </button>
                                 </div>
+
+                                <form action="/event/<%= p.id %>/comment" method="POST" class="relative group mb-4">
+                                    <div class="flex items-center gap-3 bg-slate-950/50 border border-white/5 rounded-2xl px-4 py-2 focus-within:border-blue-500/30 transition-all">
+                                        <input type="text" name="content" placeholder="Add a comment..." required
+                                            class="w-full bg-transparent outline-none text-[13px] text-slate-200 placeholder-slate-700 py-1 font-medium">
+                                        <button type="submit" class="text-blue-600 hover:text-blue-400 px-2 transition-colors">
+                                            <i class="fas fa-paper-plane text-sm"></i>
+                                        </button>
+                                    </div>
+                                </form>
+
+                                <% if (p.comments_list && p.comments_list.length > 0) { %>
+                                    <div class="space-y-3 mt-4 border-t border-white/5 pt-4">
+                                        <% p.comments_list.slice(-3).forEach(comment => { %>
+                                            <div class="flex justify-between items-start group/comment">
+                                                <div class="text-[12px] leading-relaxed">
+                                                    <span class="font-black text-blue-500 uppercase tracking-tighter mr-2">
+                                                        <%= comment.author.split('@')[0] %>
+                                                    </span>
+                                                    <span class="text-slate-400 font-medium"><%= comment.content %></span>
+                                                </div>
+                                                
+                                                <% if (locals.user && (comment.user_id === user.id || user.role === 'admin')) { %>
+                                                    <form action="/comment/<%= comment.id %>/delete" method="POST" class="opacity-0 group-hover/comment:opacity-100 transition-opacity">
+                                                        <button type="submit" class="text-slate-700 hover:text-red-500 text-[10px]">
+                                                            <i class="fas fa-trash-alt"></i>
+                                                        </button>
+                                                    </form>
+                                                <% } %>
+                                            </div>
+                                        <% }) %>
+                                        
+                                        <% if (p.comments_list.length > 3) { %>
+                                            <a href="/event/<%= p.id %>" class="block text-[9px] font-black uppercase tracking-widest text-slate-600 hover:text-blue-500 mt-2 transition-colors">
+                                                View all <%= p.comments_list.length %> comments
+                                            </a>
+                                        <% } %>
+                                    </div>
+                                <% } %>
                             </div>
                         </article>
                     <% }) %>
@@ -216,11 +250,11 @@
                 <% if (locals.trending && trending.length > 0) { %>
                     <div class="space-y-10">
                         <% trending.forEach((t, i) => { %>
-                            <div class="group cursor-pointer relative" onclick="window.location.href='/feed?search=<%= encodeURIComponent(t.description.substring(0,10)) %>'">
+                            <div class="group cursor-pointer relative" onclick="window.location.href='/event/<%= t.id %>'">
                                 <span class="absolute -left-6 top-0 text-[32px] font-black text-white/5 group-hover:text-blue-600/20 transition-colors">0<%= i+1 %></span>
                                 <p class="text-[13px] font-bold text-slate-300 group-hover:text-blue-400 transition leading-snug"><%= t.description.substring(0,60) %>...</p>
                                 <div class="flex items-center gap-3 mt-3">
-                                    <p class="text-[8px] text-slate-600 font-black uppercase tracking-widest"><%= t.likes_count %> Reactions</p>
+                                    <p class="text-[8px] text-slate-600 font-black uppercase tracking-widest"><%= t.likes_count %> Vibes</p>
                                     <div class="h-1 w-1 bg-slate-700 rounded-full"></div>
                                     <p class="text-[8px] text-blue-500/50 font-black uppercase tracking-widest">Trending</p>
                                 </div>
@@ -240,7 +274,7 @@
 
     <div class="lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-2xl border border-white/10 px-10 py-5 rounded-full flex gap-12 shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-50">
         <a href="/feed" class="text-blue-500"><i class="fas fa-home text-lg"></i></a>
-        <a href="/messages" class="text-slate-500 hover:text-white transition-all"><i class="fas fa-comment-dots text-lg"></i></a>
+        <a href="/discover" class="text-slate-500 hover:text-white transition-all"><i class="fas fa-compass text-lg"></i></a>
         <a href="/notifications" class="text-slate-500 hover:text-white transition-all relative">
             <i class="fas fa-bell text-lg"></i>
             <% if (locals.unreadCount && unreadCount > 0) { %>
@@ -251,7 +285,7 @@
     </div>
 
     <script>
-        // Form Submit Loading State
+        // Post Button Loading State
         const postForm = document.getElementById('postForm');
         if (postForm) {
             postForm.addEventListener('submit', function() {
