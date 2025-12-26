@@ -28,7 +28,9 @@ const app = express();
 const port = process.env.PORT || 3000;
 const saltRounds = 10;
 const router = express.Router();
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  datasourceUrl: process.env.DATABASE_URL,
+});
 
 
 /* ---------------- SERVICES (DB, SUPABASE, MAIL) ---------------- */
