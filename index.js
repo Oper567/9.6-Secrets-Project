@@ -528,36 +528,33 @@ app.post("/friends/request/:id", isAuth, async (req, res) => {
     const senderId = req.user.id;
     const receiverId = req.params.id;
 
-    // Prevent adding yourself
-    if (parseInt(senderId) === parseInt(receiverId)) {
-        return res.redirect("/feed");
-    }
+    if (parseInt(senderId) === parseInt(receiverId)) return res.redirect("/feed");
 
     try {
-        // 1. Check if they are already friends or if a request is pending
+        // 1. Check existing using 'friendships' table
         const existing = await db.query(
-            "SELECT * FROM friends WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)",
+            "SELECT * FROM friendships WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)",
             [senderId, receiverId]
         );
 
         if (existing.rows.length === 0) {
-            // 2. Insert the friendship
+            // 2. Insert using 'friendships' table
             await db.query(
-                "INSERT INTO friends (user_id, friend_id, status) VALUES ($1, $2, 'pending')",
+                "INSERT INTO friendships (sender_id, receiver_id, status) VALUES ($1, $2, 'pending')",
                 [senderId, receiverId]
             );
 
-            // 3. Create the notification
+            // 3. Notification (Check your notifications table columns here too!)
             await db.query(
-                "INSERT INTO notifications (receiver_id, sender_id, message, type) VALUES ($1, $2, $3, $4)",
-                [receiverId, senderId, "sent you a kinship request", "friend_request"]
+                "INSERT INTO notifications (user_id, sender_id, message) VALUES ($1, $2, $3)",
+                [receiverId, senderId, "sent you a kinship request"]
             );
         }
         
         res.redirect("/feed");
     } catch (err) {
-        console.error("DETAILED KINSHIP ERROR:", err); // CHECK YOUR TERMINAL FOR THIS
-        res.status(500).send("Server Error: Check terminal logs");
+        console.error("DETAILED KINSHIP ERROR:", err);
+        res.status(500).send("Village Error: Check your table names.");
     }
 });
 
