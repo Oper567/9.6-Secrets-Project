@@ -39,16 +39,19 @@ db.on('error', (err) => console.error('Unexpected error on idle client', err));
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
     host: 'smtp.gmail.com',
     port: 465,
-    secure: true, // Use SSL
+    secure: true, // Use SSL/TLS
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
     },
+    // Add these timeout settings to give Render more time to connect
+    connectionTimeout: 10000, // 10 seconds
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
     tls: {
-        rejectUnauthorized: false // Helps with network handshake issues
+        rejectUnauthorized: false // Helps bypass network handshake blocks
     }
 });
 // Verification Function
