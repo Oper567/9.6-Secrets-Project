@@ -589,10 +589,14 @@ app.get("/notifications", isAuth, async (req, res) => {
 });
 
 // ADD THIS: Clear Notifications Route
+// Updated Clear Notifications Route
 app.post("/notifications/clear", isAuth, async (req, res) => {
     try {
-        // Double check your table: is it 'receiver_id' or 'user_id'?
-        await db.query("UPDATE notifications SET is_read = true WHERE receiver_id = $1", [req.user.id]);
+        // Changed 'receiver_id' to 'user_id' to match your schema
+        await db.query(
+            "UPDATE notifications SET is_read = true WHERE user_id = $1", 
+            [req.user.id]
+        );
         res.redirect("/notifications");
     } catch (err) {
         console.error("NOTIFICATION CLEAR ERROR:", err);
