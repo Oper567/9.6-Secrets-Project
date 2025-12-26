@@ -438,19 +438,15 @@ app.post("/comment/:id/delete", isAuth, async (req, res) => {
 app.get("/messages", isAuth, async (req, res) => {
     try {
         // This query gets friends + their profile pic + if they were active in the last 5 mins + unread count
-        const friends = await db.query(`
-            SELECT 
-                u.id, 
-                u.email, 
-                u.profile_pic,
-                (u.last_active > NOW() - INTERVAL '5 minutes') as is_online,
-                (SELECT COUNT(*) FROM messages WHERE sender_id = u.id AND receiver_id = $1 AND is_read = false) as unread_count
-            FROM users u
-            JOIN friendships f ON (f.sender_id = u.id OR f.receiver_id = u.id)
-            WHERE (f.sender_id = $1 OR f.receiver_id = $1) 
-              AND u.id != $1 
-              AND f.status = 'accepted'
-            ORDER BY unread_count DESC, u.last_active DESC`, [req.user.id]);
+       const friends = await db.query(`
+        SELECT 
+        u.id, u.email, u.profile_pic,
+        (u.last_active > NOW() - INTERVAL '5 minutes') as is_online
+        FROM users u
+        JOIN friendships f ON (f.sender_id = u.id OR f.receiver_id = u.id)
+        WHERE (f.sender_id = $1 OR f.receiver_id = $1) 
+        AND u.id != $1 
+         AND f.status = 'accepted'`, [req.user.id]);
 
         res.render("messages", { 
             friends: friends.rows, 
@@ -531,30 +527,23 @@ app.post("/friends/request/:id", isAuth, async (req, res) => {
     if (parseInt(senderId) === parseInt(receiverId)) return res.redirect("/feed");
 
     try {
-        // 1. Check existing using 'friendships' table
-        const existing = await db.query(
-            "SELECT * FROM friendships WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)",
-            [senderId, receiverId]
+        // Change 'pending' to 'accepted' if you want immediate whispering
+        const status = 'accepted'; 
+
+        await db.query(
+            "INSERT INTO friendships (sender_id, receiver_id, status) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+            [senderId, receiverId, status]
         );
 
-        if (existing.rows.length === 0) {
-            // 2. Insert using 'friendships' table
-            await db.query(
-                "INSERT INTO friendships (sender_id, receiver_id, status) VALUES ($1, $2, 'pending')",
-                [senderId, receiverId]
-            );
-
-            // 3. Notification (Check your notifications table columns here too!)
-            await db.query(
-                "INSERT INTO notifications (user_id, sender_id, message) VALUES ($1, $2, $3)",
-                [receiverId, senderId, "sent you a kinship request"]
-            );
-        }
+        await db.query(
+            "INSERT INTO notifications (user_id, sender_id, message) VALUES ($1, $2, $3)",
+            [receiverId, senderId, "added you as kin!"]
+        );
         
         res.redirect("/feed");
     } catch (err) {
-        console.error("DETAILED KINSHIP ERROR:", err);
-        res.status(500).send("Village Error: Check your table names.");
+        console.error("KINSHIP ERROR:", err);
+        res.status(500).send("Error connecting souls.");
     }
 });
 
@@ -589,15 +578,13 @@ app.get("/notifications", isAuth, async (req, res) => {
 });
 
 // ADD THIS: Clear Notifications Route
-// Updated Clear Notifications Route
 app.post("/notifications/clear", isAuth, async (req, res) => {
     try {
-        // Changed 'receiver_id' to 'user_id' to match your schema
-        await db.query(
-            "UPDATE notifications SET is_read = true WHERE user_id = $1", 
-            [req.user.id]
-        );
-        res.redirect("/notifications");
+        // We use user_id because that's what your middleware uses
+        await db.query("UPDATE notifications SET is_read = true WHERE user_id = $1", [req.user.id]);
+        
+        // Use back() to keep the user on the same page, or redirect to notifications
+        res.redirect("back"); 
     } catch (err) {
         console.error("NOTIFICATION CLEAR ERROR:", err);
         res.redirect("/notifications?error=true");
