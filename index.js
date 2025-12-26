@@ -25,6 +25,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = process.env.PORT || 3000;
 const saltRounds = 10;
+const router = express.Router();
 
 /* ---------------- SERVICES (DB, SUPABASE, MAIL) ---------------- */
 const db = new pg.Pool({
@@ -118,6 +119,16 @@ app.use(async (req, res, next) => {
     }
     next();
 });
+// Middleware to update "Last Seen"
+app.use(async (req, res, next) => {
+    if (req.session.user) {
+        await supabase
+            .from('profiles')
+            .update({ last_seen: new Date().toISOString() })
+            .eq('id', req.session.user.id);
+    }
+    next();
+});
 
 /* ---------------- AUTHENTICATION HELPERS ---------------- */
 function isAuth(req, res, next) {
@@ -144,6 +155,40 @@ async function sendWelcomeNote(userId) {
         await db.query("INSERT INTO notifications (user_id, sender_id, message) VALUES ($1, 1, $2)",
             [userId, "Welcome to Apugo Village! 🌴"]);
     } catch (err) { console.error("Notification Error:", err); }
+}
+
+async function sendVibe(btn, postId) {
+    // Add a quick "pop" animation locally for instant feedback
+    btn.style.transform = "scale(1.3)";
+    setTimeout(() => btn.style.transform = "scale(1)", 150);
+
+    try {
+        const response = await fetch(`/event/${postId}/like`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const data = await response.json();
+
+        if (data.success) {
+            const icon = btn.querySelector('i');
+            const countSpan = btn.querySelector('.vibe-count');
+
+            // Update Count
+            countSpan.innerText = data.newCount;
+
+            // Toggle Visuals
+            if (data.isLiked) {
+                btn.classList.replace('text-slate-500', 'text-red-500');
+                icon.classList.replace('far', 'fas');
+            } else {
+                btn.classList.replace('text-red-500', 'text-slate-500');
+                icon.classList.replace('fas', 'far');
+            }
+        }
+    } catch (err) {
+        console.error("Vibe failed to travel:", err);
+    }
 }
 
 /* ---------------- PASSPORT STRATEGIES ---------------- */
@@ -224,6 +269,49 @@ app.post("/login", passport.authenticate("local", {
     failureRedirect: "/login",
     failureFlash: true
 }));
+// --- ROUTES ---
+
+router.post('/forum/create', upload.single('media'), async (req, res) => {
+    const { title, content, category } = req.body;
+    let imageUrl = null;
+
+    try {
+        if (req.file) {
+            // Create a unique filename: timestamp + original name
+            const fileName = `${Date.now()}-${req.file.originalname}`;
+            
+            // Upload to Supabase Bucket
+            const { data, error } = await supabase.storage
+                .from('forum-attachments') // Your Bucket Name
+                .upload(fileName, req.file.buffer, {
+                    contentType: req.file.mimetype,
+                    upsert: false
+                });
+
+            if (error) throw error;
+
+            // Get Public URL
+            const { data: publicUrlData } = supabase.storage
+                .from('forum-attachments')
+                .getPublicUrl(fileName);
+            
+            imageUrl = publicUrlData.publicUrl;
+        }
+
+        // Insert into Database
+        await db.query(
+            'INSERT INTO forum_threads (title, content, category, author_id, image_url) VALUES ($1, $2, $3, $4, $5)',
+            [title, content, category, req.user.id, imageUrl]
+        );
+
+        res.redirect('/forum');
+    } catch (err) {
+        console.error('Supabase Upload/DB Error:', err);
+        res.redirect('/forum?error=upload_failed');
+    }
+});
+
+export default router;
 
 app.get("/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
 app.get("/auth/google/callback", passport.authenticate("google", { failureRedirect: "/login" }), (req, res) => res.redirect("/feed"));
@@ -771,6 +859,195 @@ app.post("/user/:id/follow", isAuth, async (req, res) => {
         res.redirect("back");
     }
 });
+// VIEW ALL TOPICS
+app.get("/forum", checkVerified, async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT t.*, u.email as author, 
+            (SELECT COUNT(*) FROM forum_replies WHERE topic_id = t.id) as reply_count
+            FROM forum_topics t
+            JOIN users u ON t.creator_id = u.id
+            ORDER BY t.created_at DESC
+        `);
+        res.render("forum", { topics: result.rows, user: req.user });
+    } catch (err) {
+        res.redirect("/feed");
+    }
+});
+// 1. GET ALL THREADS (The Forum Main Page)
+router.get('/forum', async (req, res) => {
+    try {
+        const category = req.query.cat;
+        let query = `
+            SELECT ft.*, u.username as author_name, u.profile_pic as author_pic,
+            (SELECT COUNT(*) FROM forum_replies WHERE thread_id = ft.id) as reply_count
+            FROM forum_threads ft
+            JOIN users u ON ft.author_id = u.id
+        `;
+        
+        let params = [];
+        if (category) {
+            query += ` WHERE ft.category = $1`;
+            params.push(category);
+        }
+        
+        query += ` ORDER BY ft.created_at DESC`;
+        
+        const result = await db.query(query, params);
+        res.render('forum', { 
+            threads: result.rows, 
+            user: req.user,
+            activeCat: category || 'all'
+        });
+    } catch (err) {
+        console.error('Forum Fetch Error:', err);
+        res.status(500).send("The Village Elders are busy. Try again later.");
+    }
+});
+
+// 2. GET SINGLE THREAD (The Thread View)
+router.get('/forum/thread/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        // Increment view count
+        await db.query('UPDATE forum_threads SET view_count = view_count + 1 WHERE id = $1', [id]);
+
+        // Fetch thread and author details
+        const threadResult = await db.query(`
+            SELECT ft.*, u.username as author_name, u.profile_pic as author_pic 
+            FROM forum_threads ft 
+            JOIN users u ON ft.author_id = u.id 
+            WHERE ft.id = $1`, [id]);
+
+        // Fetch replies with author details
+        const repliesResult = await db.query(`
+            SELECT fr.*, u.username as author_name, u.profile_pic as author_pic 
+            FROM forum_replies fr 
+            JOIN users u ON fr.author_id = u.id 
+            WHERE fr.thread_id = $1 
+            ORDER BY fr.created_at ASC`, [id]);
+
+        if (threadResult.rows.length === 0) {
+            return res.status(404).send("This whisper has vanished into the winds.");
+        }
+
+        res.render('thread', {
+            thread: threadResult.rows[0],
+            replies: repliesResult.rows,
+            user: req.user
+        });
+    } catch (err) {
+        console.error('Thread View Error:', err);
+        res.status(500).send("Server Error");
+    }
+});
+
+// 3. POST NEW THREAD
+router.post('/forum/create', async (req, res) => {
+    const { title, content, category } = req.body;
+    try {
+        await db.query(
+            'INSERT INTO forum_threads (title, content, category, author_id) VALUES ($1, $2, $3, $4)',
+            [title, content, category, req.user.id]
+        );
+        res.redirect('/forum');
+    } catch (err) {
+        console.error('Thread Creation Error:', err);
+        res.redirect('/forum?error=creation_failed');
+    }
+});
+
+// 4. POST REPLY
+router.post('/forum/thread/:id/reply', async (req, res) => {
+    const threadId = req.params.id;
+    const { reply_text } = req.body;
+    try {
+        await db.query(
+            'INSERT INTO forum_replies (thread_id, author_id, reply_text) VALUES ($1, $2, $3)',
+            [threadId, req.user.id, reply_text]
+        );
+        res.redirect(`/forum/thread/${threadId}`);
+    } catch (err) {
+        console.error('Reply Posting Error:', err);
+        res.redirect(`/forum/thread/${threadId}?error=reply_failed`);
+    }
+});
+
+// CREATE NEW TOPIC
+app.post("/forum/new", checkVerified, async (req, res) => {
+    const { title, category } = req.body;
+    await db.query("INSERT INTO forum_topics (title, category, creator_id) VALUES ($1, $2, $3)", 
+        [title, category, req.user.id]);
+    res.redirect("/forum");
+});
+// POST /event/:id/like
+router.post('/event/:id/like', async (req, res) => {
+    const postId = req.params.id;
+    const userId = req.session.user.id;
+
+    try {
+        // 1. Check if the vibe already exists
+        const { data: existingVibe } = await supabase
+            .from('likes')
+            .select('*')
+            .eq('post_id', postId)
+            .eq('user_id', userId)
+            .single();
+
+        if (existingVibe) {
+            // Unlike: Remove the record
+            await supabase.from('likes').delete().eq('id', existingVibe.id);
+        } else {
+            // Like: Add the record
+            await supabase.from('likes').insert({ post_id: postId, user_id: userId });
+        }
+
+        // 2. Get the updated count
+        const { count, error } = await supabase
+            .from('likes')
+            .select('*', { count: 'exact', head: true })
+            .eq('post_id', postId);
+
+        // 3. Send JSON back to the frontend
+        res.json({ 
+            success: true, 
+            newCount: count || 0, 
+            isLiked: !existingVibe 
+        });
+    } catch (err) {
+        res.status(500).json({ success: false });
+    }
+});
+async function fetchMessages() {
+    if (!currentFriendId) return;
+    try {
+        const res = await fetch(`/api/chat/${currentFriendId}`);
+        const data = await res.json(); // Assume data now returns { messages, lastSeen }
+        
+        // Update Status Subtext
+        const statusEl = document.getElementById('chatStatus');
+        const lastSeenDate = new Date(data.lastSeen);
+        const now = new Date();
+        const diffInMinutes = Math.floor((now - lastSeenDate) / 1000 / 60);
+
+        if (diffInMinutes < 2) {
+            statusEl.innerHTML = `<span class="text-green-500 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span> Active Now</span>`;
+        } else {
+            statusEl.innerText = `Last seen ${formatTimeAgo(lastSeenDate)}`;
+        }
+
+        // ... existing message rendering logic ...
+    } catch (e) { console.error("Sync failed"); }
+}
+
+// Helper for "Time Ago"
+function formatTimeAgo(date) {
+    const seconds = Math.floor((new Date() - date) / 1000);
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    return date.toLocaleDateString();
+}
+
 app.get("/villagers", checkVerified, async (req, res) => {
     const search = req.query.search || "";
     try {
