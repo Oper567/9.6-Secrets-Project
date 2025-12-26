@@ -462,21 +462,44 @@ app.get("/messages", isAuth, async (req, res) => {
     }
 });
 
-app.get("/api/chat/:friendId", isAuth, async (req, res) => {
+/* ---------------- CHAT & KINSHIP CLEANUP ---------------- */
+
+// 1. DELETE ALL MESSAGES (Burn Whispers)
+// We use POST instead of DELETE for better compatibility with simple fetch calls
+app.post("/api/chat/clear/:friendId", isAuth, async (req, res) => {
     try {
-        // Mark messages as read when you open the chat
+        const userId = req.user.id;
+        const friendId = req.params.friendId;
+
+        // Deletes all messages exchanged between these two specific users
         await db.query(
-            "UPDATE messages SET is_read = true WHERE sender_id = $1 AND receiver_id = $2 AND is_read = false", 
-            [req.params.friendId, req.user.id]
+            "DELETE FROM messages WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)",
+            [userId, friendId]
         );
 
-        const result = await db.query(
-            "SELECT id, sender_id, content, created_at, is_read FROM messages WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1) ORDER BY created_at ASC", 
-            [req.user.id, req.params.friendId]
+        res.json({ success: true, message: "Whispers burned." });
+    } catch (err) {
+        console.error("CLEAR CHAT ERROR:", err);
+        res.status(500).json({ error: "The spirits failed to clear the history." });
+    }
+});
+
+// 2. UNFRIEND (Break Kinship)
+app.post("/api/friends/unfriend/:friendId", isAuth, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const friendId = req.params.friendId;
+
+        // Removes the record from your 'friendships' table
+        await db.query(
+            "DELETE FROM friendships WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)",
+            [userId, friendId]
         );
-        res.json(result.rows);
-    } catch (err) { 
-        res.status(500).json({ error: "Sync failed" }); 
+
+        res.json({ success: true, message: "Kinship broken." });
+    } catch (err) {
+        console.error("UNFRIEND ERROR:", err);
+        res.status(500).json({ error: "Failed to break the bond." });
     }
 });
 
@@ -502,12 +525,40 @@ app.delete("/api/chat/clear/:friendId", isAuth, async (req, res) => {
 
 /* ---------------- FRIENDSHIP SYSTEM ---------------- */
 app.post("/friends/request/:id", isAuth, async (req, res) => {
-    if (req.user.id == req.params.id) return res.redirect("back");
+    const senderId = req.user.id;
+    const receiverId = req.params.id;
+
+    // Prevent adding yourself
+    if (parseInt(senderId) === parseInt(receiverId)) {
+        return res.redirect("/feed");
+    }
+
     try {
-        await db.query("INSERT INTO friendships (sender_id, receiver_id, status) VALUES ($1, $2, 'pending') ON CONFLICT DO NOTHING", [req.user.id, req.params.id]);
-        await db.query("INSERT INTO notifications (user_id, sender_id, actor_id, message) VALUES ($1, $2, $2, $3)", [req.params.id, req.user.id, "Sent you a village friend request! 🤝"]);
-        res.redirect("back");
-    } catch (err) { res.redirect("back"); }
+        // 1. Check if they are already friends or if a request is pending
+        const existing = await db.query(
+            "SELECT * FROM friends WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)",
+            [senderId, receiverId]
+        );
+
+        if (existing.rows.length === 0) {
+            // 2. Insert the friendship
+            await db.query(
+                "INSERT INTO friends (user_id, friend_id, status) VALUES ($1, $2, 'pending')",
+                [senderId, receiverId]
+            );
+
+            // 3. Create the notification
+            await db.query(
+                "INSERT INTO notifications (receiver_id, sender_id, message, type) VALUES ($1, $2, $3, $4)",
+                [receiverId, senderId, "sent you a kinship request", "friend_request"]
+            );
+        }
+        
+        res.redirect("/feed");
+    } catch (err) {
+        console.error("DETAILED KINSHIP ERROR:", err); // CHECK YOUR TERMINAL FOR THIS
+        res.status(500).send("Server Error: Check terminal logs");
+    }
 });
 
 app.post("/friends/accept/:senderId", isAuth, async (req, res) => {
@@ -541,17 +592,14 @@ app.get("/notifications", isAuth, async (req, res) => {
 });
 
 // ADD THIS: Clear Notifications Route
-// Mark all notifications as read
-    app.post("/notifications/clear", isAuth, async (req, res) => {
+app.post("/notifications/clear", isAuth, async (req, res) => {
     try {
-        await db.query(
-            "UPDATE notifications SET is_read = true WHERE receiver_id = $1 AND is_read = false",
-            [req.user.id]
-        );
+        // Double check your table: is it 'receiver_id' or 'user_id'?
+        await db.query("UPDATE notifications SET is_read = true WHERE receiver_id = $1", [req.user.id]);
         res.redirect("/notifications");
     } catch (err) {
-        console.error("Error clearing notifications:", err);
-        res.status(500).send("Server Error");
+        console.error("NOTIFICATION CLEAR ERROR:", err);
+        res.redirect("/notifications?error=true");
     }
 });
 

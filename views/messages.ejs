@@ -9,7 +9,6 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap');
 
-        /* Use dynamic viewport height to prevent the address bar issue */
         body { 
             background-color: #020617; 
             height: 100dvh; 
@@ -18,10 +17,9 @@
             flex-direction: column; 
             font-family: 'Plus Jakarta Sans', sans-serif; 
             overflow: hidden; 
-            position: fixed; /* Prevents unwanted bounce/scroll on iOS */
+            position: fixed; 
         }
         
-        /* Pane Container height must be strictly the remaining space */
         .pane-container { 
             position: relative; 
             display: flex; 
@@ -41,7 +39,6 @@
             .chat-pane { flex: 1; }
         }
 
-        /* Message Bubbles - Fixed height scrolling */
         .chat-container { 
             flex: 1; 
             overflow-y: auto; 
@@ -49,7 +46,6 @@
             flex-direction: column; 
             scrollbar-width: none;
             padding: 1rem;
-            /* Extra bottom padding so messages aren't hidden by the input dock */
             padding-bottom: 2rem;
         }
         .chat-container::-webkit-scrollbar { display: none; }
@@ -90,14 +86,10 @@
             background: rgba(15, 23, 42, 0.95); 
             backdrop-filter: blur(12px); 
             border-bottom: 1px solid rgba(255,255,255,0.05);
-            height: 60px; /* Fixed height for consistency */
+            height: 60px; 
         }
         
-        /* Compact Input for mobile */
-        #inputDock {
-            padding-bottom: env(safe-area-inset-bottom, 1rem); /* iPhone notch support */
-        }
-
+        #inputDock { padding-bottom: env(safe-area-inset-bottom, 1rem); }
         .typing-dot { width: 3px; height: 3px; background: #3b82f6; border-radius: 50%; animation: blink 1.4s infinite; }
         @keyframes blink { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
     </style>
@@ -124,8 +116,11 @@
             </div>
         </div>
 
-        <div id="chatActions" class="hidden flex items-center">
-            <button onclick="clearChat()" class="text-slate-600 hover:text-red-500 p-2 transition">
+        <div id="chatActions" class="hidden flex items-center gap-1">
+            <button onclick="unfriend()" class="text-slate-600 hover:text-orange-500 p-2 transition" title="Break Kinship">
+                <i class="fas fa-user-slash text-sm"></i>
+            </button>
+            <button onclick="clearChat()" class="text-slate-600 hover:text-red-500 p-2 transition" title="Burn Whispers">
                 <i class="fas fa-fire-alt text-sm"></i>
             </button>
         </div>
@@ -163,7 +158,7 @@
                                 <div class="flex justify-between items-center mb-0.5">
                                     <span class="text-[11px] font-black block truncate text-slate-200 uppercase tracking-tight group-hover:text-blue-400">@<%= f.email.split('@')[0] %></span>
                                     <% if (f.unread_count > 0) { %>
-                                        <span class="bg-blue-600 text-[8px] font-black px-1.5 py-0.5 rounded-full"><%= f.unread_count %></span>
+                                        <span id="unread-<%= f.id %>" class="bg-blue-600 text-[8px] font-black px-1.5 py-0.5 rounded-full"><%= f.unread_count %></span>
                                     <% } %>
                                 </div>
                                 <p class="text-[9px] <%= f.unread_count > 0 ? 'text-blue-400 font-bold' : 'text-slate-600' %> truncate italic uppercase">
@@ -172,6 +167,11 @@
                             </div>
                         </div>
                     <% }) %>
+                <% } else { %>
+                    <div class="p-8 text-center opacity-20">
+                        <i class="fas fa-ghost text-2xl mb-2"></i>
+                        <p class="text-[10px] font-black uppercase">No kinships yet</p>
+                    </div>
                 <% } %>
             </div>
         </aside>
@@ -208,6 +208,10 @@
         document.querySelectorAll('.friend-item').forEach(el => el.classList.remove('active'));
         document.getElementById(`friend-${id}`).classList.add('active');
 
+        // Reset unread UI
+        const unreadBadge = document.getElementById(`unread-${id}`);
+        if(unreadBadge) unreadBadge.remove();
+
         document.getElementById('paneContainer').classList.add('show-chat');
         document.getElementById('mobileBack').classList.remove('hidden');
         document.getElementById('navHomeLink').classList.add('hidden');
@@ -229,6 +233,7 @@
         document.getElementById('mobileBack').classList.add('hidden');
         document.getElementById('navHomeLink').classList.remove('hidden');
         document.getElementById('activeChatAvatar').classList.add('hidden');
+        document.getElementById('chatActions').classList.add('hidden');
         document.getElementById('chatHeaderTitle').innerText = 'Whispers';
         document.getElementById('chatStatus').innerText = 'Village Square';
         currentFriendId = null;
@@ -242,6 +247,10 @@
             const chatWindow = document.getElementById('chatWindow');
             
             chatWindow.innerHTML = '';
+            if (messages.length === 0) {
+                chatWindow.innerHTML = `<div class="my-auto text-center opacity-10 text-[9px] uppercase font-black tracking-widest">No whispers yet</div>`;
+            }
+
             messages.forEach(m => {
                 const isMe = m.sender_id == currentUserId;
                 const div = document.createElement('div');
@@ -257,6 +266,34 @@
             });
             chatWindow.scrollTop = chatWindow.scrollHeight;
         } catch (e) { console.error("Sync error"); }
+    }
+
+    // NEW FUNCTION: DELETE CHAT
+    async function clearChat() {
+        if (!currentFriendId) return;
+        if (!confirm("Are you sure you want to burn all whispers? This cannot be undone.")) return;
+
+        try {
+            const res = await fetch(`/api/chat/clear/${currentFriendId}`, { method: 'DELETE' });
+            if (res.ok) {
+                fetchMessages();
+            }
+        } catch (e) { alert("Failed to clear chat"); }
+    }
+
+    // NEW FUNCTION: UNFRIEND
+    async function unfriend() {
+        if (!currentFriendId) return;
+        if (!confirm("Break this kinship? You will no longer be able to whisper until reunited.")) return;
+
+        try {
+            const res = await fetch(`/api/friends/unfriend/${currentFriendId}`, { method: 'POST' });
+            if (res.ok) {
+                const friendEl = document.getElementById(`friend-${currentFriendId}`);
+                if (friendEl) friendEl.remove();
+                closeChat();
+            }
+        } catch (e) { alert("Failed to break kinship"); }
     }
 
     document.getElementById('chatForm')?.addEventListener('submit', async e => {
