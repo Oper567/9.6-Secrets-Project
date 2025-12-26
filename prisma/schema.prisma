@@ -31,7 +31,7 @@ model User {
   id       Int    @id @default(autoincrement())
   email    String @unique
   password String
-  // ... other fields
-  
-  @@map("users") // <--- Add this line
+  role     String @default("user") // <--- Add this line
+
+  @@map("users") 
 }
