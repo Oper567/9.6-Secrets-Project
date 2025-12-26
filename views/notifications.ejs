@@ -166,23 +166,114 @@
     </nav>
 
     <script>
-        // Menu Toggle Logic
-        const menuBtn = document.getElementById('menu-btn');
-        const navDropdown = document.getElementById('nav-dropdown');
+    const currentUserId = '<%= user.id %>';
+    let currentFriendId = null;
 
-        menuBtn?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            navDropdown.classList.toggle('hidden');
-        });
+    // --- SWIPE GESTURE LOGIC ---
+    let touchStartX = 0;
+    let touchEndX = 0;
 
-        // Close menu on outside click
-        document.addEventListener('click', (e) => {
-            if (navDropdown && !navDropdown.classList.contains('hidden') && !navDropdown.contains(e.target)) {
-                navDropdown.classList.add('hidden');
+    const chatPane = document.querySelector('.chat-pane');
+
+    chatPane.addEventListener('touchstart', e => {
+        touchStartX = e.changedTouches[0].screenX;
+    }, { passive: true });
+
+    chatPane.addEventListener('touchend', e => {
+        touchEndX = e.changedTouches[0].screenX;
+        handleSwipe();
+    }, { passive: true });
+
+    function handleSwipe() {
+        // If swipe distance is more than 100px from left to right
+        if (touchEndX - touchStartX > 100) {
+            closeChat();
+        }
+    }
+    // ---------------------------
+
+    function selectFriend(id, name, pic) {
+        currentFriendId = id;
+        document.querySelectorAll('.friend-item').forEach(el => el.classList.remove('active'));
+        const activeItem = document.getElementById(`friend-${id}`);
+        if(activeItem) activeItem.classList.add('active');
+
+        document.getElementById('paneContainer').classList.add('show-chat');
+        document.getElementById('mobileBack').classList.remove('hidden');
+        document.getElementById('navHomeLink').classList.add('hidden');
+        document.getElementById('inputDock').classList.remove('hidden');
+        document.getElementById('chatActions').classList.remove('hidden');
+        
+        const avatarDiv = document.getElementById('activeChatAvatar');
+        avatarDiv.classList.remove('hidden');
+        avatarDiv.innerHTML = pic && pic !== 'null' ? `<img src="${pic}" class="w-full h-full object-cover">` : `<span>${name[0].toUpperCase()}</span>`;
+        
+        document.getElementById('chatHeaderTitle').innerText = `@${name}`;
+        document.getElementById('chatStatus').innerHTML = `<span class="flex items-center gap-1"><span class="typing-dot"></span> Whispering</span>`;
+        
+        fetchMessages(true);
+    }
+
+    function closeChat() {
+        document.getElementById('paneContainer').classList.remove('show-chat');
+        document.getElementById('mobileBack').classList.add('hidden');
+        document.getElementById('navHomeLink').classList.remove('hidden');
+        document.getElementById('activeChatAvatar').classList.add('hidden');
+        document.getElementById('chatHeaderTitle').innerText = 'Whispers';
+        document.getElementById('chatStatus').innerText = 'Village Square';
+        currentFriendId = null;
+    }
+
+    async function fetchMessages(force = false) {
+        if (!currentFriendId) return;
+        try {
+            const res = await fetch(`/api/chat/${currentFriendId}`);
+            const messages = await res.json();
+            const chatWindow = document.getElementById('chatWindow');
+            
+            // Simplified scroll check: only scroll if user is near bottom or forced
+            const isAtBottom = chatWindow.scrollHeight - chatWindow.scrollTop <= chatWindow.clientHeight + 100;
+
+            chatWindow.innerHTML = '';
+            messages.forEach(m => {
+                const isMe = m.sender_id == currentUserId;
+                const div = document.createElement('div');
+                div.className = `bubble ${isMe ? 'bubble-me' : 'bubble-them'}`;
+                div.innerHTML = `
+                    <div>${m.content}</div>
+                    <div class="text-[7px] mt-1 opacity-50 flex items-center justify-end font-black uppercase">
+                        ${new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        ${isMe ? (m.is_read ? '<i class="fas fa-check-double ml-1 text-blue-300"></i>' : '<i class="fas fa-check ml-1"></i>') : ''}
+                    </div>
+                `;
+                chatWindow.appendChild(div);
+            });
+
+            if (force || isAtBottom) {
+                chatWindow.scrollTop = chatWindow.scrollHeight;
             }
-        });
+        } catch (e) { console.error("Sync error"); }
+    }
 
-        // Optional: Auto-mark as read logic could go here via fetch
+    document.getElementById('chatForm')?.addEventListener('submit', async e => {
+        e.preventDefault();
+        const input = document.getElementById('msgInput');
+        const content = input.value.trim();
+        if (!content || !currentFriendId) return;
+        
+        // Immediate local UI feel (Optional: add message to DOM instantly here)
+        input.value = '';
+        
+        await fetch('/api/chat/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ receiverId: currentFriendId, content })
+        });
+        fetchMessages(true);
+    });
+
+    // Background sync every 5 seconds
+    setInterval(() => { if (currentFriendId) fetchMessages(); }, 5000);
     </script>
 </body>
 </html>

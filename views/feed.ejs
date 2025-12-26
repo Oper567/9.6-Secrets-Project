@@ -33,12 +33,23 @@
         .post-card:hover {
             border-color: rgba(59, 130, 246, 0.4);
             background: rgba(15, 23, 42, 0.6);
-            transform: translateY(-2px);
         }
-        .publish-box:focus-within {
-            box-shadow: 0 0 40px -10px rgba(59, 130, 246, 0.15);
-            border-color: rgba(59, 130, 246, 0.2);
+        /* Dropdown styling for Delete */
+        .dropdown { position: relative; display: inline-block; }
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            right: 0;
+            background: #1e293b;
+            min-width: 140px;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            z-index: 100;
+            overflow: hidden;
+            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.3);
         }
+        .dropdown:hover .dropdown-content { display: block; }
+        
         ::-webkit-scrollbar { width: 0px; }
     </style>
 </head>
@@ -66,7 +77,6 @@
                         <span class="absolute -top-1 -right-1 bg-blue-600 text-[8px] w-4 h-4 flex items-center justify-center rounded-full font-black border-2 border-[#020617]"><%= unreadCount %></span>
                     <% } %>
                 </a>
-                
                 <a href="/profile" class="flex items-center gap-3 bg-white/5 pl-1 pr-3 py-1 rounded-full border border-white/5 hover:border-blue-500/30 transition-all">
                     <div class="w-8 h-8 rounded-full overflow-hidden border border-white/10">
                         <% if (locals.user && user.profile_pic) { %>
@@ -81,23 +91,23 @@
         </div>
     </nav>
 
-    <main class="max-w-6xl mx-auto px-4 mt-8 grid grid-cols-1 lg:grid-cols-12 gap-10">
+    <main class="max-w-6xl mx-auto px-4 mt-6 lg:mt-8 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10">
         
-        <div class="lg:col-span-8 space-y-10">
+        <div class="lg:col-span-8 space-y-8 lg:space-y-10">
             
             <% if (locals.announcements && announcements.length > 0) { %>
                 <div class="space-y-4">
-                    <div class="flex items-center gap-3 mb-2 px-2">
+                    <div class="flex items-center gap-3 px-2">
                         <div class="h-[2px] w-8 bg-blue-600"></div>
                         <p class="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em]">Elderly Decrees</p>
                     </div>
                     <% announcements.forEach(a => { %>
-                        <div class="bg-gradient-to-r from-blue-600/10 to-transparent border-l-4 border-blue-600 rounded-r-3xl p-6 backdrop-blur-xl group">
-                            <div class="flex gap-5 items-start">
-                                <div class="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-xl shadow-lg shadow-blue-600/20 group-hover:scale-110 transition-transform">📢</div>
+                        <div class="bg-gradient-to-r from-blue-600/10 to-transparent border-l-4 border-blue-600 rounded-r-3xl p-5 lg:p-6 backdrop-blur-xl group">
+                            <div class="flex gap-4 lg:gap-5 items-start">
+                                <div class="w-10 h-10 lg:w-12 lg:h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-lg lg:text-xl shadow-lg shadow-blue-600/20 group-hover:scale-110 transition-transform">📢</div>
                                 <div class="space-y-1">
-                                    <p class="text-[14px] text-blue-100 font-bold leading-relaxed tracking-tight"><%= a.description %></p>
-                                    <p class="text-[9px] text-blue-500/60 font-black uppercase tracking-widest">Active decree</p>
+                                    <p class="text-[13px] lg:text-[14px] text-blue-100 font-bold leading-relaxed tracking-tight"><%= a.description %></p>
+                                    <p class="text-[8px] lg:text-[9px] text-blue-500/60 font-black uppercase tracking-widest">Active decree</p>
                                 </div>
                             </div>
                         </div>
@@ -105,27 +115,27 @@
                 </div>
             <% } %>
 
-            <div class="publish-box bg-slate-900/50 border border-white/5 rounded-[3rem] p-8 shadow-2xl transition-all">
+            <div class="publish-box bg-slate-900/50 border border-white/5 rounded-[2rem] lg:rounded-[3rem] p-5 lg:p-8 shadow-2xl transition-all">
                 <form action="/event/create" method="POST" enctype="multipart/form-data" id="postForm">
-                    <div class="flex gap-6">
-                        <div class="w-12 h-12 shrink-0 rounded-2xl overflow-hidden bg-slate-800 ring-2 ring-white/5">
+                    <div class="flex gap-4 lg:gap-6">
+                        <div class="w-10 h-10 lg:w-12 lg:h-12 shrink-0 rounded-xl lg:rounded-2xl overflow-hidden bg-slate-800 ring-2 ring-white/5">
                             <% if (locals.user && user.profile_pic) { %>
                                 <img src="<%= user.profile_pic %>" class="w-full h-full object-cover">
                             <% } else { %>
-                                <div class="w-full h-full flex items-center justify-center font-black text-blue-500 uppercase"><%= user.email[0] %></div>
+                                <div class="w-full h-full flex items-center justify-center font-black text-blue-500 uppercase text-xs"><%= user.email[0] %></div>
                             <% } %>
                         </div>
-                        <textarea name="description" placeholder="What's the word in the square today?" required 
-                            class="w-full bg-transparent outline-none h-24 resize-none text-[16px] text-slate-200 placeholder-slate-600 mt-2 leading-relaxed font-medium"></textarea>
+                        <textarea name="description" placeholder="What's the word in the square?" required 
+                            class="w-full bg-transparent outline-none h-20 lg:h-24 resize-none text-[15px] lg:text-[16px] text-slate-200 placeholder-slate-600 mt-1 leading-relaxed font-medium"></textarea>
                     </div>
-                    <div class="flex items-center justify-between border-t border-white/5 mt-6 pt-6">
-                        <div class="flex items-center gap-4">
+                    <div class="flex items-center justify-between border-t border-white/5 mt-4 lg:mt-6 pt-4 lg:pt-6">
+                        <div class="flex items-center gap-2 lg:gap-4">
                             <input type="file" name="localMedia" id="fileInput" class="hidden" accept="image/*,video/*">
-                            <label for="fileInput" class="cursor-pointer bg-white/5 hover:bg-blue-600/10 text-slate-300 px-6 py-3 rounded-2xl text-[10px] font-black uppercase flex items-center gap-3 tracking-widest transition-all">
-                                <i class="fas fa-photo-film text-blue-500"></i> Attachment
+                            <label for="fileInput" class="cursor-pointer bg-white/5 hover:bg-blue-600/10 text-slate-300 px-4 lg:px-6 py-2.5 lg:py-3 rounded-xl lg:rounded-2xl text-[9px] lg:text-[10px] font-black uppercase flex items-center gap-2 lg:gap-3 tracking-widest transition-all">
+                                <i class="fas fa-camera text-blue-500"></i> <span class="hidden sm:inline">Media</span>
                             </label>
                         </div>
-                        <button type="submit" class="bg-blue-600 hover:bg-blue-500 px-10 py-3.5 rounded-2xl font-black text-[10px] text-white uppercase tracking-[0.2em] transition-all hover:shadow-[0_0_20px_rgba(37,99,235,0.3)] active:scale-95">
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-500 px-8 lg:px-10 py-3 lg:py-3.5 rounded-xl lg:rounded-2xl font-black text-[9px] lg:text-[10px] text-white uppercase tracking-[0.2em] transition-all active:scale-95">
                             Publish
                         </button>
                     </div>
@@ -133,26 +143,33 @@
             </div>
 
             <% if (locals.posts && posts.length > 0) { %>
-                <div class="space-y-8">
+                <div class="space-y-6 lg:space-y-8">
                     <% posts.forEach(p => { %>
-                        <article class="post-card rounded-[3rem] overflow-hidden">
-                            <div class="p-6 flex justify-between items-center">
-                                <div class="flex items-center gap-4">
+                        <article class="post-card rounded-[2rem] lg:rounded-[3rem] overflow-hidden">
+                            <div class="p-5 lg:p-6 flex justify-between items-center">
+                                <div class="flex items-center gap-3 lg:gap-4">
                                     <div class="relative">
-                                        <div class="w-12 h-12 bg-slate-800 rounded-2xl overflow-hidden flex items-center justify-center font-black text-blue-500 text-sm uppercase ring-1 ring-white/10">
+                                        <div class="w-10 h-10 lg:w-12 lg:h-12 bg-slate-800 rounded-xl lg:rounded-2xl overflow-hidden flex items-center justify-center font-black text-blue-500 text-xs lg:text-sm uppercase ring-1 ring-white/10">
                                             <% if (p.profile_pic) { %>
                                                 <img src="<%= p.profile_pic %>" class="w-full h-full object-cover">
                                             <% } else { %>
                                                 <%= p.author ? p.author[0] : '?' %>
                                             <% } %>
                                         </div>
-                                        <span class="absolute -bottom-1 -right-1 w-4 h-4 border-[3px] border-[#020617] rounded-full <%= p.is_online ? 'status-online' : 'bg-slate-700' %>"></span>
+                                        <span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 border-[3px] border-[#020617] rounded-full <%= p.is_online ? 'status-online' : 'bg-slate-700' %>"></span>
                                     </div>
                                     <div>
-                                        <div class="flex items-center gap-2">
-                                            <p class="font-bold text-[15px] tracking-tight text-white hover:text-blue-500 cursor-pointer transition-colors">@<%= p.author.split('@')[0] %></p>
+                                        <div class="flex items-center gap-2 flex-wrap">
+                                            <p class="font-bold text-[14px] lg:text-[15px] tracking-tight text-white hover:text-blue-500 cursor-pointer transition-colors">@<%= p.author.split('@')[0] %></p>
                                             <% if (p.is_verified) { %>
-                                                <i class="fas fa-certificate text-blue-500 text-[10px]"></i>
+                                                <i class="fas fa-certificate text-blue-500 text-[9px]"></i>
+                                            <% } %>
+                                            <% if (locals.user && p.user_id !== user.id) { %>
+                                                <form action="/user/<%= p.user_id %>/follow" method="POST" class="ml-1">
+                                                    <button type="submit" class="text-[8px] font-black uppercase text-blue-500 bg-blue-500/10 px-2.5 py-1 rounded-full hover:bg-blue-500 hover:text-white transition-all">
+                                                        + Kinship
+                                                    </button>
+                                                </form>
                                             <% } %>
                                         </div>
                                         <p class="text-[8px] text-slate-600 uppercase font-black tracking-[0.2em] mt-0.5">
@@ -160,16 +177,33 @@
                                         </p>
                                     </div>
                                 </div>
-                                <button class="text-slate-700 hover:text-white p-2 transition-colors"><i class="fas fa-ellipsis-h"></i></button>
+                                
+                                <div class="dropdown">
+                                    <button class="text-slate-700 hover:text-white p-2 transition-colors">
+                                        <i class="fas fa-ellipsis-h"></i>
+                                    </button>
+                                    <div class="dropdown-content">
+                                        <% if (locals.user && (p.user_id === user.id || user.role === 'admin')) { %>
+                                            <form action="/event/<%= p.id %>/delete" method="POST" onsubmit="return confirm('Erase this whisper?')">
+                                                <button type="submit" class="w-full text-left px-4 py-3 text-[9px] font-black uppercase text-red-500 hover:bg-white/5 transition-all">
+                                                    <i class="fas fa-trash-alt mr-2"></i> Delete
+                                                </button>
+                                            </form>
+                                        <% } %>
+                                        <button class="w-full text-left px-4 py-3 text-[9px] font-black uppercase text-slate-400 hover:bg-white/5 transition-all">
+                                            <i class="fas fa-flag mr-2"></i> Report
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
 
-                            <div class="px-8 pb-6">
-                                <p class="text-slate-300 text-[16px] leading-[1.6] tracking-tight font-medium"><%= p.description %></p>
+                            <div class="px-7 lg:px-8 pb-5 lg:pb-6">
+                                <p class="text-slate-300 text-[15px] lg:text-[16px] leading-[1.6] tracking-tight font-medium"><%= p.description %></p>
                             </div>
 
                             <% if (p.image_url) { %>
                                 <div class="px-4">
-                                    <div class="rounded-[2rem] overflow-hidden bg-black/40 border border-white/5">
+                                    <div class="rounded-[1.5rem] lg:rounded-[2rem] overflow-hidden bg-black/40 border border-white/5">
                                         <% if (p.media_type === 'video') { %>
                                             <video controls class="w-full max-h-[500px] object-cover">
                                                 <source src="<%= p.image_url %>" type="video/mp4">
@@ -181,15 +215,15 @@
                                 </div>
                             <% } %>
 
-                            <div class="p-8 border-t border-white/5 mt-4 bg-white/[0.01]">
-                                <div class="flex gap-10 mb-6">
+                            <div class="p-6 lg:p-8 border-t border-white/5 mt-4 bg-white/[0.01]">
+                                <div class="flex gap-8 lg:gap-10 mb-6">
                                     <form action="/event/<%= p.id %>/like" method="POST">
-                                        <button type="submit" class="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest transition-all <%= p.liked_by_me ? 'text-red-500' : 'text-slate-500 hover:text-red-400' %>">
+                                        <button type="submit" class="flex items-center gap-3 text-[9px] lg:text-[10px] font-black uppercase tracking-widest transition-all <%= p.liked_by_me ? 'text-red-500' : 'text-slate-500 hover:text-red-400' %>">
                                             <i class="<%= p.liked_by_me ? 'fas' : 'far' %> fa-heart text-lg"></i>
                                             <span><%= p.likes_count || 0 %> Vibes</span>
                                         </button>
                                     </form>
-                                    <button onclick="window.location.href='/event/<%= p.id %>'" class="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-blue-400 transition-all">
+                                    <button onclick="window.location.href='/event/<%= p.id %>'" class="flex items-center gap-3 text-[9px] lg:text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-blue-400 transition-all">
                                         <i class="far fa-comment-dots text-lg"></i>
                                         <span><%= (p.comments_list) ? p.comments_list.length : 0 %> Comments</span>
                                     </button>
@@ -210,12 +244,9 @@
                                         <% p.comments_list.slice(-3).forEach(comment => { %>
                                             <div class="flex justify-between items-start group/comment">
                                                 <div class="text-[12px] leading-relaxed">
-                                                    <span class="font-black text-blue-500 uppercase tracking-tighter mr-2">
-                                                        <%= comment.author.split('@')[0] %>
-                                                    </span>
+                                                    <span class="font-black text-blue-500 uppercase tracking-tighter mr-2"><%= comment.author.split('@')[0] %></span>
                                                     <span class="text-slate-400 font-medium"><%= comment.content %></span>
                                                 </div>
-                                                
                                                 <% if (locals.user && (comment.user_id === user.id || user.role === 'admin')) { %>
                                                     <form action="/comment/<%= comment.id %>/delete" method="POST" class="opacity-0 group-hover/comment:opacity-100 transition-opacity">
                                                         <button type="submit" class="text-slate-700 hover:text-red-500 text-[10px]">
@@ -225,12 +256,6 @@
                                                 <% } %>
                                             </div>
                                         <% }) %>
-                                        
-                                        <% if (p.comments_list.length > 3) { %>
-                                            <a href="/event/<%= p.id %>" class="block text-[9px] font-black uppercase tracking-widest text-slate-600 hover:text-blue-500 mt-2 transition-colors">
-                                                View all <%= p.comments_list.length %> comments
-                                            </a>
-                                        <% } %>
                                     </div>
                                 <% } %>
                             </div>
@@ -241,14 +266,34 @@
         </div>
 
         <aside class="hidden lg:block lg:col-span-4 space-y-8">
+            <div class="bg-slate-900/40 border border-white/5 rounded-[3rem] p-8 backdrop-blur-md">
+                <h3 class="text-[10px] font-black text-blue-500 uppercase tracking-[0.4em] mb-6">Village Kinship</h3>
+                <div class="space-y-5">
+                    <% if (locals.friends && friends.length > 0) { %>
+                        <% friends.forEach(f => { %>
+                            <div class="flex items-center justify-between group cursor-pointer">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-9 h-9 rounded-full bg-slate-800 overflow-hidden border border-white/10">
+                                        <img src="<%= f.profile_pic || '/default-avatar.png' %>" class="w-full h-full object-cover">
+                                    </div>
+                                    <p class="text-[11px] font-bold text-slate-300 group-hover:text-blue-400 transition-colors">@<%= f.username %></p>
+                                </div>
+                                <span class="w-2 h-2 rounded-full bg-green-500/50"></span>
+                            </div>
+                        <% }) %>
+                    <% } else { %>
+                        <p class="text-[10px] text-slate-600 font-black uppercase italic tracking-widest text-center">Seek kin to unite</p>
+                    <% } %>
+                </div>
+            </div>
+
             <div class="bg-slate-900/40 border border-white/5 rounded-[3rem] p-8 sticky top-28 backdrop-blur-md">
                 <div class="flex items-center justify-between mb-8">
                     <h3 class="text-[10px] font-black text-blue-500 uppercase tracking-[0.4em]">Hot Whispers</h3>
                     <div class="h-1 w-8 bg-blue-600/20 rounded-full"></div>
                 </div>
-                
                 <% if (locals.trending && trending.length > 0) { %>
-                    <div class="space-y-10">
+                    <div class="space-y-8">
                         <% trending.forEach((t, i) => { %>
                             <div class="group cursor-pointer relative" onclick="window.location.href='/event/<%= t.id %>'">
                                 <span class="absolute -left-6 top-0 text-[32px] font-black text-white/5 group-hover:text-blue-600/20 transition-colors">0<%= i+1 %></span>
@@ -261,27 +306,21 @@
                             </div>
                         <% }) %>
                     </div>
-                <% } else { %>
-                    <p class="text-[10px] text-slate-600 font-black uppercase italic tracking-widest text-center py-10">The winds are quiet...</p>
                 <% } %>
-            </div>
-            
-            <div class="p-8 text-center">
-                <p class="text-[9px] text-slate-700 font-black uppercase tracking-[0.5em]">Apugo Village © 2025</p>
             </div>
         </aside>
     </main>
 
-    <div class="lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-2xl border border-white/10 px-10 py-5 rounded-full flex gap-12 shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-50">
+    <div class="lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-2xl border border-white/10 px-8 py-4 rounded-full flex gap-10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-50">
         <a href="/feed" class="text-blue-500"><i class="fas fa-home text-lg"></i></a>
-        <a href="/discover" class="text-slate-500 hover:text-white transition-all"><i class="fas fa-compass text-lg"></i></a>
-        <a href="/notifications" class="text-slate-500 hover:text-white transition-all relative">
+        <a href="/discover" class="text-slate-500"><i class="fas fa-compass text-lg"></i></a>
+        <a href="/notifications" class="text-slate-500 relative">
             <i class="fas fa-bell text-lg"></i>
             <% if (locals.unreadCount && unreadCount > 0) { %>
                 <span class="absolute -top-1 -right-1 w-2 h-2 bg-blue-600 rounded-full"></span>
             <% } %>
         </a>
-        <a href="/profile" class="text-slate-500 hover:text-white transition-all"><i class="fas fa-user text-lg"></i></a>
+        <a href="/profile" class="text-slate-500"><i class="fas fa-user text-lg"></i></a>
     </div>
 
     <script>

@@ -437,20 +437,47 @@ app.post("/comment/:id/delete", isAuth, async (req, res) => {
 /* ---------------- CHAT SYSTEM ---------------- */
 app.get("/messages", isAuth, async (req, res) => {
     try {
+        // This query gets friends + their profile pic + if they were active in the last 5 mins + unread count
         const friends = await db.query(`
-            SELECT u.id, u.email FROM users u
+            SELECT 
+                u.id, 
+                u.email, 
+                u.profile_pic,
+                (u.last_active > NOW() - INTERVAL '5 minutes') as is_online,
+                (SELECT COUNT(*) FROM messages WHERE sender_id = u.id AND receiver_id = $1 AND is_read = false) as unread_count
+            FROM users u
             JOIN friendships f ON (f.sender_id = u.id OR f.receiver_id = u.id)
-            WHERE (f.sender_id = $1 OR f.receiver_id = $1) AND u.id != $1 AND f.status = 'accepted'`, [req.user.id]);
-        res.render("messages", { friends: friends.rows, targetUser: req.query.userId || null });
-    } catch (err) { res.redirect("/feed"); }
+            WHERE (f.sender_id = $1 OR f.receiver_id = $1) 
+              AND u.id != $1 
+              AND f.status = 'accepted'
+            ORDER BY unread_count DESC, u.last_active DESC`, [req.user.id]);
+
+        res.render("messages", { 
+            friends: friends.rows, 
+            user: req.user 
+        });
+    } catch (err) { 
+        console.error(err);
+        res.redirect("/feed"); 
+    }
 });
 
 app.get("/api/chat/:friendId", isAuth, async (req, res) => {
     try {
-        await db.query("UPDATE messages SET is_read = true WHERE sender_id = $1 AND receiver_id = $2 AND is_read = false", [req.params.friendId, req.user.id]);
-        const result = await db.query("SELECT * FROM messages WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1) ORDER BY created_at ASC", [req.user.id, req.params.friendId]);
+        // Mark messages as read when you open the chat
+        await db.query(
+            "UPDATE messages SET is_read = true WHERE sender_id = $1 AND receiver_id = $2 AND is_read = false", 
+            [req.params.friendId, req.user.id]
+        );
+
+        const result = await db.query(
+            "SELECT id, sender_id, content, created_at, is_read FROM messages WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1) ORDER BY created_at ASC", 
+            [req.user.id, req.params.friendId]
+        );
         res.json(result.rows);
-    } catch (err) { res.status(500).json({ error: "Sync failed" }); }
+    } catch (err) { 
+        res.status(500).json({ error: "Sync failed" }); 
+    }
 });
 
 app.post("/api/chat/send", isAuth, async (req, res) => {
@@ -461,9 +488,16 @@ app.post("/api/chat/send", isAuth, async (req, res) => {
     } catch (err) { res.status(500).json({ error: "Send failed" }); }
 });
 
-app.post("/api/chat/delete/:friendId", isAuth, async (req, res) => {
-    await db.query("DELETE FROM messages WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)", [req.user.id, req.params.friendId]);
-    res.json({ success: true });
+app.delete("/api/chat/clear/:friendId", isAuth, async (req, res) => {
+    try {
+        await db.query(
+            "DELETE FROM messages WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)", 
+            [req.user.id, req.params.friendId]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: "Burn failed" });
+    }
 });
 
 /* ---------------- FRIENDSHIP SYSTEM ---------------- */

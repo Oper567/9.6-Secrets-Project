@@ -9,17 +9,19 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap');
 
+        /* Use dynamic viewport height to prevent the address bar issue */
         body { 
             background-color: #020617; 
-            height: 100vh; 
+            height: 100dvh; 
             width: 100vw;
             display: flex; 
             flex-direction: column; 
             font-family: 'Plus Jakarta Sans', sans-serif; 
             overflow: hidden; 
+            position: fixed; /* Prevents unwanted bounce/scroll on iOS */
         }
         
-        /* Layout Transitions */
+        /* Pane Container height must be strictly the remaining space */
         .pane-container { 
             position: relative; 
             display: flex; 
@@ -35,66 +37,77 @@
 
         @media (min-width: 769px) {
             .pane-container { width: 100%; }
-            .friends-pane { width: 380px; border-right: 1px solid rgba(255,255,255,0.05); }
+            .friends-pane { width: 350px; border-right: 1px solid rgba(255,255,255,0.05); }
             .chat-pane { flex: 1; }
         }
 
-        /* Message Bubbles */
+        /* Message Bubbles - Fixed height scrolling */
         .chat-container { 
             flex: 1; 
             overflow-y: auto; 
             display: flex; 
             flex-direction: column; 
             scrollbar-width: none;
-            padding: 1.5rem;
+            padding: 1rem;
+            /* Extra bottom padding so messages aren't hidden by the input dock */
+            padding-bottom: 2rem;
         }
         .chat-container::-webkit-scrollbar { display: none; }
 
         .bubble { 
-            max-width: 80%; 
-            padding: 12px 16px; 
-            font-size: 14px; 
-            margin-bottom: 8px; 
-            line-height: 1.5; 
+            max-width: 85%; 
+            padding: 10px 14px; 
+            font-size: 13px; 
+            margin-bottom: 6px; 
+            line-height: 1.4; 
             position: relative; 
             word-wrap: break-word;
             animation: bubbleIn 0.2s ease-out;
         }
 
         @keyframes bubbleIn {
-            from { opacity: 0; transform: translateY(10px) scale(0.95); }
+            from { opacity: 0; transform: translateY(5px) scale(0.98); }
             to { opacity: 1; transform: translateY(0) scale(1); }
         }
 
         .bubble-me { 
             background: linear-gradient(135deg, #2563eb, #1d4ed8);
             color: white; 
-            border-radius: 20px 20px 4px 20px; 
+            border-radius: 18px 18px 4px 18px; 
             align-self: flex-end;
-            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.2);
         }
 
         .bubble-them { 
             background: #1e293b; 
             color: #e2e8f0; 
-            border-radius: 20px 20px 20px 4px; 
+            border-radius: 18px 18px 18px 4px; 
             border: 1px solid rgba(255,255,255,0.05);
             align-self: flex-start;
         }
         
-        .friend-item.active { background-color: rgba(37, 99, 235, 0.08); border-right: 3px solid #3b82f6; }
-        .glass-nav { background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .friend-item.active { background-color: rgba(37, 99, 235, 0.1); border-right: 3px solid #3b82f6; }
+        .glass-nav { 
+            background: rgba(15, 23, 42, 0.95); 
+            backdrop-filter: blur(12px); 
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            height: 60px; /* Fixed height for consistency */
+        }
         
-        .typing-dot { width: 4px; height: 4px; background: #3b82f6; border-radius: 50%; animation: blink 1.4s infinite; }
+        /* Compact Input for mobile */
+        #inputDock {
+            padding-bottom: env(safe-area-inset-bottom, 1rem); /* iPhone notch support */
+        }
+
+        .typing-dot { width: 3px; height: 3px; background: #3b82f6; border-radius: 50%; animation: blink 1.4s infinite; }
         @keyframes blink { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
     </style>
 </head>
 
 <body class="text-slate-200">
 
-<nav class="glass-nav p-3 shrink-0">
-    <div class="max-w-7xl mx-auto flex items-center gap-3">
-        <button id="mobileBack" class="hidden text-slate-400 p-2 hover:text-white transition" onclick="closeChat()">
+<nav class="glass-nav px-4 shrink-0 flex items-center">
+    <div class="w-full flex items-center gap-3">
+        <button id="mobileBack" class="hidden text-slate-400 py-2 pr-2 hover:text-white transition" onclick="closeChat()">
             <i class="fas fa-chevron-left text-lg"></i>
         </button>
         
@@ -102,105 +115,84 @@
             <i class="fas fa-house text-lg"></i>
         </a>
 
-        <div class="flex-1 min-w-0 flex items-center gap-3">
-            <div id="activeChatAvatar" class="hidden w-10 h-10 rounded-full overflow-hidden border border-slate-700 bg-slate-800 flex items-center justify-center text-xs font-black text-blue-500 uppercase">
-                </div>
-            <div>
-                <h1 id="chatHeaderTitle" class="font-black text-blue-500 italic text-sm uppercase tracking-tighter">Whispers</h1>
-                <p id="chatStatus" class="text-[9px] text-slate-500 uppercase font-black truncate tracking-[0.2em]">Village Square</p>
+        <div class="flex-1 min-w-0 flex items-center gap-2">
+            <div id="activeChatAvatar" class="hidden w-8 h-8 rounded-full overflow-hidden border border-slate-700 bg-slate-800 flex items-center justify-center text-[10px] font-black text-blue-500 uppercase">
+            </div>
+            <div class="min-w-0">
+                <h1 id="chatHeaderTitle" class="font-black text-blue-500 italic text-xs uppercase tracking-tighter truncate">Whispers</h1>
+                <p id="chatStatus" class="text-[8px] text-slate-500 uppercase font-black truncate tracking-[0.15em]">Village Square</p>
             </div>
         </div>
 
-        <div id="chatActions" class="hidden relative group">
-            <button class="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-white transition">
-                <i class="fas fa-ellipsis-v"></i>
+        <div id="chatActions" class="hidden flex items-center">
+            <button onclick="clearChat()" class="text-slate-600 hover:text-red-500 p-2 transition">
+                <i class="fas fa-fire-alt text-sm"></i>
             </button>
-            <div class="absolute right-0 mt-2 w-48 bg-slate-900 border border-white/10 rounded-2xl hidden group-hover:block shadow-2xl z-50 overflow-hidden">
-                <button onclick="clearChat()" class="w-full text-left px-5 py-4 text-[10px] font-black uppercase text-red-500 hover:bg-red-500/10 transition">
-                    <i class="fas fa-fire-alt mr-2"></i> Burn History
-                </button>
-            </div>
         </div>
     </div>
 </nav>
 
-<div class="flex-1 overflow-hidden">
+<div class="flex-1 overflow-hidden relative">
     <div id="paneContainer" class="pane-container">
         
-        <aside class="friends-pane bg-slate-950 flex flex-col">
-            <div class="p-5">
+        <aside class="friends-pane bg-slate-950 flex flex-col h-full">
+            <div class="p-4">
                 <div class="relative">
                     <input type="text" id="globalSearch" placeholder="Find a soul..." 
-                        class="w-full bg-slate-900 border border-white/5 rounded-2xl py-3 pl-11 pr-4 text-xs outline-none text-white focus:border-blue-600 focus:bg-slate-900/50 transition-all shadow-inner">
-                    <i class="fas fa-search absolute left-4 top-4 text-slate-600 text-xs"></i>
+                        class="w-full bg-slate-900 border border-white/5 rounded-xl py-2.5 pl-10 pr-4 text-[11px] outline-none text-white focus:border-blue-600 focus:bg-slate-900/50 transition-all">
+                    <i class="fas fa-search absolute left-3.5 top-3 text-slate-600 text-[10px]"></i>
                 </div>
             </div>
             
-            <div class="flex-1 overflow-y-auto px-2 space-y-1">
+            <div class="flex-1 overflow-y-auto px-2 pb-20 md:pb-4">
                 <% if (friends && friends.length > 0) { %>
                     <% friends.forEach(f => { %>
-                        <div id="friend-<%= f.id %>" class="friend-item p-4 flex items-center gap-4 cursor-pointer rounded-2xl hover:bg-white/5 transition-all group" 
+                        <div id="friend-<%= f.id %>" class="friend-item p-3 flex items-center gap-3 cursor-pointer rounded-xl hover:bg-white/5 transition-all group" 
                              onclick="selectFriend('<%= f.id %>', `<%= f.email.split('@')[0] %>`, `<%= f.profile_pic %>`)">
                             
-                            <div class="relative shrink-0 w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center border border-slate-700 overflow-hidden shadow-lg">
+                            <div class="relative shrink-0 w-11 h-11 bg-slate-800 rounded-full flex items-center justify-center border border-slate-700 overflow-hidden">
                                 <% if (f.profile_pic) { %>
                                     <img src="<%= f.profile_pic %>" class="w-full h-full object-cover">
                                 <% } else { %>
-                                    <span class="font-black text-blue-500 text-sm"><%= f.email[0].toUpperCase() %></span>
+                                    <span class="font-black text-blue-500 text-xs"><%= f.email[0].toUpperCase() %></span>
                                 <% } %>
-                                <span class="absolute bottom-0 right-0 w-3.5 h-3.5 border-4 border-slate-950 rounded-full <%= f.is_online ? 'bg-green-500' : 'bg-slate-600' %>"></span>
+                                <span class="absolute bottom-0 right-0 w-3 h-3 border-[3px] border-slate-950 rounded-full <%= f.is_online ? 'bg-green-500' : 'bg-slate-600' %>"></span>
                             </div>
 
                             <div class="flex-1 min-w-0">
-                                <div class="flex justify-between items-center mb-1">
-                                    <span class="text-xs font-black block truncate text-slate-200 uppercase tracking-tight group-hover:text-blue-400 transition-colors">@<%= f.email.split('@')[0] %></span>
+                                <div class="flex justify-between items-center mb-0.5">
+                                    <span class="text-[11px] font-black block truncate text-slate-200 uppercase tracking-tight group-hover:text-blue-400">@<%= f.email.split('@')[0] %></span>
                                     <% if (f.unread_count > 0) { %>
-                                        <span class="bg-blue-600 text-[9px] font-black px-2 py-0.5 rounded-full shadow-lg shadow-blue-600/30 animate-pulse"><%= f.unread_count %></span>
+                                        <span class="bg-blue-600 text-[8px] font-black px-1.5 py-0.5 rounded-full"><%= f.unread_count %></span>
                                     <% } %>
                                 </div>
-                                <p class="text-[10px] <%= f.unread_count > 0 ? 'text-blue-400 font-bold' : 'text-slate-600' %> truncate italic uppercase tracking-tighter">
-                                    <%= f.unread_count > 0 ? 'A new whisper awaits...' : 'Silent' %>
+                                <p class="text-[9px] <%= f.unread_count > 0 ? 'text-blue-400 font-bold' : 'text-slate-600' %> truncate italic uppercase">
+                                    <%= f.unread_count > 0 ? 'Whispering...' : 'Silent' %>
                                 </p>
                             </div>
                         </div>
                     <% }) %>
-                <% } else { %>
-                    <div class="py-20 text-center opacity-30">
-                        <i class="fas fa-comment-slash text-3xl mb-4"></i>
-                        <p class="text-[10px] font-black uppercase tracking-[0.3em]">No connections yet</p>
-                    </div>
                 <% } %>
             </div>
         </aside>
 
-        <main class="chat-pane flex flex-col bg-slate-950 relative">
+        <main class="chat-pane flex flex-col bg-slate-950 h-full overflow-hidden">
             <div id="chatWindow" class="chat-container">
-                <div class="my-auto text-center space-y-4">
-                    <div class="w-24 h-24 bg-slate-900/50 rounded-full flex items-center justify-center mx-auto border border-white/5 shadow-2xl">
-                        <i class="fas fa-feather-alt text-slate-800 text-3xl"></i>
-                    </div>
-                    <div class="space-y-1">
-                        <h2 class="font-black text-slate-600 uppercase text-[11px] tracking-[0.4em]">Ancient Grounds</h2>
-                        <p class="text-slate-800 text-[9px] font-medium uppercase tracking-widest">Select a soul to start whispering</p>
-                    </div>
+                <div class="my-auto text-center space-y-3 opacity-20">
+                    <i class="fas fa-feather-alt text-4xl"></i>
+                    <p class="text-[10px] font-black uppercase tracking-[0.3em]">Ancient Grounds</p>
                 </div>
             </div>
 
-            <div id="inputDock" class="hidden p-4 bg-slate-900/80 backdrop-blur-xl border-t border-white/5">
+            <div id="inputDock" class="hidden p-3 bg-slate-900/90 backdrop-blur-xl border-t border-white/5 shrink-0">
                 <% if (user.is_verified) { %>
-                    <form id="chatForm" class="flex gap-3 items-center max-w-5xl mx-auto">
-                        <div class="flex-1 relative">
-                            <input id="msgInput" type="text" autocomplete="off" placeholder="Write a whisper..." 
-                                class="w-full bg-slate-950 border border-slate-800 rounded-3xl px-6 py-4 text-sm outline-none text-white focus:border-blue-600/50 transition-all shadow-2xl" />
-                        </div>
-                        <button type="submit" class="bg-blue-600 w-12 h-12 rounded-full text-white flex items-center justify-center shadow-xl shadow-blue-600/20 active:scale-90 transition-all hover:bg-blue-500">
-                            <i class="fas fa-paper-plane text-xs"></i>
+                    <form id="chatForm" class="flex gap-2 items-center">
+                        <input id="msgInput" type="text" autocomplete="off" placeholder="Write a whisper..." 
+                            class="flex-1 bg-slate-950 border border-slate-800 rounded-2xl px-5 py-3 text-sm outline-none text-white focus:border-blue-600/50 transition-all" />
+                        <button type="submit" class="bg-blue-600 w-11 h-11 rounded-2xl text-white flex items-center justify-center shadow-lg active:scale-90 transition-all">
+                            <i class="fas fa-paper-plane text-[10px]"></i>
                         </button>
                     </form>
-                <% } else { %>
-                    <div class="text-center p-2 text-[10px] text-red-500 font-black uppercase tracking-widest bg-red-500/5 rounded-2xl border border-red-500/10">
-                        <i class="fas fa-lock mr-2"></i> Verify email to unlock whispers
-                    </div>
                 <% } %>
             </div>
         </main>
@@ -210,32 +202,26 @@
 <script>
     const currentUserId = '<%= user.id %>';
     let currentFriendId = null;
-    let lastMessageId = null;
 
-    async function selectFriend(id, name, pic) {
+    function selectFriend(id, name, pic) {
         currentFriendId = id;
-        
-        // UI Selection Feedback
         document.querySelectorAll('.friend-item').forEach(el => el.classList.remove('active'));
         document.getElementById(`friend-${id}`).classList.add('active');
 
-        // Pane Transitions
         document.getElementById('paneContainer').classList.add('show-chat');
         document.getElementById('mobileBack').classList.remove('hidden');
         document.getElementById('navHomeLink').classList.add('hidden');
         document.getElementById('inputDock').classList.remove('hidden');
         document.getElementById('chatActions').classList.remove('hidden');
         
-        // Update Header Context
         const avatarDiv = document.getElementById('activeChatAvatar');
         avatarDiv.classList.remove('hidden');
-        avatarDiv.innerHTML = pic && pic !== 'null' && pic !== '' ? `<img src="${pic}" class="w-full h-full object-cover">` : `<span class="mt-0.5">${name[0].toUpperCase()}</span>`;
+        avatarDiv.innerHTML = pic && pic !== 'null' ? `<img src="${pic}" class="w-full h-full object-cover">` : `<span>${name[0].toUpperCase()}</span>`;
         
         document.getElementById('chatHeaderTitle').innerText = `@${name}`;
-        document.getElementById('chatHeaderTitle').classList.add('text-white');
-        document.getElementById('chatStatus').innerHTML = `<span class="flex items-center gap-1.5"><span class="typing-dot"></span> Whispering Now</span>`;
+        document.getElementById('chatStatus').innerHTML = `<span class="flex items-center gap-1"><span class="typing-dot"></span> Whispering</span>`;
         
-        await fetchMessages(true);
+        fetchMessages(true);
     }
 
     function closeChat() {
@@ -244,7 +230,6 @@
         document.getElementById('navHomeLink').classList.remove('hidden');
         document.getElementById('activeChatAvatar').classList.add('hidden');
         document.getElementById('chatHeaderTitle').innerText = 'Whispers';
-        document.getElementById('chatHeaderTitle').classList.remove('text-white');
         document.getElementById('chatStatus').innerText = 'Village Square';
         currentFriendId = null;
     }
@@ -256,42 +241,22 @@
             const messages = await res.json();
             const chatWindow = document.getElementById('chatWindow');
             
-            const latestM = messages[messages.length - 1];
-            if (!force && latestM && latestM.id === lastMessageId && latestM.is_read) return;
-            
             chatWindow.innerHTML = '';
             messages.forEach(m => {
                 const isMe = m.sender_id == currentUserId;
                 const div = document.createElement('div');
                 div.className = `bubble ${isMe ? 'bubble-me' : 'bubble-them'}`;
-                
-                let statusIcon = '';
-                if (isMe) {
-                    statusIcon = m.is_read 
-                        ? '<i class="fas fa-check-double text-blue-200 ml-1"></i>' 
-                        : '<i class="fas fa-check opacity-30 ml-1"></i>';
-                }
-
                 div.innerHTML = `
-                    <div class="font-medium">${m.content}</div>
-                    <div class="text-[7px] mt-1.5 opacity-60 flex items-center justify-end font-black uppercase tracking-tighter">
+                    <div>${m.content}</div>
+                    <div class="text-[7px] mt-1 opacity-50 flex items-center justify-end font-black uppercase">
                         ${new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                        ${statusIcon}
+                        ${isMe ? (m.is_read ? '<i class="fas fa-check-double ml-1 text-blue-300"></i>' : '<i class="fas fa-check ml-1"></i>') : ''}
                     </div>
                 `;
                 chatWindow.appendChild(div);
-                lastMessageId = m.id;
             });
             chatWindow.scrollTop = chatWindow.scrollHeight;
-        } catch (e) { console.error("Whisper sync error"); }
-    }
-
-    async function clearChat() {
-        if (!currentFriendId || !confirm("Burn all whispers in this circle?")) return;
-        try {
-            await fetch(`/api/chat/clear/${currentFriendId}`, { method: 'DELETE' });
-            fetchMessages(true);
-        } catch (e) { alert("Failed to burn history"); }
+        } catch (e) { console.error("Sync error"); }
     }
 
     document.getElementById('chatForm')?.addEventListener('submit', async e => {
@@ -299,17 +264,16 @@
         const input = document.getElementById('msgInput');
         const content = input.value.trim();
         if (!content || !currentFriendId) return;
-        
         input.value = '';
         await fetch('/api/chat/send', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ receiverId: currentFriendId, content })
         });
-        fetchMessages(true);
+        fetchMessages();
     });
 
-    setInterval(() => { if (currentFriendId) fetchMessages(); }, 4000);
+    setInterval(() => { if (currentFriendId) fetchMessages(); }, 5000);
 </script>
 </body>
 </html>

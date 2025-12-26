@@ -20,185 +20,148 @@
             -webkit-backdrop-filter: blur(20px);
         }
         
-        /* Smooth Entrance */
         .profile-card { 
             animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1); 
         }
         @keyframes slideUp {
-            from { opacity: 0; transform: translateY(30px); }
+            from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
-        .post-grid-item { 
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); 
-        }
-        .post-grid-item:hover { transform: scale(0.98); }
-
+        .post-grid-item { transition: all 0.3s ease; }
         .hover-overlay { 
-            background: linear-gradient(to top, rgba(2, 6, 23, 0.9), transparent); 
+            background: linear-gradient(to top, rgba(2, 6, 23, 0.95), transparent); 
         }
 
-        /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 0px; }
-        
-        #nav-dropdown:not(.hidden) { 
-            display: flex !important;
-            animation: fadeIn 0.2s ease-out;
-        }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
 </head>
-<body class="text-slate-200 pb-32">
+<body class="text-slate-200 pb-24 md:pb-32">
 
     <nav class="glass-nav border-b border-white/5 sticky top-0 z-50">
         <div class="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
             <h1 class="text-xl font-black text-blue-500 italic tracking-tighter cursor-pointer" onclick="window.location.href='/feed'">APUGO</h1>
-            
             <div class="flex items-center gap-2">
-                <a href="/notifications" class="relative p-2.5 text-slate-400 hover:text-white transition">
+                <a href="/notifications" class="relative p-2 text-slate-400">
                     <i class="fas fa-bell"></i>
                     <% if (locals.unreadCount && unreadCount > 0) { %>
-                        <span class="absolute top-2 right-2 w-2 h-2 bg-blue-500 rounded-full border-2 border-slate-950 animate-pulse shadow-[0_0_10px_#3b82f6]"></span>
+                        <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-blue-500 rounded-full border-2 border-slate-950"></span>
                     <% } %>
                 </a>
-                <button id="menu-btn" class="md:hidden p-2 text-slate-400">
-                    <i class="fas fa-bars text-lg"></i>
-                </button>
-                <a href="/logout" class="hidden md:block text-[9px] font-black text-slate-500 uppercase border border-slate-800 px-4 py-2 rounded-full hover:bg-red-950/30 hover:text-red-500 hover:border-red-900/50 transition-all">Exit Village</a>
+                <a href="/logout" class="text-[8px] font-black text-slate-500 uppercase border border-slate-800 px-3 py-1.5 rounded-full hover:text-red-500 transition-all">Exit</a>
             </div>
-        </div>
-
-        <div id="nav-dropdown" class="hidden flex-col items-center gap-1 p-4 bg-slate-950 border-b border-white/5 shadow-2xl">
-            <a href="/feed" class="w-full text-center py-4 text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 hover:text-blue-500">Village Square</a>
-            <a href="/discover" class="w-full text-center py-4 text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 hover:text-blue-500">The Wilds</a>
-            <a href="/messages" class="w-full text-center py-4 text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 hover:text-blue-500">Whispers</a>
-            <a href="/logout" class="w-full text-center py-4 text-[10px] font-black uppercase tracking-[0.3em] text-red-500 bg-red-500/5 mt-2 rounded-2xl">Logout</a>
         </div>
     </nav>
 
-    <div class="max-w-4xl mx-auto p-6 mt-4">
+    <div class="max-w-4xl mx-auto px-4 md:px-6 mt-4 lg:mt-8">
         
-        <div class="profile-card bg-slate-900/30 border border-white/5 p-8 md:p-12 rounded-[3.5rem] text-center mb-12 relative overflow-hidden shadow-2xl">
-            <div class="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.08),transparent)]"></div>
+        <div class="profile-card bg-slate-900/30 border border-white/5 p-6 md:p-12 rounded-[2.5rem] md:rounded-[3.5rem] text-center mb-8 relative overflow-hidden shadow-2xl">
+            <div class="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.06),transparent)]"></div>
             
             <div class="relative">
-                <div class="w-28 h-28 bg-gradient-to-tr from-blue-600 to-indigo-700 rounded-full mx-auto mb-6 flex items-center justify-center text-4xl font-black shadow-2xl border-4 border-slate-950 uppercase ring-8 ring-white/5">
+                <div class="w-20 h-20 md:w-28 md:h-28 bg-gradient-to-tr from-blue-600 to-indigo-700 rounded-full mx-auto mb-4 md:mb-6 flex items-center justify-center text-3xl md:text-4xl font-black shadow-2xl border-4 border-slate-950 uppercase ring-4 md:ring-8 ring-white/5">
                     <%= user.email ? user.email[0] : 'V' %>
                 </div>
 
                 <div class="space-y-1">
-                    <h1 class="text-3xl font-black text-white tracking-tighter">@<%= user.email ? user.email.split('@')[0] : 'Villager' %></h1>
+                    <h1 class="text-xl md:text-3xl font-black text-white tracking-tighter">@<%= user.email ? user.email.split('@')[0] : 'Villager' %></h1>
                     <div class="flex items-center justify-center gap-2">
-                        <span class="px-3 py-1 bg-blue-500/10 rounded-full text-blue-500 text-[9px] font-black uppercase tracking-widest border border-blue-500/20">
+                        <span class="px-2.5 py-0.5 bg-blue-500/10 rounded-full text-blue-500 text-[8px] md:text-[9px] font-black uppercase tracking-widest border border-blue-500/20">
                             <%= user.role || 'Villager' %>
                         </span>
                         <% if (user.is_verified) { %>
-                            <i class="fas fa-check-circle text-blue-500 text-sm"></i>
+                            <i class="fas fa-check-circle text-blue-500 text-xs"></i>
                         <% } %>
                     </div>
                 </div>
                 
-                <div class="flex justify-center gap-8 md:gap-16 mt-12 bg-slate-950/40 p-6 rounded-3xl border border-white/5 max-w-md mx-auto">
-                    <div class="text-center group cursor-default">
-                        <p class="text-2xl font-black text-white group-hover:text-blue-500 transition-colors"><%= (typeof posts !== 'undefined') ? posts.length : 0 %></p>
-                        <p class="text-[8px] text-slate-500 uppercase font-black tracking-[0.2em] mt-1">Secrets</p>
+                <div class="flex justify-center gap-6 md:gap-16 mt-8 md:mt-12 bg-slate-950/40 p-4 md:p-6 rounded-3xl border border-white/5 max-w-sm md:max-w-md mx-auto">
+                    <div class="text-center">
+                        <p class="text-lg md:text-2xl font-black text-white"><%= (typeof posts !== 'undefined') ? posts.length : 0 %></p>
+                        <p class="text-[7px] md:text-[8px] text-slate-500 uppercase font-black tracking-widest mt-1">Secrets</p>
                     </div>
                     <div class="w-[1px] bg-white/5"></div>
-                    <div class="text-center group cursor-default">
-                        <p class="text-2xl font-black text-white group-hover:text-blue-500 transition-colors"><%= (typeof friendCount !== 'undefined') ? friendCount : 0 %></p>
-                        <p class="text-[8px] text-slate-500 uppercase font-black tracking-[0.2em] mt-1">Kinship</p>
+                    <div class="text-center">
+                        <p class="text-lg md:text-2xl font-black text-white"><%= (typeof friendCount !== 'undefined') ? friendCount : 0 %></p>
+                        <p class="text-[7px] md:text-[8px] text-slate-500 uppercase font-black tracking-widest mt-1">Kinship</p>
                     </div>
                     <div class="w-[1px] bg-white/5"></div>
-                    <div class="text-center group cursor-default">
-                        <p class="text-2xl font-black text-white group-hover:text-blue-500 transition-colors">LVL 1</p>
-                        <p class="text-[8px] text-slate-500 uppercase font-black tracking-[0.2em] mt-1">Spirit</p>
+                    <div class="text-center">
+                        <p class="text-lg md:text-2xl font-black text-white">LVL 1</p>
+                        <p class="text-[7px] md:text-[8px] text-slate-500 uppercase font-black tracking-widest mt-1">Spirit</p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="flex items-center justify-between mb-6 px-4">
-            <h3 class="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">Your Echoes</h3>
-            <div class="h-[1px] flex-1 bg-white/5 mx-6"></div>
-            <i class="fas fa-th-large text-slate-700 text-xs"></i>
+        <div class="flex items-center justify-between mb-4 px-2">
+            <h3 class="text-[9px] font-black uppercase tracking-[0.3em] text-slate-500">Your Echoes</h3>
+            <div class="h-[1px] flex-1 bg-white/5 mx-4"></div>
+            <i class="fas fa-th-large text-slate-700 text-[10px]"></i>
         </div>
 
-        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-4">
             <% if (typeof posts !== 'undefined' && posts.length > 0) { %>
                 <% posts.forEach(post => { %>
-                    <div class="post-grid-item aspect-square bg-slate-900/50 rounded-[2.5rem] overflow-hidden border border-white/5 group relative">
+                    <div class="post-grid-item aspect-square bg-slate-900/50 rounded-3xl md:rounded-[2.5rem] overflow-hidden border border-white/5 group relative">
                         <% if (post.image_url) { %>
                             <% if (post.media_type === 'video') { %>
-                                <video src="<%= post.image_url %>" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" muted loop playsinline></video>
-                                <div class="absolute top-4 right-4 w-6 h-6 bg-black/40 backdrop-blur-md rounded-full flex items-center justify-center text-[8px] text-white/60">
+                                <video src="<%= post.image_url %>" class="w-full h-full object-cover opacity-80" muted loop playsinline></video>
+                                <div class="absolute top-2 right-2 w-5 h-5 bg-black/40 backdrop-blur-md rounded-full flex items-center justify-center text-[7px] text-white/60">
                                     <i class="fas fa-play"></i>
                                 </div>
                             <% } else { %>
-                                <img src="<%= post.image_url %>" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" loading="lazy">
+                                <img src="<%= post.image_url %>" class="w-full h-full object-cover opacity-80" loading="lazy">
                             <% } %>
                         <% } else { %>
-                            <div class="w-full h-full flex items-center justify-center p-6 text-center bg-slate-950/20">
-                                <p class="text-[10px] text-slate-500 italic font-medium leading-relaxed">"<%= post.description %>"</p>
+                            <div class="w-full h-full flex items-center justify-center p-4 text-center bg-slate-950/20">
+                                <p class="text-[9px] md:text-[10px] text-slate-600 italic font-medium leading-tight">"<%= post.description.substring(0, 40) %><%= post.description.length > 40 ? '...' : '' %>"</p>
                             </div>
                         <% } %>
 
-                        <div class="absolute inset-0 hover-overlay opacity-0 group-hover:opacity-100 transition-all duration-500 flex flex-col items-center justify-center gap-4">
-                            <div class="flex gap-6 text-white text-xs font-black">
-                                <span class="flex items-center gap-1.5"><i class="fas fa-heart text-blue-500"></i> <%= post.likes_count || 0 %></span>
-                                <span class="flex items-center gap-1.5"><i class="fas fa-comment text-blue-500"></i> <%= post.comments_count || 0 %></span>
+                        <div class="absolute inset-0 hover-overlay md:opacity-0 md:group-hover:opacity-100 transition-all duration-300 flex flex-col items-center justify-end pb-4 gap-3">
+                            <div class="flex gap-4 text-white text-[10px] font-black">
+                                <span class="flex items-center gap-1"><i class="fas fa-heart text-blue-500 text-[8px]"></i> <%= post.likes_count || 0 %></span>
+                                <span class="flex items-center gap-1"><i class="fas fa-comment text-blue-500 text-[8px]"></i> <%= post.comments_count || 0 %></span>
                             </div>
                             
-                            <form action="/event/<%= post.id %>/delete" method="POST" onsubmit="return confirm('Burn this secret forever?')">
-                                <button type="submit" class="bg-white/10 backdrop-blur-md border border-white/10 text-white text-[8px] font-black px-5 py-2.5 rounded-full uppercase tracking-widest hover:bg-red-600 hover:border-red-600 transition-all active:scale-90">
-                                    <i class="fas fa-trash-alt mr-1.5"></i> Burn
+                            <form action="/event/<%= post.id %>/delete" method="POST" onsubmit="return confirm('Burn this secret?')">
+                                <button type="submit" class="bg-red-500/20 backdrop-blur-md border border-red-500/20 text-red-500 text-[7px] font-black px-4 py-2 rounded-full uppercase tracking-tighter hover:bg-red-600 hover:text-white transition-all">
+                                    Burn
                                 </button>
                             </form>
                         </div>
                     </div>
                 <% }) %>
             <% } else { %>
-                <div class="col-span-full py-24 text-center border-2 border-dashed border-white/5 rounded-[4rem] bg-slate-900/10">
-                    <div class="w-16 h-16 bg-slate-900 rounded-full flex items-center justify-center mx-auto mb-4 border border-white/5">
-                        <i class="fas fa-feather text-slate-800 text-xl"></i>
-                    </div>
-                    <p class="text-slate-600 font-black uppercase tracking-[0.4em] text-[10px]">Your scroll is empty</p>
-                    <a href="/feed" class="text-blue-500 text-[9px] font-black uppercase tracking-widest mt-4 inline-block hover:underline">Share a Secret</a>
+                <div class="col-span-full py-16 text-center border-2 border-dashed border-white/5 rounded-[2.5rem] bg-slate-900/10">
+                    <p class="text-slate-600 font-black uppercase tracking-widest text-[9px]">Scroll empty</p>
                 </div>
             <% } %>
         </div>
     </div>
 
     <nav class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-2xl border border-white/10 px-8 py-4 rounded-full flex gap-10 shadow-2xl z-[60] md:hidden">
-        <a href="/feed" class="text-slate-500 hover:text-white transition-all"><i class="fas fa-home text-lg"></i></a>
-        <a href="/discover" class="text-slate-500 hover:text-white transition-all"><i class="fas fa-compass text-lg"></i></a>
-        <a href="/messages" class="text-slate-500 hover:text-white transition-all"><i class="fas fa-comment-dots text-lg"></i></a>
-        <a href="/profile" class="text-blue-500 scale-125"><i class="fas fa-user text-lg"></i></a>
+        <a href="/feed" class="text-slate-500"><i class="fas fa-home text-lg"></i></a>
+        <a href="/discover" class="text-slate-500"><i class="fas fa-compass text-lg"></i></a>
+        <a href="/messages" class="text-slate-500"><i class="fas fa-comment-dots text-lg"></i></a>
+        <a href="/profile" class="text-blue-500"><i class="fas fa-user text-lg"></i></a>
     </nav>
 
     <script>
-        // Dropdown Logic
-        const menuBtn = document.getElementById('menu-btn');
-        const navDropdown = document.getElementById('nav-dropdown');
-        
-        menuBtn?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            navDropdown.classList.toggle('hidden');
-        });
-
-        // Video Hover Playback
-        document.querySelectorAll('.post-grid-item video').forEach(video => {
-            const container = video.closest('.post-grid-item');
-            container.addEventListener('mouseenter', () => video.play().catch(() => {}));
-            container.addEventListener('mouseleave', () => {
-                video.pause();
-                video.currentTime = 0;
+        // Automatic Play on Mobile Scroll (Intersection Observer)
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                const video = entry.target;
+                if (entry.isIntersecting) {
+                    video.play().catch(() => {});
+                } else {
+                    video.pause();
+                }
             });
-        });
+        }, { threshold: 0.5 });
 
-        // Close dropdown on outside click
-        document.addEventListener('click', () => {
-            navDropdown?.classList.add('hidden');
-        });
+        document.querySelectorAll('.post-grid-item video').forEach(v => observer.observe(v));
     </script>
 </body>
 </html>
