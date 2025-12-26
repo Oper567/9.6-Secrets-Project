@@ -46,6 +46,26 @@ const transporter = nodemailer.createTransport({
         pass: process.env.EMAIL_PASS
     }
 });
+// Verification Function
+const sendVerificationEmail = async (toEmail, token) => {
+    const mailOptions = {
+        from: `"Apugo Village" <${process.env.EMAIL_USER}>`,
+        to: toEmail,
+        subject: "Verify Your Apugo Account",
+        html: `
+            <div style="font-family: sans-serif; padding: 20px; color: #333;">
+                <h2>Welcome to the Village!</h2>
+                <p>Please verify your email to start whispering with your neighbors.</p>
+                <a href="https://your-app-name.onrender.com/verify/${token}" 
+                   style="background: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+                   Verify My Soul
+                </a>
+            </div>
+        `
+    };
+
+    return transporter.sendMail(mailOptions);
+};
 
 const upload = multer({
     storage: multer.memoryStorage(),
