@@ -458,6 +458,31 @@ app.get("/messages", isAuth, async (req, res) => {
     }
 });
 
+app.get("/api/chat/:friendId", isAuth, async (req, res) => {
+    const userId = req.user.id;
+    const friendId = req.params.friendId;
+
+    try {
+        const result = await db.query(
+            `SELECT 
+                id, 
+                sender_id, 
+                receiver_id, 
+                content AS content, -- Ensure this matches your DB column name
+                created_at, 
+                is_read 
+             FROM messages 
+             WHERE (sender_id = $1 AND receiver_id = $2) 
+                OR (sender_id = $2 AND receiver_id = $1) 
+             ORDER BY created_at ASC`, 
+            [userId, friendId]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Ancient spirits blocked the message." });
+    }
+});
+
 /* ---------------- CHAT & KINSHIP CLEANUP ---------------- */
 
 // 1. DELETE ALL MESSAGES (Burn Whispers)

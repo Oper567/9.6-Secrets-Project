@@ -140,7 +140,7 @@
             </div>
             
             <div class="flex-1 overflow-y-auto px-2 pb-20 md:pb-4">
-                <% if (friends && friends.length > 0) { %>
+                <% if (locals.friends && friends.length > 0) { %>
                     <% friends.forEach(f => { %>
                         <div id="friend-<%= f.id %>" class="friend-item p-3 flex items-center gap-3 cursor-pointer rounded-xl hover:bg-white/5 transition-all group" 
                              onclick="selectFriend('<%= f.id %>', `<%= f.email.split('@')[0] %>`, `<%= f.profile_pic %>`)">
@@ -206,9 +206,9 @@
     function selectFriend(id, name, pic) {
         currentFriendId = id;
         document.querySelectorAll('.friend-item').forEach(el => el.classList.remove('active'));
-        document.getElementById(`friend-${id}`).classList.add('active');
+        const activeItem = document.getElementById(`friend-${id}`);
+        if(activeItem) activeItem.classList.add('active');
 
-        // Reset unread UI
         const unreadBadge = document.getElementById(`unread-${id}`);
         if(unreadBadge) unreadBadge.remove();
 
@@ -225,7 +225,7 @@
         document.getElementById('chatHeaderTitle').innerText = `@${name}`;
         document.getElementById('chatStatus').innerHTML = `<span class="flex items-center gap-1"><span class="typing-dot"></span> Whispering</span>`;
         
-        fetchMessages(true);
+        fetchMessages();
     }
 
     function closeChat() {
@@ -239,7 +239,7 @@
         currentFriendId = null;
     }
 
-    async function fetchMessages(force = false) {
+    async function fetchMessages() {
         if (!currentFriendId) return;
         try {
             const res = await fetch(`/api/chat/${currentFriendId}`);
@@ -249,14 +249,20 @@
             chatWindow.innerHTML = '';
             if (messages.length === 0) {
                 chatWindow.innerHTML = `<div class="my-auto text-center opacity-10 text-[9px] uppercase font-black tracking-widest">No whispers yet</div>`;
+                return;
             }
 
             messages.forEach(m => {
-                const isMe = m.sender_id == currentUserId;
+                // IMPORTANT: String comparison ensures match even if one is Int and other is String
+                const isMe = String(m.sender_id) === String(currentUserId);
                 const div = document.createElement('div');
                 div.className = `bubble ${isMe ? 'bubble-me' : 'bubble-them'}`;
+                
+                // Assuming database column is 'content'. Change to 'message' if that is your DB name.
+                const content = m.content || m.message || "---"; 
+                
                 div.innerHTML = `
-                    <div>${m.content}</div>
+                    <div>${content}</div>
                     <div class="text-[7px] mt-1 opacity-50 flex items-center justify-end font-black uppercase">
                         ${new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                         ${isMe ? (m.is_read ? '<i class="fas fa-check-double ml-1 text-blue-300"></i>' : '<i class="fas fa-check ml-1"></i>') : ''}
@@ -265,27 +271,21 @@
                 chatWindow.appendChild(div);
             });
             chatWindow.scrollTop = chatWindow.scrollHeight;
-        } catch (e) { console.error("Sync error"); }
+        } catch (e) { console.error("Sync error:", e); }
     }
 
-    // NEW FUNCTION: DELETE CHAT
     async function clearChat() {
         if (!currentFriendId) return;
-        if (!confirm("Are you sure you want to burn all whispers? This cannot be undone.")) return;
-
+        if (!confirm("Burn all whispers? This cannot be undone.")) return;
         try {
             const res = await fetch(`/api/chat/clear/${currentFriendId}`, { method: 'DELETE' });
-            if (res.ok) {
-                fetchMessages();
-            }
+            if (res.ok) fetchMessages();
         } catch (e) { alert("Failed to clear chat"); }
     }
 
-    // NEW FUNCTION: UNFRIEND
     async function unfriend() {
         if (!currentFriendId) return;
-        if (!confirm("Break this kinship? You will no longer be able to whisper until reunited.")) return;
-
+        if (!confirm("Break kinship? You will no longer be able to whisper.")) return;
         try {
             const res = await fetch(`/api/friends/unfriend/${currentFriendId}`, { method: 'POST' });
             if (res.ok) {
@@ -301,16 +301,20 @@
         const input = document.getElementById('msgInput');
         const content = input.value.trim();
         if (!content || !currentFriendId) return;
+        
+        // Optimistic UI could go here, but for now we wait for server
         input.value = '';
-        await fetch('/api/chat/send', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ receiverId: currentFriendId, content })
-        });
-        fetchMessages();
+        try {
+            await fetch('/api/chat/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ receiverId: currentFriendId, content })
+            });
+            fetchMessages();
+        } catch (e) { console.error("Send failed"); }
     });
 
-    setInterval(() => { if (currentFriendId) fetchMessages(); }, 5000);
+    setInterval(() => { if (currentFriendId) fetchMessages(); }, 4000);
 </script>
 </body>
 </html>
