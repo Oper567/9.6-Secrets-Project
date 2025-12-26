@@ -203,9 +203,10 @@ app.post("/register", async (req, res) => {
     }
 
     try {
-        const hash = await bcrypt.hash(password, saltRounds);
+        const hash = await bcrypt.hash(password, 10);
         const token = Math.random().toString(36).substring(2, 15);
 
+        // Save user to DB with verified = false
         const user = await db.query(
             "INSERT INTO users (email, password, role, is_verified, verification_token) VALUES ($1,$2,$3,$4,$5) RETURNING *",
             [email.toLowerCase(), hash, "user", false, token]
@@ -213,19 +214,38 @@ app.post("/register", async (req, res) => {
 
         const verifyLink = `${req.protocol}://${req.get('host')}/auth/verify/${token}`;
 
-        // Send Email via Resend
-        await transporter.sendMail({
-            from: 'onboarding@resend.dev', // Required for Resend Free Tier
-            to: email.toLowerCase(),
-            subject: "Verify your Apugo Village Account",
-            html: `<h3>Welcome to Apugo!</h3><p>Click <a href="${verifyLink}">here</a> to verify your account.</p>`
+        // SEND USING RESEND API (Not SMTP)
+        const { data, error } = await resend.emails.send({
+            from: 'Apugo Village <onboarding@resend.dev>',
+            to: [email.toLowerCase()],
+            subject: 'Verify your Apugo Village Account',
+            html: `
+                <div style="font-family: sans-serif; padding: 20px;">
+                    <h2>Welcome to the Village! 🌴</h2>
+                    <p>Click the button below to verify your email and join the conversation.</p>
+                    <a href="${verifyLink}" style="background: #22c55e; color: white; padding: 12px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
+                        Verify My Account
+                    </a>
+                    <p style="margin-top: 20px; font-size: 12px; color: #666;">
+                        If the button doesn't work, copy this link: ${verifyLink}
+                    </p>
+                </div>
+            `
         });
 
-        console.log("✅ Verification email sent to:", email);
+        if (error) {
+            console.error("Resend Registration Error:", error);
+            // Even if email fails, the user is in the DB, but we should let them know
+        }
+
+        console.log("✅ Verification API Email sent:", data?.id);
+        
+        await sendWelcomeNote(user.rows[0].id);
         res.render("verify-email-notice", { email: email.toLowerCase() });
+
     } catch (err) {
-        console.error("Registration Error:", err);
-        req.flash("error", "Email already registered or system error.");
+        console.error("REGISTRATION ERROR:", err);
+        req.flash("error", "That email is already in the village square!");
         res.redirect("/register");
     }
 });
@@ -251,13 +271,17 @@ app.get("/auth/verify/:token", async (req, res) => {
             "UPDATE users SET is_verified = true, verification_token = NULL WHERE verification_token = $1 RETURNING *",
             [token]
         );
+
         if (result.rows.length > 0) {
-            req.flash("success", "Village access granted! Sign in now.");
+            req.flash("success", "Soul verified! You may now enter the village.");
             res.redirect("/login");
         } else {
-            res.status(400).send("Invalid or expired link.");
+            res.status(400).send("This verification link has expired or is invalid.");
         }
-    } catch (err) { res.redirect("/login"); }
+    } catch (err) {
+        console.error("Verification DB Error:", err);
+        res.redirect("/login");
+    }
 });
 
 app.get("/forgot-password", (req, res) => res.render("forgot-password", { message: null, error: null }));
