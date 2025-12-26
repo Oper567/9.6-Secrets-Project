@@ -38,12 +38,17 @@ const db = new pg.Pool({
 db.on('error', (err) => console.error('Unexpected error on idle client', err));
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-
 const transporter = nodemailer.createTransport({
     service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true, // Use SSL
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
+    },
+    tls: {
+        rejectUnauthorized: false // Helps with network handshake issues
     }
 });
 // Verification Function
@@ -217,11 +222,29 @@ app.post("/register", async (req, res) => {
         );
 
         const verifyLink = `${req.protocol}://${req.get('host')}/auth/verify/${token}`;
-        await transporter.sendMail({
-            to: email.toLowerCase(),
-            subject: "Verify your Apugo Village Account",
-            html: `<p>Welcome! Click <a href="${verifyLink}">here</a> to verify your account.</p>`
-        });
+
+try {
+    console.log(`Attempting to send email to: ${email.toLowerCase()}`);
+    
+    const info = await transporter.sendMail({
+        from: `"Apugo Village" <${process.env.EMAIL_USER}>`, // Added explicit from
+        to: email.toLowerCase(),
+        subject: "Verify your Apugo Village Account",
+        html: `
+            <div style="font-family: sans-serif; border: 1px solid #e2e8f0; padding: 20px; border-radius: 10px;">
+                <h2 style="color: #2563eb;">Welcome to the Village!</h2>
+                <p>Click the button below to verify your account and join the square.</p>
+                <a href="${verifyLink}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">Verify Account</a>
+                <p style="font-size: 12px; color: #64748b; margin-top: 20px;">If the button doesn't work, copy this link: ${verifyLink}</p>
+            </div>
+        `
+    });
+
+    console.log("✅ Email sent successfully:", info.messageId);
+    } catch (error) {
+    console.error("❌ NODEMAILER ERROR:", error);
+    // This will print the real reason in your terminal/Render logs
+    }
 
         await sendWelcomeNote(user.rows[0].id);
         res.render("verify-email-notice", { email: email.toLowerCase() });
@@ -266,17 +289,52 @@ app.get("/forgot-password", (req, res) => res.render("forgot-password", { messag
 app.post("/forgot-password", async (req, res) => {
     const { email } = req.body;
     try {
-        const token = Math.random().toString(36).substring(2, 15);
-        await db.query("UPDATE users SET reset_token = $1, reset_expires = NOW() + INTERVAL '1 hour' WHERE email = $2", [token, email.toLowerCase()]);
+        // 1. Check if user exists first
+        const userCheck = await db.query("SELECT * FROM users WHERE email = $1", [email.toLowerCase()]);
         
+        if (userCheck.rows.length === 0) {
+            return res.render("forgot-password", { 
+                message: null, 
+                error: "No account found with that email." 
+            });
+        }
+
+        // 2. Generate token
+        const token = Math.random().toString(36).substring(2, 15);
+        
+        // 3. Update DB
+        await db.query(
+            "UPDATE users SET reset_token = $1, reset_expires = NOW() + INTERVAL '1 hour' WHERE email = $2", 
+            [token, email.toLowerCase()]
+        );
+        
+        // 4. Send Email
         const resetLink = `${req.protocol}://${req.get('host')}/reset-password/${token}`;
+        
         await transporter.sendMail({
-            to: email,
-            subject: "Apugo Village Password Reset",
-            text: `Reset your password here: ${resetLink}`
+            from: `"Apugo Village Support" <${process.env.EMAIL_USER}>`,
+            to: email.toLowerCase(),
+            subject: "Reset Your Apugo Password",
+            html: `
+                <div style="font-family: sans-serif; padding: 20px;">
+                    <h3>Password Reset Request</h3>
+                    <p>You requested a password reset. Click the link below to continue:</p>
+                    <a href="${resetLink}" style="background: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Reset Password</a>
+                    <p>This link expires in 1 hour.</p>
+                </div>
+            `
         });
-        res.render("forgot-password", { message: "Reset link sent!", error: null });
-    } catch (err) { res.render("forgot-password", { message: null, error: "System error." }); }
+
+        // 5. Success response (Stops the loading spinner)
+        res.render("forgot-password", { message: "Check your inbox for the reset link!", error: null });
+
+    } catch (err) {
+        console.error("FORGOT PASSWORD ERROR:", err); // Look at your terminal for this!
+        res.render("forgot-password", { 
+            message: null, 
+            error: "The village spirits are busy. Please try again later." 
+        });
+    }
 });
 
 app.get("/reset-password/:token", async (req, res) => {
