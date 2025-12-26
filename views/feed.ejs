@@ -34,7 +34,6 @@
             border-color: rgba(59, 130, 246, 0.4);
             background: rgba(15, 23, 42, 0.6);
         }
-        /* Dropdown styling for Delete */
         .dropdown { position: relative; display: inline-block; }
         .dropdown-content {
             display: none;
@@ -49,7 +48,6 @@
             box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.3);
         }
         .dropdown:hover .dropdown-content { display: block; }
-        
         ::-webkit-scrollbar { width: 0px; }
     </style>
 </head>
@@ -71,6 +69,9 @@
             </div>
 
             <div class="flex items-center gap-6">
+                <a href="/messages" class="text-slate-400 hover:text-blue-500 transition-colors hidden md:block">
+                    <i class="far fa-comment-dots text-xl"></i>
+                </a>
                 <a href="/notifications" class="relative group">
                     <i class="far fa-bell text-xl text-slate-400 group-hover:text-blue-500 transition-colors"></i>
                     <% if (locals.unreadCount && unreadCount > 0) { %>
@@ -164,8 +165,8 @@
                                             <% if (p.is_verified) { %>
                                                 <i class="fas fa-certificate text-blue-500 text-[9px]"></i>
                                             <% } %>
-                                            <% if (locals.user && p.user_id !== user.id) { %>
-                                                <form action="/user/<%= p.user_id %>/follow" method="POST" class="ml-1">
+                                            <% if (locals.user && p.created_by !== user.id) { %>
+                                                <form action="/friends/request/<%= p.created_by %>" method="POST" class="ml-1">
                                                     <button type="submit" class="text-[8px] font-black uppercase text-blue-500 bg-blue-500/10 px-2.5 py-1 rounded-full hover:bg-blue-500 hover:text-white transition-all">
                                                         + Kinship
                                                     </button>
@@ -183,7 +184,7 @@
                                         <i class="fas fa-ellipsis-h"></i>
                                     </button>
                                     <div class="dropdown-content">
-                                        <% if (locals.user && (p.user_id === user.id || user.role === 'admin')) { %>
+                                        <% if (locals.user && (p.created_by === user.id || user.role === 'admin')) { %>
                                             <form action="/event/<%= p.id %>/delete" method="POST" onsubmit="return confirm('Erase this whisper?')">
                                                 <button type="submit" class="w-full text-left px-4 py-3 text-[9px] font-black uppercase text-red-500 hover:bg-white/5 transition-all">
                                                     <i class="fas fa-trash-alt mr-2"></i> Delete
@@ -271,14 +272,18 @@
                 <div class="space-y-5">
                     <% if (locals.friends && friends.length > 0) { %>
                         <% friends.forEach(f => { %>
-                            <div class="flex items-center justify-between group cursor-pointer">
+                            <div class="flex items-center justify-between group cursor-pointer" onclick="window.location.href='/messages?userId=<%= f.id %>'">
                                 <div class="flex items-center gap-3">
                                     <div class="w-9 h-9 rounded-full bg-slate-800 overflow-hidden border border-white/10">
-                                        <img src="<%= f.profile_pic || '/default-avatar.png' %>" class="w-full h-full object-cover">
+                                        <% if (f.profile_pic) { %>
+                                            <img src="<%= f.profile_pic %>" class="w-full h-full object-cover">
+                                        <% } else { %>
+                                            <div class="w-full h-full flex items-center justify-center text-[10px] font-black text-blue-500 uppercase"><%= f.email[0] %></div>
+                                        <% } %>
                                     </div>
-                                    <p class="text-[11px] font-bold text-slate-300 group-hover:text-blue-400 transition-colors">@<%= f.username %></p>
+                                    <p class="text-[11px] font-bold text-slate-300 group-hover:text-blue-400 transition-colors">@<%= f.email.split('@')[0] %></p>
                                 </div>
-                                <span class="w-2 h-2 rounded-full bg-green-500/50"></span>
+                                <span class="w-2 h-2 rounded-full <%= f.is_online ? 'bg-green-500' : 'bg-slate-700' %>"></span>
                             </div>
                         <% }) %>
                     <% } else { %>
@@ -313,6 +318,7 @@
 
     <div class="lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-2xl border border-white/10 px-8 py-4 rounded-full flex gap-10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-50">
         <a href="/feed" class="text-blue-500"><i class="fas fa-home text-lg"></i></a>
+        <a href="/messages" class="text-slate-500"><i class="fas fa-comment-dots text-lg"></i></a>
         <a href="/discover" class="text-slate-500"><i class="fas fa-compass text-lg"></i></a>
         <a href="/notifications" class="text-slate-500 relative">
             <i class="fas fa-bell text-lg"></i>

@@ -541,9 +541,18 @@ app.get("/notifications", isAuth, async (req, res) => {
 });
 
 // ADD THIS: Clear Notifications Route
-app.post("/notifications/clear", isAuth, async (req, res) => {
-    await db.query("UPDATE notifications SET is_read = true WHERE user_id = $1", [req.user.id]);
-    res.redirect("back");
+// Mark all notifications as read
+    app.post("/notifications/clear", isAuth, async (req, res) => {
+    try {
+        await db.query(
+            "UPDATE notifications SET is_read = true WHERE receiver_id = $1 AND is_read = false",
+            [req.user.id]
+        );
+        res.redirect("/notifications");
+    } catch (err) {
+        console.error("Error clearing notifications:", err);
+        res.status(500).send("Server Error");
+    }
 });
 
 app.get("/settings", isAuth, (req, res) => res.render("settings", { user: req.user }));
@@ -563,6 +572,25 @@ app.get("/users/search", isAuth, async (req, res) => {
         const result = await db.query("SELECT id, email FROM users WHERE email ILIKE $1 AND id != $2 LIMIT 5", [`%${req.query.query}%`, req.user.id]);
         res.json(result.rows);
     } catch (err) { res.status(500).json({ error: "Search failed" }); }
+});
+
+app.post("/user/:id/follow", isAuth, async (req, res) => {
+    const targetId = req.params.id;
+    const followerId = req.user.id;
+
+    if (targetId == followerId) return res.redirect("back");
+
+    try {
+        // Example logic for a simple follow (or reuse your friendship logic)
+        await db.query(
+            "INSERT INTO friendships (sender_id, receiver_id, status) VALUES ($1, $2, 'accepted') ON CONFLICT DO NOTHING", 
+            [followerId, targetId]
+        );
+        res.redirect("back");
+    } catch (err) {
+        console.error(err);
+        res.redirect("back");
+    }
 });
 
 app.get("/admin", isAdmin, async (req, res) => {
