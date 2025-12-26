@@ -5,8 +5,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql" // or "mysql" / "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL") // Add this line
 }
 
 model Post {
@@ -25,4 +26,12 @@ model Comment {
   post         Post     @relation(fields: [post_id], references: [id])
   user_id      Int
   created_at   DateTime @default(now())
+}
+model User {
+  id       Int    @id @default(autoincrement())
+  email    String @unique
+  password String
+  // ... other fields
+  
+  @@map("users") // <--- Add this line
 }
