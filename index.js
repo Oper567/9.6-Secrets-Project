@@ -276,6 +276,46 @@ app.post("/login", passport.authenticate("local", {
     failureRedirect: "/login",
     failureFlash: true
 }));
+app.get('/forum', async (req, res) => {
+    try {
+        // 1. Get the category from the URL (e.g., /forum?cat=marketplace)
+        // If no category is provided, default it to 'all'
+        const activeCat = req.query.cat || 'all';
+
+        // ... your database logic to fetch posts ...
+        const { data: posts } = await supabase.from('forum_posts').select('*');
+
+        // 2. PASS IT TO THE EJS TEMPLATE
+        res.render('forum', { 
+            posts: posts,
+            user: req.session.user,
+            activeCat: activeCat // <--- ADD THIS LINE
+        });
+    } catch (err) {
+        console.error(err);
+        res.redirect('/feed');
+    }
+});
+// GET /feed
+app.get('/feed', async (req, res) => {
+    const page = parseInt(req.query.page) || 0;
+    const limit = 10;
+    const offset = page * limit;
+
+    const { data: posts } = await supabase
+        .from('posts')
+        .select('*, profiles(username, profile_pic)')
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+
+    // If it's an AJAX request (from our scroll script), return JSON
+    if (req.xhr) {
+        return res.json({ posts });
+    }
+
+    // Otherwise, render the initial page
+    res.render('feed', { posts, user: req.session.user, page });
+});
 // --- ROUTES ---
 
 router.post('/forum/create', upload.single('media'), async (req, res) => {

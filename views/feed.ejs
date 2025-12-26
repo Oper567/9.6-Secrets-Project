@@ -283,77 +283,139 @@
         <a href="/villagers" class="text-slate-500"><i class="fas fa-users text-lg"></i></a>
         <a href="/profile" class="text-slate-500"><i class="fas fa-user text-lg"></i></a>
     </div>
+    // --- EXISTING LOGIC ---
+let page = 0;
+let loading = false;
+let hasMore = true;
 
-    <script>
-        // 1. IMPROVED OPTIMISTIC VIBE SYSTEM
-        async function sendVibe(btn, postId) {
-            const icon = btn.querySelector('i');
-            const countSpan = btn.querySelector('.vibe-count');
-            const isLiked = icon.classList.contains('fas');
-            let count = parseInt(countSpan.innerText);
+function toggleEchoes(postId) {
+    document.getElementById(`echoes-${postId}`).classList.toggle('open');
+}
 
-            // OPTIMISTIC UPDATE: Change UI immediately
-            if (isLiked) {
-                icon.classList.replace('fas', 'far');
-                btn.classList.replace('text-red-500', 'text-slate-500');
-                countSpan.innerText = Math.max(0, count - 1);
-            } else {
-                icon.classList.replace('far', 'fas');
-                btn.classList.replace('text-slate-500', 'text-red-500');
-                countSpan.innerText = count + 1;
-                btn.classList.add('vibe-pop');
-                setTimeout(() => btn.classList.remove('vibe-pop'), 400);
-            }
+async function sendVibe(btn, postId) {
+    const icon = btn.querySelector('i');
+    const countSpan = btn.querySelector('.vibe-count');
+    const isLiked = icon.classList.contains('fas');
+    let count = parseInt(countSpan.innerText);
 
-            try {
-                const response = await fetch(`/event/${postId}/like`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                const data = await response.json();
-                // Sync with server in case count changed by others
-                if (data.success) {
-                    countSpan.innerText = data.newCount;
-                }
-            } catch (err) { 
-                console.error("Vibe sync failed", err);
-            }
-        }
+    if (isLiked) {
+        icon.classList.replace('fas', 'far');
+        btn.classList.replace('text-red-500', 'text-slate-500');
+        countSpan.innerText = Math.max(0, count - 1);
+    } else {
+        icon.classList.replace('far', 'fas');
+        btn.classList.replace('text-slate-500', 'text-red-500');
+        countSpan.innerText = count + 1;
+        btn.classList.add('vibe-pop');
+        setTimeout(() => btn.classList.remove('vibe-pop'), 400);
+    }
 
-        function toggleEchoes(postId) {
-            document.getElementById(`echoes-${postId}`).classList.toggle('open');
-        }
-
-        // MEDIA PREVIEW
-        const fileInput = document.getElementById('fileInput');
-        const imgPreview = document.getElementById('imagePreview');
-        const previewContainer = document.getElementById('mediaPreviewContainer');
-
-        fileInput.addEventListener('change', function() {
-            const file = this.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = e => {
-                    imgPreview.src = e.target.result;
-                    previewContainer.classList.remove('hidden');
-                }
-                reader.readAsDataURL(file);
-                document.querySelector('label[for="fileInput"]').innerHTML = `<i class="fas fa-check text-green-500"></i> Attached`;
-            }
+    try {
+        const response = await fetch(`/event/${postId}/like`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
         });
+        const data = await response.json();
+        if (data.success) countSpan.innerText = data.newCount;
+    } catch (err) { console.error("Vibe sync failed", err); }
+}
+<script
+// --- NEW INFINITE SCROLL LOGIC ---
 
-        function clearMedia() {
-            fileInput.value = "";
-            previewContainer.classList.add('hidden');
-            document.querySelector('label[for="fileInput"]').innerHTML = `<i class="fas fa-camera text-blue-500"></i> Media`;
+window.onscroll = async function() {
+    // If user is 800px from the bottom, load more
+    if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 800 && !loading && hasMore) {
+        loading = true;
+        page++;
+        
+        // Optional: show a small loader at bottom
+        console.log(`Fetching page ${page}...`);
+
+        try {
+            const response = await fetch(`/feed?page=${page}`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const data = await response.json();
+
+            if (!data.posts || data.posts.length === 0) {
+                hasMore = false;
+                return;
+            }
+
+            data.posts.forEach(post => {
+                appendPostToFeed(post);
+            });
+            
+            loading = false;
+        } catch (err) {
+            console.error("Scroll fetch failed", err);
+            loading = false;
         }
+    }
+};
 
-        document.getElementById('postForm').addEventListener('submit', function() {
-            const btn = document.getElementById('publishBtn');
-            btn.innerHTML = '<i class="fas fa-circle-notch animate-spin"></i>';
-            btn.style.opacity = '0.5';
-            btn.style.pointerEvents = 'none';
-        });
+function appendPostToFeed(p) {
+    const container = document.getElementById('feedContainer');
+    const date = new Date(p.created_at).toLocaleDateString();
+    const authorHandle = p.author ? p.author.split('@')[0] : 'villager';
+    
+    // This matches your refactored "post-card" structure exactly
+    const postHTML = `
+        <article class="post-card rounded-[2.5rem] overflow-hidden" id="post-${p.id}">
+            <div class="p-6 flex justify-between items-center">
+                <div class="flex items-center gap-4">
+                    <div class="avatar-container bg-slate-800 rounded-2xl overflow-hidden ring-1 ring-white/10">
+                        <img src="${p.profile_pic || '/default-avatar.png'}" class="w-full h-full object-cover">
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <p class="font-bold text-[14px] text-white">@${authorHandle}</p>
+                            ${p.is_verified ? '<i class="fas fa-certificate text-blue-500 text-[9px]"></i>' : ''}
+                        </div>
+                        <p class="text-[8px] text-slate-600 uppercase font-black tracking-widest">${date}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="px-8 pb-5 text-slate-300 text-[15px] leading-relaxed">
+                ${p.description}
+            </div>
+
+            ${p.image_url ? `
+                <div class="px-4 pb-4">
+                    <div class="rounded-[2rem] overflow-hidden bg-black/20 border border-white/5">
+                        ${(p.media_type === 'video' || p.image_url.includes('.mp4')) 
+                            ? `<video controls class="w-full max-h-[500px] object-cover"><source src="${p.image_url}" type="video/mp4"></video>`
+                            : `<img src="${p.image_url}" class="w-full h-auto max-h-[600px] object-cover" loading="lazy">`
+                        }
+                    </div>
+                </div>
+            ` : ''}
+
+            <div class="px-8 py-5 border-t border-white/5 bg-white/[0.01] flex gap-8">
+                <button type="button" onclick="sendVibe(this, '${p.id}')" 
+                    class="vibe-btn flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all ${p.liked_by_me ? 'text-red-500' : 'text-slate-500 hover:text-red-400'}">
+                    <i class="${p.liked_by_me ? 'fas' : 'far'} fa-heart text-lg"></i> 
+                    <span class="vibe-count">${p.likes_count || 0}</span>
+                </button>
+                
+                <button onclick="toggleEchoes('${p.id}')" class="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-blue-400">
+                    <i class="far fa-comment-dots text-lg"></i> 
+                    <span>${p.comments_list ? p.comments_list.length : 0} Echoes</span>
+                </button>
+            </div>
+
+            <div id="echoes-${p.id}" class="comment-section bg-black/20 border-t border-white/5">
+                <form action="/event/${p.id}/comment" method="POST" class="p-4 flex gap-3 border-t border-white/5">
+                    <input type="text" name="comment" placeholder="Add an echo..." class="flex-1 bg-slate-900 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none">
+                    <button class="bg-blue-600 w-10 h-10 rounded-xl text-[10px]"><i class="fas fa-paper-plane"></i></button>
+                </form>
+            </div>
+        </article>
+    `;
+    
+    container.insertAdjacentHTML('beforeend', postHTML);
+}
     </script>
 </body>
 </html>
