@@ -12,58 +12,39 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import multer from "multer";
-import { createClient } from '@supabase/supabase-js';
-import nodemailer from "nodemailer";
-import { Resend } from 'resend';
+import { createClient } from "@supabase/supabase-js";
+import { Resend } from "resend";
+
 dotenv.config();
 
-/* ---------------- INITIAL SETUP ---------------- */
-const PostgresStore = pgSession(session);
+/* ---------------- BASIC SETUP ---------------- */
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
 const app = express();
 const port = process.env.PORT || 3000;
 const saltRounds = 10;
-/* ---------------- SERVICES (DB, SUPABASE, MAIL) ---------------- */
+
+/* ---------------- DATABASE ---------------- */
 const db = new pg.Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
-    connectionTimeoutMillis: 10000,
-    idleTimeoutMillis: 30000,
-    max: 10,
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
 });
 
-db.on('error', (err) => console.error('Unexpected error on idle client', err));
+db.on("error", err => console.error("PG ERROR:", err));
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-/* ---------------- MAIL SERVICE (RESEND) ---------------- */
-const resend = new Resend(process.env.EMAIL_PASS);
-// Verification Function - use Resend API (transporter was undefined)
-const sendVerificationEmail = async (toEmail, token) => {
-    const verifyLink = `${process.env.APP_URL || 'https://your-app-name.onrender.com'}/verify/${token}`;
-    const { data, error } = await resend.emails.send({
-        from: `"Apugo Village" <${process.env.EMAIL_USER || 'onboarding@resend.dev'}>`,
-        to: [toEmail],
-        subject: "Verify Your Apugo Account",
-        html: `
-            <div style="font-family: sans-serif; padding: 20px; color: #333;">
-                <h2>Welcome to the Village!</h2>
-                <p>Please verify your email to start whispering with your neighbors.</p>
-                <a href="${verifyLink}" 
-                   style="background: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
-                   Verify My Soul
-                </a>
-            </div>
-        `
-    });
-    if (error) throw new Error(error.message || 'Email send failed');
-    return data;
-};
+/* ---------------- SUPABASE ---------------- */
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY
+);
 
+/* ---------------- MAIL (RESEND) ---------------- */
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+/* ---------------- FILE UPLOAD ---------------- */
 const upload = multer({
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 5 * 1024 * 1024 } // Increased to 5MB for village media
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }
 });
 
 /* ---------------- MIDDLEWARE ---------------- */
@@ -74,834 +55,255 @@ app.use(express.static("public"));
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
-// HTTPS Redirect for Production
-app.use((req, res, next) => {
-    if (process.env.NODE_ENV === 'production' && req.headers['x-forwarded-proto'] !== 'https') {
-        return res.redirect('https://' + req.get('host') + req.url);
-    }
-    next();
-});
-
-app.use((req, res, next) => {
-    // This makes 'user' available in every .ejs file automatically
-    res.locals.user = req.session.user || null;
-    next();
-});
-
-app.use(session({
+/* ---------------- SESSION ---------------- */
+const PostgresStore = pgSession(session);
+app.use(
+  session({
     store: new PostgresStore({
-        pool: db,
-        tableName: 'session',
-        createTableIfMissing: true
+      pool: db,
+      createTableIfMissing: true
     }),
-    secret: process.env.SESSION_SECRET || "apugo_secret",
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
-        maxAge: 1000 * 60 * 60 * 24,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: process.env.NODE_ENV === "production" ? 'none' : 'lax'
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax"
     }
-}));
+  })
+);
 
 app.use(flash());
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Global Locals & Activity Tracker
+/* ---------------- GLOBAL LOCALS ---------------- */
 app.use(async (req, res, next) => {
-    res.locals.user = req.user || null;
-    res.locals.messages = req.flash();
-    res.locals.unreadCount = 0;
-    res.locals.search = ""; 
+  res.locals.user = req.user || null;
+  res.locals.messages = req.flash();
+  res.locals.unreadCount = 0;
 
-    if (req.isAuthenticated()) {
-        try {
-            await db.query("UPDATE users SET last_active = NOW() WHERE id = $1", [req.user.id]);
-            const noteCount = await db.query("SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND is_read = false", [req.user.id]);
-            res.locals.unreadCount = noteCount.rows[0].count;
-        } catch (e) { console.error("Middleware DB Error:", e); }
+  if (req.isAuthenticated()) {
+    try {
+      await db.query(
+        "UPDATE users SET last_active = NOW() WHERE id = $1",
+        [req.user.id]
+      );
+
+      const notes = await db.query(
+        "SELECT COUNT(*) FROM notifications WHERE user_id=$1 AND is_read=false",
+        [req.user.id]
+      );
+      res.locals.unreadCount = notes.rows[0].count;
+    } catch (err) {
+      console.error("LOCALS ERROR:", err);
     }
-    next();
-});
-// Middleware to update "Last Seen"
-app.use(async (req, res, next) => {
-    if (req.session.user) {
-        await supabase
-            .from('profiles')
-            .update({ last_seen: new Date().toISOString() })
-            .eq('id', req.session.user.id);
-    }
-    next();
+  }
+  next();
 });
 
-/* ---------------- AUTHENTICATION HELPERS ---------------- */
-function isAuth(req, res, next) {
-    if (req.isAuthenticated()) return next();
-    res.redirect("/login");
-}
+/* ---------------- AUTH HELPERS ---------------- */
+const isAuth = (req, res, next) =>
+  req.isAuthenticated() ? next() : res.redirect("/login");
 
-function checkVerified(req, res, next) {
-    if (req.isAuthenticated()) {
-        if (req.user.is_verified) return next();
-        return res.render("verify-email-notice", { email: req.user.email });
+const checkVerified = (req, res, next) => {
+  if (!req.isAuthenticated()) return res.redirect("/login");
+  if (!req.user.is_verified)
+    return res.render("verify-email-notice", { email: req.user.email });
+  next();
+};
+
+const isAdmin = (req, res, next) => {
+  if (req.isAuthenticated() && req.user.role === "admin") return next();
+  req.flash("error", "Admins only");
+  res.redirect("/feed");
+};
+
+/* ---------------- PASSPORT ---------------- */
+passport.use(
+  new LocalStrategy({ usernameField: "email" }, async (email, password, done) => {
+    try {
+      const result = await db.query(
+        "SELECT * FROM users WHERE email=$1",
+        [email.toLowerCase()]
+      );
+      if (!result.rows.length) return done(null, false);
+
+      const user = result.rows[0];
+      if (user.password === "google-oauth")
+        return done(null, false, { message: "Use Google login" });
+
+      const valid = await bcrypt.compare(password, user.password);
+      return valid ? done(null, user) : done(null, false);
+    } catch (err) {
+      done(err);
     }
-    res.redirect("/login");
-}
+  })
+);
 
-function isAdmin(req, res, next) {
-    if (req.isAuthenticated() && req.user.role === 'admin') return next();
-    req.flash("error", "Access denied. Elders only!");
-    res.redirect("/feed");
-}
-
-async function sendWelcomeNote(userId) {
-    try {
-        await db.query("INSERT INTO notifications (user_id, sender_id, message) VALUES ($1, 1, $2)",
-            [userId, "Welcome to Apugo Village! 🌴"]);
-    } catch (err) { console.error("Notification Error:", err); }
-}
-
-/* ---------------- PASSPORT STRATEGIES ---------------- */
-passport.use(new LocalStrategy({ usernameField: "email" }, async (email, password, done) => {
-    try {
-        const result = await db.query("SELECT * FROM users WHERE email=$1", [email.toLowerCase()]);
-        if (!result.rows.length) return done(null, false, { message: "User not found" });
-
-        const user = result.rows[0];
-        
-        if (user.password === "google-oauth") return done(null, false, { message: "Use Google Sign-In" });
-
-        const valid = await bcrypt.compare(password, user.password);
-        return valid ? done(null, user) : done(null, false, { message: "Wrong password" });
-    } catch (err) { done(err); }
-));
-
-passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: process.env.GOOGLE_CALLBACK_URL,
-    proxy: true
-}, async (token, secret, profile, done) => {
-    try {
+passport.use(
+  new GoogleStrategy(
+    {
+      clientID: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      callbackURL: process.env.GOOGLE_CALLBACK_URL,
+      proxy: true
+    },
+    async (_, __, profile, done) => {
+      try {
         const email = profile.emails[0].value.toLowerCase();
-        const result = await db.query("SELECT * FROM users WHERE email = $1", [email]);
-        if (result.rows.length > 0) return done(null, result.rows[0]);
-
-        const newUser = await db.query(
-            "INSERT INTO users (email, password, role, is_verified) VALUES ($1, $2, $3, $4) RETURNING *",
-            [email, "google-oauth", "user", true]
+        const existing = await db.query(
+          "SELECT * FROM users WHERE email=$1",
+          [email]
         );
-        await sendWelcomeNote(newUser.rows[0].id);
-        return done(null, newUser.rows[0]);
-    } catch (err) { return done(err); }
-));
+        if (existing.rows.length) return done(null, existing.rows[0]);
+
+        const created = await db.query(
+          "INSERT INTO users (email,password,role,is_verified) VALUES ($1,$2,$3,true) RETURNING *",
+          [email, "google-oauth", "user"]
+        );
+        done(null, created.rows[0]);
+      } catch (err) {
+        done(err);
+      }
+    }
+  )
+);
 
 passport.serializeUser((user, done) => done(null, user.id));
 passport.deserializeUser(async (id, done) => {
-    try {
-        const result = await db.query("SELECT * FROM users WHERE id=$1", [id]);
-        done(null, result.rows[0]);
-    } catch (e) { done(e); }
+  try {
+    const res = await db.query("SELECT * FROM users WHERE id=$1", [id]);
+    done(null, res.rows[0]);
+  } catch (err) {
+    done(err);
+  }
 });
 
 /* ---------------- AUTH ROUTES ---------------- */
-app.get("/", (req, res) => res.render("home"));
-app.get("/login", (req, res) => res.render("login"));
-app.get("/register", (req, res) => res.render("register"));
+app.get("/", (_, res) => res.render("home"));
+app.get("/login", (_, res) => res.render("login"));
+app.get("/register", (_, res) => res.render("register"));
 
-/* ---------------- UPDATED REGISTER ROUTE ---------------- */
 app.post("/register", async (req, res) => {
-    const { email, password } = req.body;
-    try {
-        const hash = await bcrypt.hash(password, saltRounds);
-        
-        // We set is_verified to TRUE immediately
-        await db.query(
-            "INSERT INTO users (email, password, role, is_verified) VALUES ($1, $2, $3, $4)",
-            [email.toLowerCase(), hash, "user", true] 
-        );
-
-        console.log(`✅ User ${email} registered and auto-verified.`);
-        
-        // Redirect straight to login or auto-login them
-        req.flash("success", "Registration successful! Welcome to the village.");
-        res.redirect("/login");
-
-    } catch (err) {
-        console.error("REGISTRATION ERROR:", err);
-        req.flash("error", "Email already exists.");
-        res.redirect("/register");
-    }
+  try {
+    const hash = await bcrypt.hash(req.body.password, saltRounds);
+    await db.query(
+      "INSERT INTO users (email,password,role,is_verified) VALUES ($1,$2,'user',true)",
+      [req.body.email.toLowerCase(), hash]
+    );
+    req.flash("success", "Account created");
+    res.redirect("/login");
+  } catch {
+    req.flash("error", "Email exists");
+    res.redirect("/register");
+  }
 });
 
-app.post("/login", passport.authenticate("local", {
+app.post(
+  "/login",
+  passport.authenticate("local", {
     successRedirect: "/feed",
     failureRedirect: "/login",
     failureFlash: true
-}));
+  })
+);
 
-// Consolidated forum GET (DB-backed) and removed duplicate supabase variants
-app.get("/forum", checkVerified, async (req, res) => {
-    try {
-        const result = await db.query(`
-            SELECT t.*, u.email as author, 
-            (SELECT COUNT(*) FROM forum_replies WHERE topic_id = t.id) as reply_count
-            FROM forum_topics t
-            JOIN users u ON t.creator_id = u.id
-            ORDER BY t.created_at DESC
-        `);
-        res.render("forum", { topics: result.rows, user: req.user });
-    } catch (err) {
-        console.error("Forum Error:", err);
-        res.redirect("/feed");
-    }
-});
+app.get("/logout", (req, res) =>
+  req.logout(() => res.redirect("/"))
+);
 
-// forum thread view
-app.get('/forum/thread/:id', checkVerified, async (req, res) => {
-    const { id } = req.params;
-    try {
-        await db.query('UPDATE forum_threads SET view_count = view_count + 1 WHERE id = $1', [id]);
-
-        const threadResult = await db.query(`
-            SELECT ft.*, u.username as author_name, u.profile_pic as author_pic 
-            FROM forum_threads ft 
-            JOIN users u ON ft.author_id = u.id 
-            WHERE ft.id = $1`, [id]);
-
-        const repliesResult = await db.query(`
-            SELECT fr.*, u.username as author_name, u.profile_pic as author_pic 
-            FROM forum_replies fr 
-            JOIN users u ON fr.author_id = u.id 
-            WHERE fr.thread_id = $1 
-            ORDER BY fr.created_at ASC`, [id]);
-
-        if (threadResult.rows.length === 0) {
-            return res.status(404).send("This whisper has vanished into the winds.");
-        }
-
-        res.render('thread', {
-            thread: threadResult.rows[0],
-            replies: repliesResult.rows,
-            user: req.user
-        });
-    } catch (err) {
-        console.error('Thread View Error:', err);
-        res.status(500).send("Server Error");
-    }
-});
-
-// forum thread creation (with optional media) - unified as app route
-app.post('/forum/create', checkVerified, upload.single('media'), async (req, res) => {
-    const { title, content, category } = req.body;
-    let imageUrl = null;
-
-    try {
-        if (req.file) {
-            const fileName = `${Date.now()}-${req.file.originalname}`;
-            
-            const { data, error } = await supabase.storage
-                .from('forum-attachments')
-                .upload(fileName, req.file.buffer, {
-                    contentType: req.file.mimetype,
-                    upsert: false
-                });
-
-            if (error) throw error;
-
-            const { data: publicUrlData } = supabase.storage
-                .from('forum-attachments')
-                .getPublicUrl(fileName);
-            
-            imageUrl = publicUrlData.publicUrl;
-        }
-
-        await db.query(
-            'INSERT INTO forum_threads (title, content, category, author_id, image_url) VALUES ($1, $2, $3, $4, $5)',
-            [title, content, category, req.user.id, imageUrl]
-        );
-
-        res.redirect('/forum');
-    } catch (err) {
-        console.error('Supabase Upload/DB Error:', err);
-        res.redirect('/forum?error=upload_failed');
-    }
-});
-
-// auth google
-app.get("/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
-app.get("/auth/google/callback", passport.authenticate("google", { failureRedirect: "/login" }), (req, res) => res.redirect("/feed"));
-
-app.get("/logout", (req, res) => {
-    req.logout((err) => res.redirect("/"));
-});
-
-/* ---------------- VERIFICATION & PASSWORD RESET ---------------- */
-app.get("/auth/verify/:token", async (req, res) => {
-    const { token } = req.params;
-    try {
-        const result = await db.query(
-            "UPDATE users SET is_verified = true, verification_token = NULL WHERE verification_token = $1 RETURNING *",
-            [token]
-        );
-
-        if (result.rows.length > 0) {
-            req.flash("success", "Soul verified! You may now enter the village.");
-            res.redirect("/login");
-        } else {
-            res.status(400).send("This verification link has expired or is invalid.");
-        }
-    } catch (err) {
-        console.error("Verification DB Error:", err);
-        res.redirect("/login");
-    }
-});
-
-app.get("/forgot-password", (req, res) => res.render("forgot-password", { message: null, error: null }));
-
-/* ---------------- UPDATED FORGOT PASSWORD ROUTE ---------------- */
-app.post("/forgot-password", async (req, res) => {
-    const { email } = req.body;
-    try {
-        const userCheck = await db.query("SELECT * FROM users WHERE email = $1", [email.toLowerCase()]);
-        if (userCheck.rows.length === 0) {
-            return res.render("forgot-password", { message: null, error: "Email not found." });
-        }
-
-        const token = Math.random().toString(36).substring(2, 15);
-        await db.query("UPDATE users SET reset_token = $1, reset_expires = NOW() + INTERVAL '1 hour' WHERE email = $2", [token, email.toLowerCase()]);
-        
-        const resetLink = `${req.protocol}://${req.get('host')}/reset-password/${token}`;
-
-        const { data, error } = await resend.emails.send({
-            from: 'Apugo <onboarding@resend.dev>',
-            to: [email.toLowerCase()],
-            subject: 'Apugo Village | Password Reset',
-            html: `<p>Reset your password here: <a href="${resetLink}">${resetLink}</a></p>`
-        });
-
-        if (error) {
-            console.error("Resend API Error:", error);
-            throw new Error(error.message);
-        }
-
-        console.log("✅ API Email sent successfully:", data.id);
-        res.render("forgot-password", { message: "Reset link sent!", error: null });
-
-    } catch (err) {
-        console.error("FORGOT PASSWORD ERROR:", err.message);
-        res.render("forgot-password", { message: null, error: "The village spirits are blocked. Try again." });
-    }
-});
-
-app.get("/reset-password/:token", async (req, res) => {
-    res.render("reset-password", { token: req.params.token });
-});
-
-app.post("/reset-password/:token", async (req, res) => {
-    const { token } = req.params;
-    const { password } = req.body;
-    try {
-        const hash = await bcrypt.hash(password, saltRounds);
-        const result = await db.query(
-            "UPDATE users SET password = $1, reset_token = NULL, reset_expires = NULL WHERE reset_token = $2 RETURNING *",
-            [hash, token]
-        );
-        if (result.rows.length > 0) {
-            req.flash("success", "Password updated!");
-            res.redirect("/login");
-        } else {
-            res.status(400).send("Invalid token.");
-        }
-    } catch (err) { res.redirect("/login"); }
-});
-
-/* ---------------- FEED & EVENTS ---------------- */
-// Keep the consolidated feed with checkVerified and richer logic; removed earlier duplicate feed definition
+/* ---------------- FEED ---------------- */
 app.get("/feed", checkVerified, async (req, res) => {
-    const search = req.query.search || "";
-    try {
-        const announcements = await db.query(`
-            SELECT e.*, u.email AS author FROM events e 
-            JOIN users u ON e.created_by=u.id 
-            WHERE is_announcement=true AND is_deleted=false 
-            ORDER BY created_at DESC
-        `);
+  try {
+    const posts = await db.query(`
+      SELECT e.*, u.email AS author,
+      (SELECT COUNT(*) FROM likes WHERE event_id=e.id) AS likes_count
+      FROM events e
+      JOIN users u ON u.id=e.created_by
+      WHERE e.is_deleted=false
+      ORDER BY e.created_at DESC
+    `);
 
-        const trending = await db.query(`
-            SELECT e.id, e.description, COUNT(l.id) as likes_count 
-            FROM events e LEFT JOIN likes l ON e.id = l.event_id 
-            WHERE e.is_deleted = false 
-            GROUP BY e.id ORDER BY likes_count DESC LIMIT 3
-        `);
+    res.render("feed", { posts: posts.rows });
+  } catch (err) {
+    res.status(500).send("Feed error");
+  }
+});
 
-        let villagerSearchQuery = `SELECT id, email, profile_pic FROM users WHERE id != $1`;
-        const villagerParams = [req.user.id];
+/* ---------------- LIKE (FIXED) ---------------- */
+app.post("/event/:id/like", checkVerified, async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
 
-        if (search) {
-            villagerSearchQuery += ` AND email ILIKE $2`;
-            villagerParams.push(`%${search}%`);
-        }
-        
-        villagerSearchQuery += ` LIMIT 10`;
-        const suggestedUsers = await db.query(villagerSearchQuery, villagerParams);
+  try {
+    const existing = await db.query(
+      "SELECT * FROM likes WHERE event_id=$1 AND user_id=$2",
+      [id, userId]
+    );
 
-        let postsQuery = `
-            SELECT e.*, u.email AS author, u.profile_pic, u.is_verified,
-            (SELECT COUNT(*) FROM likes WHERE event_id=e.id) AS likes_count,
-            (SELECT EXISTS (SELECT 1 FROM likes WHERE event_id=e.id AND user_id=$1)) AS liked_by_me,
-            (SELECT JSON_AGG(json_build_object(
-                'id', c.id, 
-                'content', c.content, 
-                'author', cu.email, 
-                'user_id', c.user_id
-            )) FROM comments c JOIN users cu ON c.user_id = cu.id WHERE c.event_id = e.id) as comments_list
-            FROM events e 
-            JOIN users u ON e.created_by=u.id 
-            WHERE is_announcement=false AND is_deleted=false
-        `;
-        
-        const params = [req.user.id];
-        if (search) { 
-            postsQuery += ` AND (e.description ILIKE $2 OR u.email ILIKE $2)`; 
-            params.push(`%${search}%`); 
-        }
-
-        postsQuery += ` ORDER BY e.is_pinned DESC, e.created_at DESC`;
-        const posts = await db.query(postsQuery, params);
-
-        res.render("feed", { 
-            announcements: announcements.rows, 
-            posts: posts.rows, 
-            trending: trending.rows,
-            suggestedUsers: suggestedUsers.rows,
-            search: search,
-            unreadCount: res.locals.unreadCount,
-            user: req.user
-        });
-
-    } catch (err) { 
-        console.error("FEED ERROR:", err);
-        res.status(500).send("Village Feed Error: " + err.message); 
+    if (existing.rows.length) {
+      await db.query("DELETE FROM likes WHERE id=$1", [
+        existing.rows[0].id
+      ]);
+    } else {
+      await db.query(
+        "INSERT INTO likes (event_id,user_id) VALUES ($1,$2)",
+        [id, userId]
+      );
     }
+
+    const count = await db.query(
+      "SELECT COUNT(*) FROM likes WHERE event_id=$1",
+      [id]
+    );
+
+    res.json({ success: true, count: count.rows[0].count });
+  } catch {
+    res.status(500).json({ success: false });
+  }
 });
 
-// Discover route
-app.get("/discover", checkVerified, async (req, res) => {
-    try {
-        const result = await db.query(`
-            SELECT e.*, u.email as author 
-            FROM events e 
-            JOIN users u ON e.created_by = u.id 
-            WHERE e.image_url IS NOT NULL AND e.is_deleted = false 
-            ORDER BY RANDOM() LIMIT 24
-        `);
-        res.render("discover", { posts: result.rows });
-    } catch (err) { res.redirect("/feed"); }
-});
-
-// Single post detail
-app.get("/event/:id", checkVerified, async (req, res) => {
-    try {
-        const result = await db.query(`
-            SELECT e.*, u.email AS author, u.profile_pic, u.is_verified,
-            (SELECT COUNT(*) FROM likes WHERE event_id=e.id) AS likes_count,
-            (SELECT JSON_AGG(json_build_object('content', c.content, 'author', cu.email, 'pic', cu.profile_pic)) 
-             FROM comments c JOIN users cu ON c.user_id = cu.id 
-             WHERE c.event_id = e.id ORDER BY c.created_at ASC) as comments_list
-            FROM events e JOIN users u ON e.created_by=u.id 
-            WHERE e.id = $1 AND e.is_deleted = false`, [req.params.id]);
-
-        if (!result.rows.length) return res.status(404).send("Whisper not found.");
-        res.render("event_detail", { post: result.rows[0] });
-    } catch (err) { res.redirect("/feed"); }
-});
-
-app.post("/event/create", checkVerified, upload.single("localMedia"), async (req, res) => {
-    try {
-        let mediaUrl = null, mediaType = 'image';
-        if (req.file) {
-            const fileName = `${Date.now()}-${req.file.originalname}`;
-            await supabase.storage.from('apugo_village').upload(fileName, req.file.buffer, { contentType: req.file.mimetype, upsert: true });
-            mediaUrl = supabase.storage.from('apugo_village').getPublicUrl(fileName).data.publicUrl;
-            mediaType = req.file.mimetype.startsWith("video") ? 'video' : 'image';
-        }
-        await db.query("INSERT INTO events (title, description, image_url, created_by, is_announcement, media_type) VALUES ($1,$2,$3,$4,$5,$6)", 
-            ["Post", req.body.description, mediaUrl, req.user.id, req.user.role === 'admin', mediaType]);
-        res.redirect("/feed");
-    } catch (err) { res.redirect("/feed"); }
-});
-
-// Unified like endpoint using Supabase and returning JSON for AJAX; requires auth
-app.post('/event/:id/like', checkVerified, async (req, res) => {
-    const postId = req.params.id;
-    const userId = req.user.id;
-
-    try {
-        const { data: existingVibe, error: vibeErr } = await supabase
-            .from('likes')
-            .select('*')
-            .eq('post_id', postId)
-            .eq('user_id', userId)
-            .single();
-
-        if (existingVibe) {
-            await supabase.from('likes').delete().eq('id', existingVibe.id);
-        } else {
-            await supabase.from('likes').insert({ post_id: postId, user_id: userId });
-        }
-
-        const { count, error } = await supabase
-            .from('likes')
-            .select('*', { count: 'exact', head: true })
-            .eq('post_id', postId);
-
-        res.json({ 
-            success: true, 
-            newCount: count || 0, 
-            isLiked: !existingVibe 
-        });
-    } catch (err) {
-        console.error("LIKE ERROR:", err);
-        res.status(500).json({ success: false });
-    }
-});
-
-app.post("/event/:id/report", checkVerified, async (req, res) => {
-    const postId = req.params.id;
-    const userId = req.user.id;
-
-    try {
-        await db.query(
-            "INSERT INTO reports (post_id, reported_by, created_at) VALUES ($1, $2, NOW())",
-            [postId, userId]
-        );
-
-        console.log(`⚠️ Post ${postId} was reported by user ${userId}`);
-        
-        req.flash("success", "Thank you. The Village Elders will review this whisper.");
-        res.redirect("/feed");
-    } catch (err) {
-        console.error("Report Error:", err);
-        res.redirect("/feed");
-    }
-});
-
-app.post("/event/:id/comment", isAuth, async (req, res) => {
-    try {
-        const { content } = req.body;
-        if (!content || content.trim() === "") return res.redirect("back");
-
-        await db.query(
-            "INSERT INTO comments (event_id, user_id, content) VALUES ($1, $2, $3)", 
-            [req.params.id, req.user.id, content]
-        );
-        
-        res.redirect("back");
-    } catch (err) { 
-        console.error(err);
-        res.redirect("back"); 
-    }
-});
-
-app.post("/comment/:id/delete", isAuth, async (req, res) => {
-    try {
-        const comment = await db.query("SELECT user_id FROM comments WHERE id = $1", [req.params.id]);
-        
-        if (comment.rows.length > 0 && (comment.rows[0].user_id === req.user.id || req.user.role === 'admin')) {
-            await db.query("DELETE FROM comments WHERE id = $1", [req.params.id]);
-        }
-        res.redirect("back");
-    } catch (err) {
-        res.redirect("back");
-    }
-});
-
-/* ---------------- CHAT SYSTEM ---------------- */
+/* ---------------- CHAT (DEDUPED) ---------------- */
 app.get("/messages", isAuth, async (req, res) => {
-    try {
-       const friends = await db.query(`
-        SELECT 
-        u.id, u.email, u.profile_pic,
-        (u.last_active > NOW() - INTERVAL '5 minutes') as is_online
-        FROM users u
-        JOIN friendships f ON (f.sender_id = u.id OR f.receiver_id = u.id)
-        WHERE (f.sender_id = $1 OR f.receiver_id = $1) 
-        AND u.id != $1 
-         AND f.status = 'accepted'`, [req.user.id]);
+  const friends = await db.query(`
+    SELECT u.id,u.email FROM users u
+    JOIN friendships f ON (f.sender_id=u.id OR f.receiver_id=u.id)
+    WHERE (f.sender_id=$1 OR f.receiver_id=$1)
+    AND u.id != $1 AND f.status='accepted'
+  `,[req.user.id]);
 
-        res.render("messages", { 
-            friends: friends.rows, 
-            user: req.user 
-        });
-    } catch (err) { 
-        console.error(err);
-        res.redirect("/feed"); 
-    }
+  res.render("messages", { friends: friends.rows });
 });
 
 app.get("/api/chat/:friendId", isAuth, async (req, res) => {
-    const userId = req.user.id;
-    const friendId = req.params.friendId;
+  const rows = await db.query(`
+    SELECT * FROM messages
+    WHERE (sender_id=$1 AND receiver_id=$2)
+    OR (sender_id=$2 AND receiver_id=$1)
+    ORDER BY created_at ASC
+  `,[req.user.id, req.params.friendId]);
 
-    try {
-        const result = await db.query(
-            `SELECT 
-                id, 
-                sender_id, 
-                receiver_id, 
-                content AS content, 
-                created_at, 
-                is_read 
-             FROM messages 
-             WHERE (sender_id = $1 AND receiver_id = $2) 
-                OR (sender_id = $2 AND receiver_id = $1) 
-             ORDER BY created_at ASC`, 
-            [userId, friendId]
-        );
-        res.json(result.rows);
-    } catch (err) {
-        res.status(500).json({ error: "Ancient spirits blocked the message." });
-    }
-});
-
-// DELETE ALL MESSAGES between two users
-app.post("/api/chat/clear/:friendId", isAuth, async (req, res) => {
-    try {
-        const userId = req.user.id;
-        const friendId = req.params.friendId;
-
-        await db.query(
-            "DELETE FROM messages WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)",
-            [userId, friendId]
-        );
-
-        res.json({ success: true, message: "Whispers burned." });
-    } catch (err) {
-        console.error("CLEAR CHAT ERROR:", err);
-        res.status(500).json({ error: "The spirits failed to clear the history." });
-    }
-});
-
-app.post("/api/friends/unfriend/:friendId", isAuth, async (req, res) => {
-    try {
-        const userId = req.user.id;
-        const friendId = req.params.friendId;
-
-        await db.query(
-            "DELETE FROM friendships WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)",
-            [userId, friendId]
-        );
-
-        res.json({ success: true, message: "Kinship broken." });
-    } catch (err) {
-        console.error("UNFRIEND ERROR:", err);
-        res.status(500).json({ error: "Failed to break the bond." });
-    }
-});
-
-app.post("/api/chat/send", isAuth, async (req, res) => {
-    const { receiverId, content } = req.body;
-    
-    if (!content || !receiverId) {
-        return res.status(400).json({ error: "Empty whisper or no recipient." });
-    }
-
-    try {
-        const result = await db.query(
-            "INSERT INTO messages (sender_id, receiver_id, content) VALUES ($1, $2, $3) RETURNING *", 
-            [req.user.id, receiverId, content]
-        );
-        
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error("SEND ERROR:", err);
-        res.status(500).json({ error: "Whisper lost in the wind." });
-    }
+  res.json(rows.rows);
 });
 
 app.delete("/api/chat/clear/:friendId", isAuth, async (req, res) => {
-    try {
-        await db.query(
-            "DELETE FROM messages WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)", 
-            [req.user.id, req.params.friendId]
-        );
-        res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ error: "Burn failed" });
-    }
+  await db.query(
+    "DELETE FROM messages WHERE (sender_id=$1 AND receiver_id=$2) OR (sender_id=$2 AND receiver_id=$1)",
+    [req.user.id, req.params.friendId]
+  );
+  res.json({ success: true });
 });
 
-/* ---------------- FRIENDSHIP SYSTEM ---------------- */
-app.post("/friends/request/:id", isAuth, async (req, res) => {
-    const senderId = req.user.id;
-    const receiverId = req.params.id;
-
-    if (parseInt(senderId) === parseInt(receiverId)) return res.redirect("/feed");
-
-    try {
-        const check = await db.query(
-            "SELECT * FROM friendships WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)",
-            [senderId, receiverId]
-        );
-
-        if (check.rows.length === 0) {
-            const status = 'accepted'; 
-
-            await db.query(
-                "INSERT INTO friendships (sender_id, receiver_id, status) VALUES ($1, $2, $3)",
-                [senderId, receiverId, status]
-            );
-
-            await db.query(
-                "INSERT INTO notifications (user_id, sender_id, message) VALUES ($1, $2, $3)",
-                [receiverId, senderId, "added you as kin!"]
-            );
-        }
-        
-        res.redirect(req.get("Referrer") || "/feed");
-    } catch (err) {
-        console.error("KINSHIP ERROR:", err);
-        res.status(500).send("Error connecting souls.");
-    }
+/* ---------------- ADMIN ---------------- */
+app.get("/admin", isAdmin, async (_, res) => {
+  const users = await db.query(
+    "SELECT id,email,role,is_verified FROM users"
+  );
+  res.render("admin-dashboard", { users: users.rows });
 });
 
-app.post("/friends/unfriend/:id", isAuth, async (req, res) => {
-    const targetId = req.params.id;
-    const userId = req.user.id;
-    try {
-        await db.query(
-            "DELETE FROM friendships WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)",
-            [userId, targetId]
-        );
-        res.redirect(req.get("Referrer") || "/feed");
-    } catch (err) {
-        console.error(err);
-        res.status(500).send("Failed to sever kinship.");
-    }
-});
-
-app.post("/messages/delete/:userId", checkVerified, async (req, res) => {
-    const otherUserId = req.params.userId;
-    const myId = req.user.id;
-    try {
-        await db.query(
-            "DELETE FROM messages WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)",
-            [myId, otherUserId]
-        );
-        res.redirect("/messages");
-    } catch (err) {
-        console.error(err);
-        res.status(500).send("Failed to clear scrolls.");
-    }
-});
-
-
-
-/* ---------------- PROFILE & SETTINGS ---------------- */
-app.get('/profile', isAuth, async (req, res) => {
-    try {
-        const posts = await db.query('SELECT * FROM events WHERE created_by = $1 AND is_deleted = false ORDER BY created_at DESC', [req.user.id]);
-        const friends = await db.query("SELECT COUNT(*) FROM friendships WHERE (sender_id = $1 OR receiver_id = $1) AND status = 'accepted'", [req.user.id]);
-        res.render('profile', { user: req.user, posts: posts.rows, friendCount: friends.rows[0].count });
-    } catch (error) { res.status(500).send("Profile Error"); }
-});
-
-app.get("/notifications", isAuth, async (req, res) => {
-    try {
-        const result = await db.query(`
-            SELECT n.*, u.email as actor_name, u.profile_pic as actor_pic 
-            FROM notifications n 
-            LEFT JOIN users u ON n.actor_id = u.id 
-            WHERE n.user_id = $1 
-            ORDER BY n.created_at DESC LIMIT 50`, [req.user.id]);
-        
-        res.render("notifications", { notifications: result.rows });
-    } catch (err) { res.redirect("/feed"); }
-});
-
-app.post("/notifications/clear", isAuth, async (req, res) => {
-    try {
-        await db.query("UPDATE notifications SET is_read = true WHERE user_id = $1", [req.user.id]);
-        res.redirect("/notifications"); 
-    } catch (err) {
-        console.error("NOTIFICATION CLEAR ERROR:", err);
-        res.status(500).send("The spirits failed to clear the echoes.");
-    }
-});
-
-app.get("/settings", isAuth, (req, res) => res.render("settings", { user: req.user }));
-
-app.post("/settings/profile-pic", isAuth, upload.single("avatar"), async (req, res) => {
-    try {
-        if (!req.file) return res.redirect("back");
-        const dataUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
-        await db.query("UPDATE users SET profile_pic = $1 WHERE id = $2", [dataUrl, req.user.id]);
-        res.redirect("back");
-    } catch (err) { res.redirect("back"); }
-});
-
-/* ---------------- SEARCH & ADMIN ---------------- */
-app.get("/users/search", isAuth, async (req, res) => {
-    try {
-        const result = await db.query("SELECT id, email FROM users WHERE email ILIKE $1 AND id != $2 LIMIT 5", [`%${req.query.query}%`, req.user.id]);
-        res.json(result.rows);
-    } catch (err) { res.status(500).json({ error: "Search failed" }); }
-});
-
-app.post("/user/:id/follow", isAuth, async (req, res) => {
-    const targetId = req.params.id;
-    const followerId = req.user.id;
-
-    if (targetId == followerId) return res.redirect("back");
-
-    try {
-        await db.query(
-            "INSERT INTO friendships (sender_id, receiver_id, status) VALUES ($1, $2, 'accepted') ON CONFLICT DO NOTHING", 
-            [followerId, targetId]
-        );
-        res.redirect("back");
-    } catch (err) {
-        console.error(err);
-        res.redirect("back");
-    }
-});
-
-// View all forum topics (kept above as /forum route)
-
-/* ---------------- VILLAGERS & ADMIN ---------------- */
-app.get("/villagers", checkVerified, async (req, res) => {
-    const search = req.query.search || "";
-    try {
-        const query = `
-            SELECT u.id, u.email, u.profile_pic, u.is_verified,
-            (SELECT status FROM friendships 
-             WHERE (sender_id = $1 AND receiver_id = u.id) 
-                OR (sender_id = u.id AND receiver_id = $1) 
-             LIMIT 1) as friend_status
-            FROM users u 
-            WHERE u.id != $1 
-            ${search ? "AND u.email ILIKE $2" : ""}
-            ORDER BY u.is_verified DESC, u.email ASC`;
-
-        const params = search ? [req.user.id, `%${search}%`] : [req.user.id];
-        const result = await db.query(query, params);
-
-        res.render("villagers", {
-            villagers: result.rows,
-            user: req.user,
-            search: search
-        });
-    } catch (err) {
-        res.redirect("/feed");
-    }
-});
-
-app.get("/admin", isAdmin, async (req, res) => {
-    const users = await db.query("SELECT id, email, role, is_verified FROM users ORDER BY id DESC");
-    res.render("admin-dashboard", { users: users.rows });
-});
-
-/* ---------------- SERVER START ---------------- */
-app.listen(port, () => console.log(`🚀 Village Square live at port ${port}`));
+/* ---------------- SERVER ---------------- */
+app.listen(port, () =>
+  console.log(`🚀 Apugo running on port ${port}`)
+);
