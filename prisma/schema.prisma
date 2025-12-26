@@ -8,6 +8,19 @@ model User {
 
   @@map("users")
 }
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ... your User, Post, and Comment models follow below
 
 model Post {
   id           Int       @id @default(autoincrement())
