@@ -153,7 +153,7 @@ passport.use(new LocalStrategy({ usernameField: "email" }, async (email, passwor
         if (!result.rows.length) return done(null, false, { message: "User not found" });
 
         const user = result.rows[0];
-        if (!user.is_verified) return done(null, false, { message: "Please verify your email first." });
+        
         if (user.password === "google-oauth") return done(null, false, { message: "Use Google Sign-In" });
 
         const valid = await bcrypt.compare(password, user.password);
@@ -197,55 +197,24 @@ app.get("/register", (req, res) => res.render("register"));
 /* ---------------- UPDATED REGISTER ROUTE ---------------- */
 app.post("/register", async (req, res) => {
     const { email, password } = req.body;
-    if (password.length < 8) {
-        req.flash("error", "Password must be at least 8 characters.");
-        return res.redirect("/register");
-    }
-
     try {
         const hash = await bcrypt.hash(password, 10);
-        const token = Math.random().toString(36).substring(2, 15);
-
-        // Save user to DB with verified = false
-        const user = await db.query(
-            "INSERT INTO users (email, password, role, is_verified, verification_token) VALUES ($1,$2,$3,$4,$5) RETURNING *",
-            [email.toLowerCase(), hash, "user", false, token]
+        
+        // We set is_verified to TRUE immediately
+        await db.query(
+            "INSERT INTO users (email, password, role, is_verified) VALUES ($1, $2, $3, $4)",
+            [email.toLowerCase(), hash, "user", true] 
         );
 
-        const verifyLink = `${req.protocol}://${req.get('host')}/auth/verify/${token}`;
-
-        // SEND USING RESEND API (Not SMTP)
-        const { data, error } = await resend.emails.send({
-            from: 'Apugo Village <onboarding@resend.dev>',
-            to: [email.toLowerCase()],
-            subject: 'Verify your Apugo Village Account',
-            html: `
-                <div style="font-family: sans-serif; padding: 20px;">
-                    <h2>Welcome to the Village! 🌴</h2>
-                    <p>Click the button below to verify your email and join the conversation.</p>
-                    <a href="${verifyLink}" style="background: #22c55e; color: white; padding: 12px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
-                        Verify My Account
-                    </a>
-                    <p style="margin-top: 20px; font-size: 12px; color: #666;">
-                        If the button doesn't work, copy this link: ${verifyLink}
-                    </p>
-                </div>
-            `
-        });
-
-        if (error) {
-            console.error("Resend Registration Error:", error);
-            // Even if email fails, the user is in the DB, but we should let them know
-        }
-
-        console.log("✅ Verification API Email sent:", data?.id);
+        console.log(`✅ User ${email} registered and auto-verified.`);
         
-        await sendWelcomeNote(user.rows[0].id);
-        res.render("verify-email-notice", { email: email.toLowerCase() });
+        // Redirect straight to login or auto-login them
+        req.flash("success", "Registration successful! Welcome to the village.");
+        res.redirect("/login");
 
     } catch (err) {
         console.error("REGISTRATION ERROR:", err);
-        req.flash("error", "That email is already in the village square!");
+        req.flash("error", "Email already exists.");
         res.redirect("/register");
     }
 });
@@ -348,7 +317,7 @@ app.post("/reset-password/:token", async (req, res) => {
 app.get("/feed", checkVerified, async (req, res) => {
     const search = req.query.search || "";
     try {
-        // 1. Fetch Announcements
+        // 1. Fetch Announcements (Keep your existing logic)
         const announcements = await db.query(`
             SELECT e.*, u.email AS author FROM events e 
             JOIN users u ON e.created_by=u.id 
@@ -356,15 +325,28 @@ app.get("/feed", checkVerified, async (req, res) => {
             ORDER BY created_at DESC
         `);
 
-        // 2. Fetch Trending
+        // 2. Fetch Trending (Keep your existing logic)
         const trending = await db.query(`
             SELECT e.id, e.description, COUNT(l.id) as likes_count 
             FROM events e LEFT JOIN likes l ON e.id = l.event_id 
             WHERE e.is_deleted = false 
             GROUP BY e.id ORDER BY likes_count DESC LIMIT 3
         `);
+
+        // 3. NEW: Fetch Suggested Villagers (People to Discover)
+        // We find users that are NOT the current user
+        let villagerSearchQuery = `SELECT id, email, profile_pic FROM users WHERE id != $1`;
+        const villagerParams = [req.user.id];
+
+        if (search) {
+            villagerSearchQuery += ` AND email ILIKE $2`;
+            villagerParams.push(`%${search}%`);
+        }
         
-        // 3. Main Posts Query (Fixed the logic here)
+        villagerSearchQuery += ` LIMIT 10`;
+        const suggestedUsers = await db.query(villagerSearchQuery, villagerParams);
+
+        // 4. Main Posts Query
         let postsQuery = `
             SELECT e.*, u.email AS author, u.profile_pic, u.is_verified,
             (SELECT COUNT(*) FROM likes WHERE event_id=e.id) AS likes_count,
@@ -381,21 +363,20 @@ app.get("/feed", checkVerified, async (req, res) => {
         `;
         
         const params = [req.user.id];
-
         if (search) { 
-            postsQuery += ` AND (e.description ILIKE $2)`; 
+            postsQuery += ` AND (e.description ILIKE $2 OR u.email ILIKE $2)`; 
             params.push(`%${search}%`); 
         }
 
         postsQuery += ` ORDER BY e.is_pinned DESC, e.created_at DESC`;
-        
         const posts = await db.query(postsQuery, params);
 
-        // 4. Render with ALL required locals
+        // 5. Render with suggestedUsers added to the object
         res.render("feed", { 
             announcements: announcements.rows, 
             posts: posts.rows, 
             trending: trending.rows,
+            suggestedUsers: suggestedUsers.rows, // Added this!
             search: search,
             unreadCount: res.locals.unreadCount,
             user: req.user
@@ -464,6 +445,29 @@ app.post("/event/:id/like", checkVerified, async (req, res) => {
         }
         res.redirect("back");
     } catch (err) { res.redirect("back"); }
+});
+app.post("/event/:id/report", async (req, res) => {
+    const postId = req.params.id;
+    const userId = req.user.id; // Assuming the user is logged in
+
+    try {
+        // Option A: Just log it in a 'reports' table (Recommended)
+        await db.query(
+            "INSERT INTO reports (post_id, reported_by, created_at) VALUES ($1, $2, NOW())",
+            [postId, userId]
+        );
+
+        // Option B: Mark the post directly as 'under_review'
+        // await db.query("UPDATE posts SET status = 'under_review' WHERE id = $1", [postId]);
+
+        console.log(`⚠️ Post ${postId} was reported by user ${userId}`);
+        
+        req.flash("success", "Thank you. The Village Elders will review this whisper.");
+        res.redirect("/feed");
+    } catch (err) {
+        console.error("Report Error:", err);
+        res.redirect("/feed");
+    }
 });
 
 app.post("/event/:id/comment", isAuth, async (req, res) => {
