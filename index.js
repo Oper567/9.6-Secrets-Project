@@ -1099,30 +1099,43 @@ app.post("/forum/new", checkVerified, async (req, res) => {
 });
 // index.js or routes/forum.js
 
-// This handles the form submission
-// 1. THIS IS THE ROUTE (The "Local" scope)
-// This is your "POST" route for creating a forum thread
-/* ---------------- FORUM ROUTES ---------------- */
+/* ---------------- FORUM POST CREATION ---------------- */
 
+// 1. ensureAuthenticated: stops crashes if req.user is missing
+// 2. upload.single('media'): handles the image file
+/* ---------------- FORUM POST CREATION ---------------- */
+
+// 'media' here MUST match name="media" in your HTML
 app.post("/forum/create", upload.single('media'), async (req, res) => {
     try {
-        // Variables are defined HERE
+        // 1. Check for logged in user (Prevents userId crash)
+        if (!req.user) {
+            return res.redirect('/login');
+        }
+
+        // 2. Extract form data
         const { title, content, category } = req.body;
-        const userId = req.user.id; 
+        const userId = req.user.id;
+        
+        // 3. Handle the file path
         const mediaUrl = req.file ? `/uploads/${req.file.filename}` : null;
 
-        // The query MUST be inside these curly braces
+        // 4. Run the query
         await db.query(`
             INSERT INTO forum_posts (title, content, category, author_id, media_url)
             VALUES ($1, $2, $3, $4, $5)
         `, [title, content, category, userId, mediaUrl]);
 
+        // 5. IMPORTANT: You must send a response to stop the "loading" spinner
+        console.log("Post created successfully!");
         res.redirect("/forum");
+
     } catch (err) {
-        console.error(err);
-        res.status(500).send("Error");
+        console.error("Village Forum Error:", err);
+        // If it fails, we still need to send a response so it stops loading
+        res.status(500).send("The Great Hall could not record your message.");
     }
-}); 
+});
 
 // <--- MAKE SURE NOTHING IS PASTED HERE!
 
