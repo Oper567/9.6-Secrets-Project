@@ -153,6 +153,7 @@ app.use((err, req, res, next) => {
   }
   res.status(500).send("An unknown error occurred.");
 });
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 /* ---------------- AUTHENTICATION HELPERS ---------------- */
 // Example of a safe isAuth middleware
 function isAuth(req, res, next) {
@@ -176,6 +177,16 @@ function isAdmin(req, res, next) {
   req.flash("error", "Access denied. Elders only!");
   res.redirect("/feed");
 }
+// Protection middleware
+function ensureAuthenticated(req, res, next) {
+    if (req.isAuthenticated()) return next();
+    res.redirect("/login");
+}
+
+// Apply it to your route
+app.post("/forum/create", ensureAuthenticated, upload.single('media'), async (req, res) => {
+    const { title, content, category } = req.body;  
+});
 
 async function sendWelcomeNote(userId) {
   try {
@@ -737,23 +748,25 @@ const activeCat = req.query.cat || 'all';
 /* ---------------- FORUM POST ROUTE ---------------- */
 
 // This tells the server: "Wait for someone to submit the form"
+// This is the "Container". Code inside here only runs when a user submits the form.
 app.post("/forum/create", upload.single('media'), async (req, res) => {
     try {
-        // 1. These variables are created ONLY when a request happens
+        // 1. These variables are born HERE, inside the function
         const { title, content, category } = req.body;
         const userId = req.user.id; 
         const mediaUrl = req.file ? `/uploads/${req.file.filename}` : null;
 
-        // 2. The query must live HERE to use those variables
+        // 2. The query MUST be inside here to see those variables
         await db.query(`
             INSERT INTO forum_posts (title, content, category, author_id, media_url)
             VALUES ($1, $2, $3, $4, $5)
         `, [title, content, category, userId, mediaUrl]);
 
         res.redirect("/forum");
+
     } catch (err) {
-        console.error("Database Error:", err);
-        res.status(500).send("The server could not process your post.");
+        console.error("Village Forum Error:", err);
+        res.status(500).send("The Great Hall could not record your message.");
     }
 });
 /* ---------------- CHAT SYSTEM ---------------- */
