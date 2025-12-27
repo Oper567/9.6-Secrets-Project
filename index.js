@@ -28,6 +28,11 @@ const app = express();
 const port = process.env.PORT || 3000;
 const saltRounds = 10;
 const router = express.Router();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, 
+  dest: 'public/uploads/'// Increased to 5MB for village media
+});
 const prisma = new PrismaClient({
   datasourceUrl: process.env.DATABASE_URL,
 });
@@ -76,11 +81,7 @@ await db.query(`
     VALUES ($1, $2, $3, $4, $5)
 `, [title, content, category, userId, mediaUrl]);
 
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 }, 
-  dest: 'public/uploads/'// Increased to 5MB for village media
-});
+
 
 /* ---------------- MIDDLEWARE ---------------- */
 app.set("trust proxy", 1);
@@ -719,27 +720,25 @@ app.post("/comment/:id/delete", isAuth, async (req, res) => {
 });
 // This crashes because 'req' doesn't exist here!
 const activeCat = req.query.cat || 'all';
-app.get("/forum", async (req, res) => {
-    // req is defined here because a user just visited the page!
-    const activeCat = req.query.cat || 'all'; 
-
+// 2. The route itself
+app.post("/forum/create", upload.single('media'), async (req, res) => {
     try {
-        const result = await db.query(`
-            SELECT f.*, u.email as author_username, u.profile_pic as author_pic 
-            FROM forum_posts f 
-            JOIN users u ON f.author_id = u.id 
-            ${activeCat !== 'all' ? 'WHERE f.category = $1' : ''}
-            ORDER BY f.created_at DESC
-        `, activeCat !== 'all' ? [activeCat] : []);
+        // MOVE THE VARIABLE HERE! 
+        // It now has access to 'req' because the route provides it.
+        const mediaUrl = req.file ? `/uploads/${req.file.filename}` : null;
+        
+        const { title, content, category } = req.body;
+        const userId = req.user.id;
 
-        res.render("forum", {
-            threads: result.rows,
-            activeCat: activeCat,
-            user: req.user
-        });
+        await db.query(`
+            INSERT INTO forum_posts (title, content, category, author_id, media_url)
+            VALUES ($1, $2, $3, $4, $5)
+        `, [title, content, category, userId, mediaUrl]);
+
+        res.redirect("/forum");
     } catch (err) {
         console.error(err);
-        res.status(500).send("Error loading Town Hall.");
+        res.status(500).send("Error creating post");
     }
 });
 
