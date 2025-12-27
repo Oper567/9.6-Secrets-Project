@@ -31,9 +31,6 @@ const router = express.Router();
 const prisma = new PrismaClient({
   datasourceUrl: process.env.DATABASE_URL,
 });
-// In your GET /forum route
-const activeCat = req.query.cat || 'all';
-// Use .toLowerCase() to ensure 'Marketplace' from a link matches 'marketplace' from the DB
 
 /* ---------------- SERVICES (DB, SUPABASE, MAIL) ---------------- */
 const db = new pg.Pool({
@@ -720,14 +717,29 @@ app.post("/comment/:id/delete", isAuth, async (req, res) => {
     goBack(req, res); // FIX
   }
 });
-app.get('/forum', async (req, res) => {
+// This crashes because 'req' doesn't exist here!
+const activeCat = req.query.cat || 'all';
+app.get("/forum", async (req, res) => {
+    // req is defined here because a user just visited the page!
+    const activeCat = req.query.cat || 'all'; 
+
     try {
-        const topics = await db.query('SELECT * FROM forum_topics');
-        // If you forget this line, the page will load forever:
-        res.render('forum', { topics: topics.rows }); 
+        const result = await db.query(`
+            SELECT f.*, u.email as author_username, u.profile_pic as author_pic 
+            FROM forum_posts f 
+            JOIN users u ON f.author_id = u.id 
+            ${activeCat !== 'all' ? 'WHERE f.category = $1' : ''}
+            ORDER BY f.created_at DESC
+        `, activeCat !== 'all' ? [activeCat] : []);
+
+        res.render("forum", {
+            threads: result.rows,
+            activeCat: activeCat,
+            user: req.user
+        });
     } catch (err) {
         console.error(err);
-        res.render('forum', { topics: [] }); // Send empty array so it doesn't hang
+        res.status(500).send("Error loading Town Hall.");
     }
 });
 
