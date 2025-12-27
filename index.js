@@ -721,12 +721,15 @@ app.post("/comment/:id/delete", isAuth, async (req, res) => {
 // This crashes because 'req' doesn't exist here!
 const activeCat = req.query.cat || 'all';
 // 2. The route itself
+// ... imports at the top ...
+
+// 1. The route starts here
 app.post("/forum/create", upload.single('media'), async (req, res) => {
+    
+    // MOVE LINE 77 TO HERE (Inside the function)
+    const mediaUrl = req.file ? `/uploads/${req.file.filename}` : null;
+
     try {
-        // MOVE THE VARIABLE HERE! 
-        // It now has access to 'req' because the route provides it.
-        const mediaUrl = req.file ? `/uploads/${req.file.filename}` : null;
-        
         const { title, content, category } = req.body;
         const userId = req.user.id;
 
@@ -738,7 +741,7 @@ app.post("/forum/create", upload.single('media'), async (req, res) => {
         res.redirect("/forum");
     } catch (err) {
         console.error(err);
-        res.status(500).send("Error creating post");
+        res.status(500).send("Error saving post");
     }
 });
 
