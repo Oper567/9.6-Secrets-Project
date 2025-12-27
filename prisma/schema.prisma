@@ -3,37 +3,43 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
 /* ===================== USERS ===================== */
 model User {
-  id                Int       @id @default(autoincrement())
-  email             String    @unique
-  password          String
-  role              String    @default("user")
-  is_verified       Boolean   @default(false)
-  profile_pic       String?
-  last_active       DateTime?
+  id                 Int       @id @default(autoincrement())
+  email              String    @unique
+  password           String
+  role               String    @default("user")
+  is_verified        Boolean   @default(false)
+  profile_pic        String?
+  last_active        DateTime? @default(now())
   verification_token String?
-  reset_token       String?
-  reset_expires     DateTime?
+  reset_token        String?
+  reset_expires      DateTime?
+  created_at         DateTime  @default(now())
 
-  events            Event[]
-  comments          Comment[]
-  likes             Like[]
-  sentMessages      Message[] @relation("SentMessages")
-  receivedMessages  Message[] @relation("ReceivedMessages")
-  sentFriendships   Friendship[] @relation("SentFriendships")
+  // Relations
+  events             Event[]
+  comments           Comment[]
+  likes              Like[]
+  notifications      Notification[]
+  forumThreads       ForumThread[]
+  forumReplies       ForumReply[]
+  reports            Report[]
+
+  // Chat Relations
+  sentMessages       Message[]    @relation("SentMessages")
+  receivedMessages   Message[]    @relation("ReceivedMessages")
+
+  // Social Relations
+  sentFriendships     Friendship[] @relation("SentFriendships")
   receivedFriendships Friendship[] @relation("ReceivedFriendships")
-  notifications     Notification[]
-  forumThreads      ForumThread[]
-  forumReplies      ForumReply[]
-  reports           Report[]
 
-  created_at        DateTime  @default(now())
+  @@map("users")
 }
 
 /* ===================== EVENTS (FEED POSTS) ===================== */
@@ -46,6 +52,7 @@ model Event {
   is_announcement Boolean   @default(false)
   is_pinned       Boolean   @default(false)
   is_deleted      Boolean   @default(false)
+  created_at      DateTime  @default(now())
 
   created_by      Int
   author          User      @relation(fields: [created_by], references: [id])
@@ -54,51 +61,52 @@ model Event {
   comments        Comment[]
   reports         Report[]
 
-  created_at      DateTime  @default(now())
+  @@map("events")
 }
 
 /* ===================== COMMENTS ===================== */
 model Comment {
-  id          Int      @id @default(autoincrement())
+  id           Int      @id @default(autoincrement())
   comment_text String
+  created_at   DateTime @default(now())
 
-  post_id    Int
-  post       Event    @relation(fields: [post_id], references: [id])
+  post_id      Int
+  post         Event    @relation(fields: [post_id], references: [id])
 
-  user_id    Int
-  user       User     @relation(fields: [user_id], references: [id])
+  user_id      Int
+  user         User     @relation(fields: [user_id], references: [id])
 
-  created_at DateTime @default(now())
+  @@map("comments")
 }
 
 /* ===================== LIKES ===================== */
 model Like {
-  id        Int   @id @default(autoincrement())
-
-  event_id Int
-  event    Event @relation(fields: [event_id], references: [id])
-
-  user_id  Int
-  user     User  @relation(fields: [user_id], references: [id])
-
+  id         Int      @id @default(autoincrement())
   created_at DateTime @default(now())
 
+  event_id   Int
+  event      Event    @relation(fields: [event_id], references: [id])
+
+  user_id    Int
+  user       User     @relation(fields: [user_id], references: [id])
+
   @@unique([event_id, user_id])
+  @@map("likes")
 }
 
 /* ===================== FRIENDSHIPS ===================== */
 model Friendship {
-  id          Int    @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   sender_id   Int
   receiver_id Int
-  status      String @default("accepted")
-
-  sender      User @relation("SentFriendships", fields: [sender_id], references: [id])
-  receiver    User @relation("ReceivedFriendships", fields: [receiver_id], references: [id])
-
+  status      String   @default("accepted")
   created_at  DateTime @default(now())
 
+  sender      User     @relation("SentFriendships", fields: [sender_id], references: [id])
+  receiver    User     @relation("ReceivedFriendships", fields: [receiver_id], references: [id])
+
   @@unique([sender_id, receiver_id])
+  @@map("friendships")
 }
 
 /* ===================== MESSAGES (CHAT) ===================== */
@@ -108,11 +116,12 @@ model Message {
   receiver_id Int
   content     String
   is_read     Boolean  @default(false)
-
-  sender      User @relation("SentMessages", fields: [sender_id], references: [id])
-  receiver    User @relation("ReceivedMessages", fields: [receiver_id], references: [id])
-
   created_at  DateTime @default(now())
+
+  sender      User     @relation("SentMessages", fields: [sender_id], references: [id])
+  receiver    User     @relation("ReceivedMessages", fields: [receiver_id], references: [id])
+
+  @@map("messages")
 }
 
 /* ===================== NOTIFICATIONS ===================== */
@@ -122,10 +131,11 @@ model Notification {
   sender_id  Int?
   message    String
   is_read    Boolean  @default(false)
+  created_at DateTime @default(now())
 
   user       User     @relation(fields: [user_id], references: [id])
 
-  created_at DateTime @default(now())
+  @@map("notifications")
 }
 
 /* ===================== REPORTS ===================== */
@@ -133,11 +143,12 @@ model Report {
   id          Int      @id @default(autoincrement())
   post_id     Int
   reported_by Int
+  created_at  DateTime @default(now())
 
   post        Event    @relation(fields: [post_id], references: [id])
   reporter    User     @relation(fields: [reported_by], references: [id])
 
-  created_at  DateTime @default(now())
+  @@map("reports")
 }
 
 /* ===================== FORUM ===================== */
@@ -148,31 +159,35 @@ model ForumThread {
   category    String
   image_url   String?
   view_count  Int      @default(0)
+  created_at  DateTime @default(now())
 
   author_id   Int
   author      User     @relation(fields: [author_id], references: [id])
 
   replies     ForumReply[]
 
-  created_at  DateTime @default(now())
+  @@map("forum_threads")
 }
 
 model ForumReply {
   id         Int      @id @default(autoincrement())
   reply_text String
+  created_at DateTime @default(now())
 
   thread_id  Int
   thread     ForumThread @relation(fields: [thread_id], references: [id])
 
   author_id  Int
-  author     User     @relation(fields: [author_id], references: [id])
+  author     User        @relation(fields: [author_id], references: [id])
 
-  created_at DateTime @default(now())
+  @@map("forum_replies")
 }
 
-/* ===================== SESSIONS (connect-pg-simple) ===================== */
+/* ===================== SESSIONS ===================== */
 model Session {
-  sid     String   @id
-  sess    Json
-  expire  DateTime
+  sid    String   @id
+  sess   Json
+  expire DateTime
+
+  @@map("session")
 }
