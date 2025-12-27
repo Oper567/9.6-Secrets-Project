@@ -431,62 +431,48 @@ app.post("/reset-password/:token", async (req, res) => {
 app.get("/feed", checkVerified, async (req, res) => {
   const search = req.query.search || "";
   try {
-    const result = await db.query(`
-    SELECT 
-        e.*, 
-        u.email AS author, -- Or u.name if that's what you have
-        u.is_verified 
-    FROM events e 
-    JOIN users u ON e.created_by = u.id 
-    ORDER BY e.created_at DESC
-`);
-    const recentEvents = result.rows;
-    // 1. Fetch Announcements (Keep your existing logic)
+    // 1. Fetch Announcements
     const announcements = await db.query(`
-            SELECT e.*, u.email AS author FROM events e 
-            JOIN users u ON e.created_by=u.id 
-            WHERE is_announcement=true AND is_deleted=false 
-            ORDER BY created_at DESC
-        `);
+      SELECT e.*, u.email AS author FROM events e 
+      JOIN users u ON e.created_by = u.id 
+      WHERE is_announcement = true AND is_deleted = false 
+      ORDER BY created_at DESC
+    `);
 
-    // 2. Fetch Trending (Keep your existing logic)
+    // 2. Fetch Trending
     const trending = await db.query(`
-            SELECT e.id, e.description, COUNT(l.id) as likes_count 
-            FROM events e LEFT JOIN likes l ON e.id = l.event_id 
-            WHERE e.is_deleted = false 
-            GROUP BY e.id ORDER BY likes_count DESC LIMIT 3
-        `);
+      SELECT e.id, e.description, COUNT(l.id) as likes_count 
+      FROM events e LEFT JOIN likes l ON e.id = l.event_id 
+      WHERE e.is_deleted = false 
+      GROUP BY e.id ORDER BY likes_count DESC LIMIT 3
+    `);
 
-    // 3. NEW: Fetch Suggested Villagers (People to Discover)
-    // We find users that are NOT the current user
+    // 3. Fetch Villagers (friends)
+    let villagerParams = [req.user.id];
     let villagerSearchQuery = `SELECT id, email, profile_pic FROM users WHERE id != $1`;
-    const villagerParams = [req.user.id];
-
     if (search) {
       villagerSearchQuery += ` AND email ILIKE $2`;
       villagerParams.push(`%${search}%`);
     }
-
-    villagerSearchQuery += ` LIMIT 10`;
-    const suggestedUsers = await db.query(villagerSearchQuery, villagerParams);
+    const suggestedUsers = await db.query(villagerSearchQuery + ` LIMIT 10`, villagerParams);
 
     // 4. Main Posts Query
+    let params = [req.user.id];
     let postsQuery = `
-            SELECT e.*, u.email AS author, u.profile_pic, u.is_verified,
-            (SELECT COUNT(*) FROM likes WHERE event_id=e.id) AS likes_count,
-            (SELECT EXISTS (SELECT 1 FROM likes WHERE event_id=e.id AND user_id=$1)) AS liked_by_me,
-            (SELECT JSON_AGG(json_build_object(
-                'id', c.id, 
-                'content', c.content, 
-                'author', cu.email, 
-                'user_id', c.user_id
-            )) FROM comments c JOIN users cu ON c.user_id = cu.id WHERE c.event_id = e.id) as comments_list
-            FROM events e 
-            JOIN users u ON e.created_by=u.id 
-            WHERE is_announcement=false AND is_deleted=false
-        `;
+      SELECT e.*, u.email AS author, u.profile_pic, u.is_verified,
+      (SELECT COUNT(*) FROM likes WHERE event_id = e.id) AS likes_count,
+      (SELECT EXISTS (SELECT 1 FROM likes WHERE event_id = e.id AND user_id = $1)) AS liked_by_me,
+      (SELECT JSON_AGG(json_build_object(
+          'id', c.id, 
+          'comment_text', c.content, 
+          'username', cu.email, 
+          'user_id', c.user_id
+      )) FROM comments c JOIN users cu ON c.user_id = cu.id WHERE c.event_id = e.id) as comments_list
+      FROM events e 
+      JOIN users u ON e.created_by = u.id 
+      WHERE is_announcement = false AND is_deleted = false
+    `;
 
-    const params = [req.user.id];
     if (search) {
       postsQuery += ` AND (e.description ILIKE $2 OR u.email ILIKE $2)`;
       params.push(`%${search}%`);
@@ -495,16 +481,17 @@ app.get("/feed", checkVerified, async (req, res) => {
     postsQuery += ` ORDER BY e.is_pinned DESC, e.created_at DESC`;
     const posts = await db.query(postsQuery, params);
 
-    // 5. Render with suggestedUsers added to the object
+    // 5. Final Render
     res.render("feed", {
       announcements: announcements.rows,
       posts: posts.rows,
       trending: trending.rows,
-      suggestedUsers: suggestedUsers.rows, // Added this!
+      friends: suggestedUsers.rows, // Matched to your EJS variable name
       search: search,
-      unreadCount: res.locals.unreadCount,
+      unreadCount: res.locals.unreadCount || 0,
       user: req.user,
     });
+
   } catch (err) {
     console.error("FEED ERROR:", err);
     res.status(500).send("Village Feed Error: " + err.message);
@@ -1073,29 +1060,24 @@ app.post("/forum/new", checkVerified, async (req, res) => {
 // index.js or routes/forum.js
 
 // This handles the form submission
-app.post("/forum/create", async (req, res) => {
-  try {
-    const { title, content, category } = req.body;
+app.post('/forum/create', async (req, res) => {
+    try {
+        // 1. Get data from the form
+        const { title, content, category } = req.body;
+        const userId = req.user.id; 
 
-    // 1. Validate user is logged in
-    if (!req.user) return res.redirect("/login");
+        // 2. Simple SQL Insert
+        // Using $1, $2, etc. prevents SQL Injection
+        await db.query(`
+            INSERT INTO forum_posts (title, content, category, author_id, created_at)
+            VALUES ($1, $2, $3, $4, NOW())
+        `, [title, content, category || 'General', userId]);
 
-    // 2. Save to Database (Example using Prisma/Mongoose)
-    await prisma.forumPost.create({
-      data: {
-        title: title,
-        content: content,
-        category: category || "General",
-        authorId: req.user.id,
-      },
-    });
-
-    // 3. Redirect back to the forum page
-    res.redirect("/forum");
-  } catch (error) {
-    console.error(error);
-    res.status(500).send("The Town Hall is closed due to a server error.");
-  }
+        res.redirect('/forum');
+    } catch (err) {
+        console.error("Village Registry Error:", err);
+        res.status(500).send("The Town Hall records are full.");
+    }
 });
 
 
