@@ -727,7 +727,6 @@ app.post("/comment/:id/delete", isAuth, async (req, res) => {
   }
 });
 // This crashes because 'req' doesn't exist here!
-const activeCat = req.query.cat || 'all';
 // 2. The route itself
 // ... imports at the top ...
 
@@ -1072,19 +1071,21 @@ app.post("/user/:id/follow", isAuth, async (req, res) => {
   }
 });
 // VIEW ALL TOPICS
-app.get("/forum", checkVerified, async (req, res) => {
-  try {
-    const result = await db.query(`
-            SELECT t.*, u.email as author, 
-            (SELECT COUNT(*) FROM forum_replies WHERE topic_id = t.id) as reply_count
-            FROM forum_topics t
-            JOIN users u ON t.creator_id = u.id
-            ORDER BY t.created_at DESC
-        `);
-    res.render("forum", { topics: result.rows, user: req.user });
-  } catch (err) {
-    res.redirect("/feed");
-  }
+// --- DO NOT PUT IT HERE (Global Scope) ---
+
+app.get("/forum", async (req, res) => {
+    // --- MOVE IT HERE (Route Scope) ---
+    try {
+        const activeCat = req.query.cat || 'all'; 
+        
+        // Now you can use activeCat in your database query
+        const posts = await db.query("SELECT * FROM forum_posts WHERE category = $1 OR $1 = 'all'", [activeCat]);
+        
+        res.render("forum", { posts, activeCat });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error loading forum");
+    }
 });
 
 // CREATE NEW TOPIC
