@@ -72,7 +72,8 @@ const sendVerificationEmail = async (toEmail, token) => {
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 }, // Increased to 5MB for village media
+  limits: { fileSize: 5 * 1024 * 1024 }, 
+  dest: 'public/uploads/'// Increased to 5MB for village media
 });
 
 /* ---------------- MIDDLEWARE ---------------- */
@@ -313,49 +314,7 @@ app.post(
     failureFlash: true,
   })
 );
-// --- ROUTES ---
 
-router.post("/forum/create", upload.single("media"), async (req, res) => {
-  const { title, content, category } = req.body;
-  let imageUrl = null;
-
-  try {
-    if (req.file) {
-      // Create a unique filename: timestamp + original name
-      const fileName = `${Date.now()}-${req.file.originalname}`;
-
-      // Upload to Supabase Bucket
-      const { data, error } = await supabase.storage
-        .from("forum-attachments") // Your Bucket Name
-        .upload(fileName, req.file.buffer, {
-          contentType: req.file.mimetype,
-          upsert: false,
-        });
-
-      if (error) throw error;
-
-      // Get Public URL
-      const { data: publicUrlData } = supabase.storage
-        .from("forum-attachments")
-        .getPublicUrl(fileName);
-
-      imageUrl = publicUrlData.publicUrl;
-    }
-
-    // Insert into Database
-    await db.query(
-      "INSERT INTO forum_threads (title, content, category, author_id, image_url) VALUES ($1, $2, $3, $4, $5)",
-      [title, content, category, req.user.id, imageUrl]
-    );
-
-    res.redirect("/forum");
-  } catch (err) {
-    console.error("Supabase Upload/DB Error:", err);
-    res.redirect("/forum?error=upload_failed");
-  }
-});
-
-export default router;
 
 app.get(
   "/auth/google",
@@ -472,6 +431,14 @@ app.post("/reset-password/:token", async (req, res) => {
 app.get("/feed", checkVerified, async (req, res) => {
   const search = req.query.search || "";
   try {
+    // Inside your GET /feed route
+    const result = await db.query(`
+    SELECT e.*, u.username AS author, u.is_verified 
+    FROM events e 
+    JOIN users u ON e.created_by = u.id 
+    ORDER BY e.created_at DESC
+`);
+    const recentEvents = result.rows;
     // 1. Fetch Announcements (Keep your existing logic)
     const announcements = await db.query(`
             SELECT e.*, u.email AS author FROM events e 
@@ -663,6 +630,28 @@ app.post("/event/:id/like", async (req, res) => {
     res.status(500).json({ success: false });
   }
 });
+// Ensure this is in your main file or the router linked to '/event'
+app.post('/event/:id/delete', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user.id;
+
+        // Security: Only delete if the user owns the post
+        await db.query('DELETE FROM events WHERE id = $1 AND created_by = $2', [id, userId]);
+        
+        res.redirect('/feed');
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Village Error");
+    }
+});
+app.post('/event/create', upload.single('localMedia'), async (req, res) => {
+    const { description } = req.body;
+    // If you don't use upload.single(), 'description' will be UNDEFINED here.
+    
+    // ... your DB insert logic
+    res.redirect('/feed');
+});
 app.post("/event/:id/report", async (req, res) => {
   const postId = req.params.id;
   const userId = req.user.id; // Assuming the user is logged in
@@ -735,6 +724,16 @@ app.post("/comment/:id/delete", isAuth, async (req, res) => {
   } catch (err) {
     goBack(req, res); // FIX
   }
+});
+app.get('/forum', async (req, res) => {
+    try {
+        const topics = await db.query('SELECT * FROM forum_topics');
+        // If you forget this line, the page will load forever:
+        res.render('forum', { topics: topics.rows }); 
+    } catch (err) {
+        console.error(err);
+        res.render('forum', { topics: [] }); // Send empty array so it doesn't hang
+    }
 });
 
 /* ---------------- CHAT SYSTEM ---------------- */
@@ -1062,113 +1061,6 @@ app.get("/forum", checkVerified, async (req, res) => {
     res.redirect("/feed");
   }
 });
-// 1. GET ALL THREADS (The Forum Main Page)
-router.get("/forum", async (req, res) => {
-  try {
-    const category = req.query.cat;
-    let query = `
-            SELECT ft.*, u.username as author_name, u.profile_pic as author_pic,
-            (SELECT COUNT(*) FROM forum_replies WHERE thread_id = ft.id) as reply_count
-            FROM forum_threads ft
-            JOIN users u ON ft.author_id = u.id
-        `;
-
-    let params = [];
-    if (category) {
-      query += ` WHERE ft.category = $1`;
-      params.push(category);
-    }
-
-    query += ` ORDER BY ft.created_at DESC`;
-
-    const result = await db.query(query, params);
-    res.render("forum", {
-      threads: result.rows,
-      user: req.user,
-      activeCat: category || "all",
-    });
-  } catch (err) {
-    console.error("Forum Fetch Error:", err);
-    res.status(500).send("The Village Elders are busy. Try again later.");
-  }
-});
-
-// 2. GET SINGLE THREAD (The Thread View)
-router.get("/forum/thread/:id", async (req, res) => {
-  const { id } = req.params;
-  try {
-    // Increment view count
-    await db.query(
-      "UPDATE forum_threads SET view_count = view_count + 1 WHERE id = $1",
-      [id]
-    );
-
-    // Fetch thread and author details
-    const threadResult = await db.query(
-      `
-            SELECT ft.*, u.username as author_name, u.profile_pic as author_pic 
-            FROM forum_threads ft 
-            JOIN users u ON ft.author_id = u.id 
-            WHERE ft.id = $1`,
-      [id]
-    );
-
-    // Fetch replies with author details
-    const repliesResult = await db.query(
-      `
-            SELECT fr.*, u.username as author_name, u.profile_pic as author_pic 
-            FROM forum_replies fr 
-            JOIN users u ON fr.author_id = u.id 
-            WHERE fr.thread_id = $1 
-            ORDER BY fr.created_at ASC`,
-      [id]
-    );
-
-    if (threadResult.rows.length === 0) {
-      return res.status(404).send("This whisper has vanished into the winds.");
-    }
-
-    res.render("thread", {
-      thread: threadResult.rows[0],
-      replies: repliesResult.rows,
-      user: req.user,
-    });
-  } catch (err) {
-    console.error("Thread View Error:", err);
-    res.status(500).send("Server Error");
-  }
-});
-
-// 3. POST NEW THREAD
-router.post("/forum/create", async (req, res) => {
-  const { title, content, category } = req.body;
-  try {
-    await db.query(
-      "INSERT INTO forum_threads (title, content, category, author_id) VALUES ($1, $2, $3, $4)",
-      [title, content, category, req.user.id]
-    );
-    res.redirect("/forum");
-  } catch (err) {
-    console.error("Thread Creation Error:", err);
-    res.redirect("/forum?error=creation_failed");
-  }
-});
-
-// 4. POST REPLY
-router.post("/forum/thread/:id/reply", async (req, res) => {
-  const threadId = req.params.id;
-  const { reply_text } = req.body;
-  try {
-    await db.query(
-      "INSERT INTO forum_replies (thread_id, author_id, reply_text) VALUES ($1, $2, $3)",
-      [threadId, req.user.id, reply_text]
-    );
-    res.redirect(`/forum/thread/${threadId}`);
-  } catch (err) {
-    console.error("Reply Posting Error:", err);
-    res.redirect(`/forum/thread/${threadId}?error=reply_failed`);
-  }
-});
 
 // CREATE NEW TOPIC
 app.post("/forum/new", checkVerified, async (req, res) => {
@@ -1207,227 +1099,8 @@ app.post("/forum/create", async (req, res) => {
   }
 });
 
-router.get("/feed", async (req, res) => {
-  try {
-    // 1. Pagination & Search Parameters
-    const page = parseInt(req.query.page) || 1;
-    const limit = 10;
-    const offset = (page - 1) * limit;
-    const searchQuery = req.query.search || "";
 
-    // 2. Fetch Posts with Author Details (JOIN)
-    // We join 'events' with 'users' to get the username for the feed
-    const postsResult = await db.query(
-      `
-            SELECT 
-                e.*, 
-                u.username, 
-                u.is_verified,
-                (SELECT COUNT(*) FROM likes WHERE event_id = e.id) as likes_count
-            FROM events e
-            JOIN users u ON e.created_by = u.id
-            WHERE e.description ILIKE $1
-            ORDER BY e.created_at DESC
-            LIMIT $2 OFFSET $3
-        `,
-      [`%${searchQuery}%`, limit, offset]
-    );
 
-    const posts = postsResult.rows;
-
-    // 3. Handle AJAX Requests (Infinite Scroll)
-    // Check if the request header 'X-Requested-With' is 'XMLHttpRequest'
-    if (req.xhr || req.headers["x-requested-with"] === "XMLHttpRequest") {
-      return res.json({
-        success: true,
-        posts: posts,
-        currentPage: page,
-      });
-    }
-
-    // 4. Data for the Sidebar (Only needed on initial page load)
-
-    // Suggested Villagers (Users who aren't the current user)
-    const suggestedResult = await db.query(
-      `
-            SELECT id, username FROM users 
-            WHERE id != $1 
-            ORDER BY RANDOM() LIMIT 5
-        `,
-      [req.user.id]
-    );
-
-    // Trending Whispers (Posts with most interaction)
-    const trendingResult = await db.query(`
-            SELECT id, description FROM events 
-            ORDER BY created_at DESC LIMIT 4
-        `);
-
-    // 5. Render the Full Page
-    res.render("feed", {
-      user: req.user,
-      posts: posts,
-      friends: suggestedResult.rows, // Used for the "Villagers" sections
-      trending: trendingResult.rows,
-      search: searchQuery,
-      unreadCount: 0, // Replace with your actual notifications logic
-    });
-  } catch (err) {
-    console.error("Feed Error:", err);
-    res
-      .status(500)
-      .send("The Village Square is currently closed for maintenance.");
-  }
-});
-
-router.post("/event/:id/like", async (req, res) => {
-  const eventId = req.params.id;
-  const userId = req.user.id;
-
-  try {
-    // Check if already liked
-    const checkLike = await db.query(
-      "SELECT * FROM likes WHERE event_id = $1 AND user_id = $2",
-      [eventId, userId]
-    );
-
-    if (checkLike.rows.length > 0) {
-      // Unlike
-      await db.query("DELETE FROM likes WHERE event_id = $1 AND user_id = $2", [
-        eventId,
-        userId,
-      ]);
-    } else {
-      // Like
-      await db.query("INSERT INTO likes (event_id, user_id) VALUES ($1, $2)", [
-        eventId,
-        userId,
-      ]);
-    }
-
-    // Get new total
-    const countResult = await db.query(
-      "SELECT COUNT(*) FROM likes WHERE event_id = $1",
-      [eventId]
-    );
-
-    res.json({ success: true, newCount: countResult.rows[0].count });
-  } catch (err) {
-    res.status(500).json({ success: false });
-  }
-});
-// POST /event/:id/like
-router.post("/event/:id/like", async (req, res) => {
-  const postId = req.params.id;
-  const userId = req.session.user.id;
-
-  try {
-    // 1. Check if the vibe already exists
-    const { data: existingVibe } = await supabase
-      .from("likes")
-      .select("*")
-      .eq("post_id", postId)
-      .eq("user_id", userId)
-      .single();
-
-    if (existingVibe) {
-      // Unlike: Remove the record
-      await supabase.from("likes").delete().eq("id", existingVibe.id);
-    } else {
-      // Like: Add the record
-      await supabase.from("likes").insert({ post_id: postId, user_id: userId });
-    }
-
-    // 2. Get the updated count
-    const { count, error } = await supabase
-      .from("likes")
-      .select("*", { count: "exact", head: true })
-      .eq("post_id", postId);
-
-    // 3. Send JSON back to the frontend
-    res.json({
-      success: true,
-      newCount: count || 0,
-      isLiked: !existingVibe,
-    });
-  } catch (err) {
-    res.status(500).json({ success: false });
-  }
-});
-
-// 2. Apply 'upload.single' to the route
-router.post('/event/create', upload.single('localMedia'), async (req, res) => {
-    try {
-        // Log this to your console! If it's undefined, Multer isn't working.
-        console.log("Form Text:", req.body);
-        console.log("Form File:", req.file);
-
-        const { description } = req.body;
-        const userId = req.user.id; 
-        const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
-
-        // Ensure description isn't empty
-        if (!description) {
-            return res.status(400).send("The square cannot whisper silence.");
-        }
-
-        await db.query(
-            'INSERT INTO events (description, image_url, created_by, created_at) VALUES ($1, $2, $3, NOW())',
-            [description, imageUrl, userId]
-        );
-
-        res.redirect('/feed'); // Redirect back to show the new post
-    } catch (err) {
-        console.error("Database Error:", err);
-        res.status(500).send("The ink ran out. Could not post.");
-    }
-});
-router.post("/event/:id/delete", async (req, res) => {
-  const eventId = req.params.id;
-  const userId = req.user.id;
-
-  try {
-    // Only the creator of the whisper can delete it
-    const result = await db.query(
-      "DELETE FROM events WHERE id = $1 AND created_by = $2",
-      [eventId, userId]
-    );
-
-    if (result.rowCount === 0) {
-      return res
-        .status(403)
-        .json({ error: "This is not your whisper to erase." });
-    }
-
-    res.redirect("/feed");
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("The whisper refused to fade.");
-  }
-});
-async function fetchMessages() {
-  if (!currentFriendId) return;
-  try {
-    const res = await fetch(`/api/chat/${currentFriendId}`);
-    const data = await res.json(); // Assume data now returns { messages, lastSeen }
-
-    // Update Status Subtext
-    const statusEl = document.getElementById("chatStatus");
-    const lastSeenDate = new Date(data.lastSeen);
-    const now = new Date();
-    const diffInMinutes = Math.floor((now - lastSeenDate) / 1000 / 60);
-
-    if (diffInMinutes < 2) {
-      statusEl.innerHTML = `<span class="text-green-500 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span> Active Now</span>`;
-    } else {
-      statusEl.innerText = `Last seen ${formatTimeAgo(lastSeenDate)}`;
-    }
-
-    // ... existing message rendering logic ...
-  } catch (e) {
-    console.error("Sync failed");
-  }
-}
 
 // Helper for "Time Ago"
 function formatTimeAgo(date) {
