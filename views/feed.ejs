@@ -18,7 +18,6 @@
         .glass-nav {
             background: rgba(2, 6, 23, 0.8);
             backdrop-filter: blur(24px);
-            -webkit-backdrop-filter: blur(24px);
             border-bottom: 1px solid rgba(255,255,255,0.03);
         }
         .post-card {
@@ -26,95 +25,61 @@
             border: 1px solid rgba(255, 255, 255, 0.05);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .post-card:hover {
-            border-color: rgba(59, 130, 246, 0.4);
-            background: rgba(15, 23, 42, 0.6);
-        }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        
-        .vibe-pop { animation: heartPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-        @keyframes heartPop {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.5); }
-            100% { transform: scale(1); }
-        }
-
-        .comment-section {
+        .echo-section {
             max-height: 0;
             overflow: hidden;
             transition: max-height 0.4s ease-out;
+            background: rgba(0, 0, 0, 0.2);
         }
-        .comment-section.open {
-            max-height: 2000px;
-        }
-
-        .avatar-container {
-            width: 44px;
-            height: 44px;
-            flex-shrink: 0;
-            aspect-ratio: 1/1;
-            overflow: hidden;
-            background: #1e293b;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 12px;
+        .echo-section.open { max-height: 1000px; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        
+        /* Vibe Animation */
+        .vibe-pop { animation: heartPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        @keyframes heartPop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.4); }
+            100% { transform: scale(1); }
         }
     </style>
 </head>
 <body class="min-h-screen pb-32">
 
     <nav class="glass-nav sticky top-0 z-50">
-        <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between gap-6">
+        <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+            <h1 class="text-2xl font-black text-blue-500 italic tracking-tighter cursor-pointer" onclick="window.location.href='/feed'">APUGO</h1>
+            
             <div class="flex items-center gap-6">
-                <h1 class="text-2xl font-black text-blue-500 italic tracking-tighter cursor-pointer hover:scale-105 transition-transform" onclick="window.location.href='/feed'">
-                    APUGO
-                </h1>
-                <div class="hidden lg:block w-80 relative group">
-                    <form action="/feed" method="GET">
-                        <input type="text" name="search" placeholder="Search whispers..." value="<%= locals.search || '' %>" 
-                            class="w-full bg-white/5 border border-white/5 rounded-2xl py-2 px-10 text-[11px] font-bold uppercase tracking-widest outline-none focus:border-blue-500/50 transition-all text-white">
-                        <i class="fas fa-search absolute left-4 top-2.5 text-slate-600 text-[10px]"></i>
-                    </form>
-                </div>
-            </div>
-
-            <div class="flex items-center gap-6">
-                <a href="/forum" class="hidden md:flex items-center gap-2 text-[10px] font-black uppercase text-blue-400 hover:text-white transition-all tracking-widest">
-                    <i class="fas fa-landmark"></i> Town Hall
-                </a>
                 <a href="/notifications" class="relative group">
-                    <i class="far fa-bell text-xl text-slate-400 group-hover:text-blue-500 transition-colors"></i>
-                    <% if (locals.unreadCount && unreadCount > 0) { %>
-                        <span class="absolute -top-1 -right-1 bg-blue-600 text-[8px] w-4 h-4 flex items-center justify-center rounded-full font-black border-2 border-[#020617]"><%= unreadCount %></span>
-                    <% } %>
+                    <i class="far fa-bell text-xl text-slate-400 group-hover:text-blue-500"></i>
                 </a>
-                <a href="/profile" class="flex items-center gap-3 bg-white/5 p-1 rounded-full border border-white/5">
-                    <div class="w-8 h-8 rounded-full overflow-hidden bg-slate-800 flex items-center justify-center">
-                        <i class="fas fa-user text-xs text-slate-500"></i>
+                <a href="/profile" class="flex items-center gap-3 bg-white/5 p-1 pr-3 rounded-full border border-white/5">
+                    <div class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center border border-white/10">
+                        <i class="fas fa-user text-[10px] text-slate-500"></i>
                     </div>
+                    <span class="text-[10px] font-black uppercase tracking-widest hidden md:inline">My Hut</span>
                 </a>
             </div>
         </div>
     </nav>
 
-    <main class="max-w-6xl mx-auto px-4 mt-6 lg:mt-8 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10">
+    <main class="max-w-6xl mx-auto px-4 mt-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
         
         <div class="lg:col-span-8 space-y-8">
             
             <section class="bg-slate-900/50 border border-white/5 rounded-[2.5rem] p-6 lg:p-8 shadow-2xl">
-                <form action="/event/create" method="POST" enctype="multipart/form-data" id="postForm">
-                    <div class="flex gap-4 lg:gap-6">
-                        <div class="avatar-container ring-2 ring-white/5">
-                            <i class="fas fa-user text-slate-500"></i>
+                <form action="/event/create" method="POST" enctype="multipart/form-data">
+                    <div class="flex gap-6">
+                        <div class="w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center shrink-0 ring-1 ring-white/10">
+                            <i class="fas fa-pen-nib text-blue-500"></i>
                         </div>
                         <div class="w-full">
-                            <textarea name="description" id="postContent" placeholder="What's the word in the square?" required 
-                                class="w-full bg-transparent outline-none h-20 resize-none text-[16px] text-slate-200 placeholder-slate-600 mt-1 leading-relaxed font-medium"></textarea>
+                            <textarea name="description" id="whisperInput" placeholder="What's the word in the square?" required 
+                                class="w-full bg-transparent outline-none h-20 resize-none text-[16px] text-slate-200 placeholder-slate-600 font-medium"></textarea>
                             
-                            <div id="mediaPreviewContainer" class="hidden mt-4 relative w-32 h-32 rounded-2xl overflow-hidden border border-white/10 group">
+                            <div id="previewContainer" class="hidden mt-4 relative w-32 h-32 rounded-2xl overflow-hidden border border-white/10">
                                 <img id="imagePreview" class="w-full h-full object-cover">
-                                <button type="button" onclick="clearMedia()" class="absolute top-2 right-2 bg-black/60 text-white w-6 h-6 rounded-full text-[10px] hover:bg-red-500 transition-colors">
+                                <button type="button" onclick="removeMedia()" class="absolute top-2 right-2 bg-black/60 text-white w-6 h-6 rounded-full text-[10px] hover:bg-red-500 transition-colors">
                                     <i class="fas fa-times"></i>
                                 </button>
                             </div>
@@ -122,13 +87,11 @@
                     </div>
                     
                     <div class="flex items-center justify-between border-t border-white/5 mt-6 pt-6">
-                        <div class="flex gap-2">
+                        <label class="cursor-pointer bg-white/5 hover:bg-blue-600/10 text-slate-300 px-5 py-3 rounded-2xl text-[10px] font-black uppercase flex items-center gap-3 tracking-widest transition-all">
                             <input type="file" name="localMedia" id="fileInput" class="hidden" accept="image/*,video/*">
-                            <label for="fileInput" class="cursor-pointer bg-white/5 hover:bg-blue-600/10 text-slate-300 px-5 py-3 rounded-2xl text-[10px] font-black uppercase flex items-center gap-3 tracking-widest transition-all">
-                                <i class="fas fa-camera text-blue-500"></i> Media
-                            </label>
-                        </div>
-                        <button type="submit" id="publishBtn" class="bg-blue-600 hover:bg-blue-500 px-10 py-3.5 rounded-2xl font-black text-[10px] text-white uppercase tracking-widest shadow-lg shadow-blue-600/20">
+                            <i class="fas fa-camera text-blue-500"></i> Add Media
+                        </label>
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-500 px-10 py-3.5 rounded-2xl font-black text-[10px] text-white uppercase tracking-widest shadow-lg shadow-blue-600/20">
                             Publish
                         </button>
                     </div>
@@ -141,18 +104,14 @@
                         <article class="post-card rounded-[2.5rem] overflow-hidden" id="post-<%= p.id %>">
                             <div class="p-6 flex justify-between items-center">
                                 <div class="flex items-center gap-4">
-                                    <div class="avatar-container bg-slate-800 rounded-2xl ring-1 ring-white/10">
+                                    <div class="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center border border-white/10">
                                         <i class="fas fa-user text-slate-600"></i>
                                     </div>
                                     <div>
-                                        <div class="flex items-center gap-2">
-                                            <p class="font-bold text-[14px] text-white">@<%= p.author ? p.author.split('@')[0] : 'villager' %></p>
-                                            <% if (p.is_verified) { %> <i class="fas fa-certificate text-blue-500 text-[9px]"></i> <% } %>
-                                        </div>
-                                        <p class="text-[8px] text-slate-600 uppercase font-black tracking-widest"><%= new Date(p.created_at).toLocaleDateString() %></p>
+                                        <p class="font-bold text-white text-sm">@<%= p.username || 'villager' %></p>
+                                        <p class="text-[8px] text-slate-500 uppercase tracking-widest">Just now</p>
                                     </div>
                                 </div>
-                                <button class="text-slate-700 hover:text-white p-2"><i class="fas fa-ellipsis-h"></i></button>
                             </div>
 
                             <div class="px-8 pb-5 text-slate-300 text-[15px] leading-relaxed">
@@ -161,185 +120,117 @@
 
                             <% if (p.image_url) { %>
                                 <div class="px-4 pb-4">
-                                    <div class="rounded-[2rem] overflow-hidden bg-black/20 border border-white/5">
-                                        <% if (p.media_type === 'video' || p.image_url.includes('.mp4')) { %>
-                                            <video controls class="w-full max-h-[500px] object-cover"><source src="<%= p.image_url %>" type="video/mp4"></video>
-                                        <% } else { %>
-                                            <img src="<%= p.image_url %>" class="w-full h-auto max-h-[600px] object-cover" loading="lazy">
-                                        <% } %>
-                                    </div>
+                                    <img src="<%= p.image_url %>" class="w-full h-auto max-h-[500px] rounded-3xl object-cover border border-white/5">
                                 </div>
                             <% } %>
 
                             <div class="px-8 py-5 border-t border-white/5 flex gap-8">
-                                <button onclick="sendVibe(this, '<%= p.id %>')" class="flex items-center gap-2 text-[10px] font-black uppercase text-slate-500 hover:text-red-400 transition-all <%= p.liked_by_me ? 'text-red-500' : '' %>">
-                                    <i class="<%= p.liked_by_me ? 'fas' : 'far' %> fa-heart text-lg"></i> 
+                                <button onclick="sendVibe(this, '<%= p.id %>')" class="flex items-center gap-2 text-[10px] font-black uppercase text-slate-500 hover:text-red-500 transition-all">
+                                    <i class="far fa-heart text-lg"></i> 
                                     <span class="vibe-count"><%= p.likes_count || 0 %></span>
                                 </button>
-                                <button onclick="toggleEchoes('<%= p.id %>')" class="flex items-center gap-2 text-[10px] font-black uppercase text-slate-500 hover:text-blue-400 transition-all">
+                                <button onclick="toggleEchoes('<%= p.id %>')" class="flex items-center gap-2 text-[10px] font-black uppercase text-slate-500 hover:text-blue-500 transition-all">
                                     <i class="far fa-comment-dots text-lg"></i> 
-                                    <span><%= p.comments_list ? p.comments_list.length : 0 %> Echoes</span>
+                                    <span>Echoes</span>
                                 </button>
                             </div>
 
-                            <div id="echoes-<%= p.id %>" class="comment-section bg-black/20 border-t border-white/5">
-                                <div class="p-6 space-y-4 max-h-64 overflow-y-auto no-scrollbar">
-                                    <% if (p.comments_list && p.comments_list.length > 0) { %>
-                                        <% p.comments_list.forEach(c => { %>
-                                            <div class="flex gap-3">
-                                                <div class="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center shrink-0">
-                                                    <i class="fas fa-user text-[10px] text-slate-600"></i>
-                                                </div>
-                                                <div class="bg-white/5 rounded-2xl p-3 flex-1">
-                                                    <p class="text-[9px] font-black text-blue-500 uppercase">@<%= c.username ? c.username.split('@')[0] : 'villager' %></p>
-                                                    <p class="text-xs text-slate-300 mt-1"><%= c.comment_text %></p>
-                                                </div>
-                                            </div>
-                                        <% }) %>
-                                    <% } else { %>
-                                        <p class="text-center text-[10px] text-slate-600 italic py-4">The echoes are silent...</p>
-                                    <% } %>
+                            <div id="echoes-<%= p.id %>" class="echo-section border-t border-white/5">
+                                <div class="p-6 space-y-4">
+                                    <form action="/event/<%= p.id %>/comment" method="POST" class="flex gap-3 mb-6">
+                                        <input type="text" name="comment" placeholder="Add an echo..." required 
+                                            class="flex-1 bg-slate-900 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-blue-500/50">
+                                        <button type="submit" class="bg-blue-600 w-10 h-10 rounded-xl flex items-center justify-center text-white">
+                                            <i class="fas fa-paper-plane text-xs"></i>
+                                        </button>
+                                    </form>
+
+                                    <p class="text-[10px] text-slate-600 italic text-center">Looking for older echoes...</p>
                                 </div>
-                                <form action="/event/<%= p.id %>/comment" method="POST" class="p-4 flex gap-3 border-t border-white/5">
-                                    <input type="text" name="comment" placeholder="Add an echo..." required class="flex-1 bg-slate-900 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none">
-                                    <button type="submit" class="bg-blue-600 w-10 h-10 rounded-xl flex items-center justify-center text-white"><i class="fas fa-paper-plane"></i></button>
-                                </form>
                             </div>
                         </article>
                     <% }) %>
                 <% } %>
             </div>
-            <div id="loadingIndicator" class="hidden py-8 text-center text-slate-500 font-black text-[10px] uppercase tracking-widest">
-                <i class="fas fa-circle-notch fa-spin mr-2"></i> Summoning more whispers...
+
+            <div id="loading" class="hidden py-10 text-center text-slate-600 text-[10px] font-black uppercase tracking-widest">
+                <i class="fas fa-circle-notch fa-spin mr-2"></i> Summoning Whispers
             </div>
         </div>
 
         <aside class="hidden lg:block lg:col-span-4 space-y-8">
-            <div class="bg-gradient-to-br from-blue-600 to-blue-800 rounded-[2.5rem] p-7 shadow-xl shadow-blue-900/20 group cursor-pointer overflow-hidden relative transition-all hover:scale-[1.02]" onclick="window.location.href='/forum'">
-                <div class="relative z-10">
-                    <p class="text-[10px] font-black text-blue-200 uppercase tracking-widest mb-1">Formal Matters</p>
-                    <h3 class="text-xl font-black text-white italic tracking-tighter">TOWN HALL</h3>
-                    <p class="text-blue-100/70 text-[11px] mt-2 font-medium leading-tight">Engage in village trade, debates, and town decrees.</p>
-                </div>
-                <i class="fas fa-landmark absolute -right-4 -bottom-4 text-7xl text-black/10"></i>
-            </div>
-
             <div class="bg-slate-900/40 border border-white/5 rounded-[2.5rem] p-8">
-                <h3 class="text-[10px] font-black text-blue-500 uppercase tracking-[0.4em] mb-6">Your Kin</h3>
-                <div class="space-y-4">
-                    <% if (locals.friends && friends.length > 0) { %>
-                        <% friends.slice(0, 5).forEach(f => { %>
-                            <div class="flex items-center justify-between group cursor-pointer">
+                <h3 class="text-[10px] font-black text-blue-500 uppercase tracking-[0.4em] mb-8">Village Kin</h3>
+                <div class="space-y-6">
+                    <% if (locals.suggestedUsers) { %>
+                        <% suggestedUsers.forEach(u => { %>
+                            <div class="flex items-center justify-between group">
                                 <div class="flex items-center gap-3">
-                                    <div class="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center border border-white/10"><i class="fas fa-user text-xs text-slate-500"></i></div>
-                                    <p class="text-[11px] font-bold text-slate-300 group-hover:text-blue-400">@<%= f.username || 'villager' %></p>
+                                    <div class="w-9 h-9 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center">
+                                        <i class="fas fa-user text-[10px] text-slate-500"></i>
+                                    </div>
+                                    <p class="text-[12px] font-bold text-slate-300">@<%= u.username %></p>
                                 </div>
-                                <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                                <button onclick="connectKin('<%= u.id %>')" class="text-blue-500 hover:text-white transition-colors">
+                                    <i class="fas fa-plus-circle text-lg"></i>
+                                </button>
                             </div>
                         <% }) %>
                     <% } %>
                 </div>
             </div>
 
-            <div class="bg-slate-900/40 border border-white/5 rounded-[2.5rem] p-8 sticky top-24">
-                <h3 class="text-[10px] font-black text-blue-500 uppercase tracking-[0.4em] mb-8">Hot Whispers</h3>
-                <div class="space-y-6">
-                    <% if (locals.trending && trending.length > 0) { %>
-                        <% trending.slice(0, 4).forEach((t, i) => { %>
-                            <div class="group cursor-pointer relative pl-8" onclick="window.location.href='/event/<%= t.id %>'">
-                                <span class="absolute left-0 top-0 text-[20px] font-black text-white/5">0<%= i+1 %></span>
-                                <p class="text-[12px] font-bold text-slate-300 group-hover:text-blue-400 leading-snug line-clamp-2"><%= t.description %></p>
-                            </div>
-                        <% }) %>
-                    <% } %>
+            <div class="bg-gradient-to-br from-blue-600 to-blue-800 rounded-[2.5rem] p-7 shadow-xl shadow-blue-900/20 relative overflow-hidden group cursor-pointer" onclick="window.location.href='/forum'">
+                <div class="relative z-10">
+                    <p class="text-[10px] font-black text-blue-200 uppercase tracking-widest mb-1">Formal Trade</p>
+                    <h3 class="text-xl font-black text-white italic tracking-tighter">TOWN HALL</h3>
                 </div>
+                <i class="fas fa-landmark absolute -right-4 -bottom-4 text-7xl text-black/10 group-hover:scale-110 transition-transform"></i>
             </div>
         </aside>
     </main>
 
-    <div class="lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-2xl border border-white/10 px-8 py-4 rounded-full flex gap-10 shadow-2xl z-50">
-        <a href="/feed" class="text-blue-500"><i class="fas fa-home text-lg"></i></a>
-        <a href="/forum" class="text-slate-500"><i class="fas fa-landmark text-lg"></i></a>
-        <a href="/profile" class="text-slate-500"><i class="fas fa-user text-lg"></i></a>
-    </div>
-
     <script>
-        // Toggle Comments
+        // Toggle Echoes
         function toggleEchoes(id) {
             document.getElementById(`echoes-${id}`).classList.toggle('open');
         }
 
-        // Like/Vibe Sync
+        // Handle Vibe (Like)
         async function sendVibe(btn, postId) {
             const icon = btn.querySelector('i');
-            const countSpan = btn.querySelector('.vibe-count');
+            const count = btn.querySelector('.vibe-count');
             
             icon.classList.toggle('fas'); icon.classList.toggle('far');
-            btn.classList.toggle('text-red-500'); btn.classList.toggle('text-slate-500');
+            btn.classList.toggle('text-red-500');
             btn.classList.add('vibe-pop');
             setTimeout(() => btn.classList.remove('vibe-pop'), 400);
 
             try {
-                const response = await fetch(`/event/${postId}/like`, { method: 'POST' });
-                const data = await response.json();
-                if (data.success) countSpan.innerText = data.newCount;
-            } catch (err) { console.error("Vibe sync failed"); }
+                const res = await fetch(`/event/${postId}/like`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) count.innerText = data.newCount;
+            } catch (e) { console.error("Vibe error"); }
         }
 
-        // Infinite Scroll
-        let page = 0;
-        let loading = false;
-        let hasMore = true;
-
-        window.onscroll = async () => {
-            if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 800 && !loading && hasMore) {
-                loading = true;
-                page++;
-                document.getElementById('loadingIndicator').classList.remove('hidden');
-
-                try {
-                    const res = await fetch(`/feed?page=${page}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-                    const data = await res.json();
-                    if (!data.posts || data.posts.length === 0) { hasMore = false; return; }
-                    data.posts.forEach(p => appendPost(p));
-                } finally {
-                    loading = false;
-                    document.getElementById('loadingIndicator').classList.add('hidden');
-                }
+        // Media Preview Logic
+        const fileInput = document.getElementById('fileInput');
+        fileInput.onchange = e => {
+            const [file] = fileInput.files;
+            if (file) {
+                document.getElementById('imagePreview').src = URL.createObjectURL(file);
+                document.getElementById('previewContainer').classList.remove('hidden');
             }
         };
 
-        function appendPost(p) {
-            const container = document.getElementById('feedContainer');
-            const html = `
-                <article class="post-card rounded-[2.5rem] overflow-hidden">
-                    <div class="p-6 flex items-center gap-4">
-                        <div class="avatar-container bg-slate-800"><i class="fas fa-user text-slate-600"></i></div>
-                        <p class="font-bold text-white text-[14px]">@${p.author ? p.author.split('@')[0] : 'villager'}</p>
-                    </div>
-                    <div class="px-8 pb-5 text-slate-300 text-[15px]">${p.description}</div>
-                    <div class="px-8 py-5 border-t border-white/5 flex gap-8">
-                        <button onclick="sendVibe(this, '${p.id}')" class="text-[10px] font-black text-slate-500 flex items-center gap-2">
-                            <i class="far fa-heart text-lg"></i> <span>${p.likes_count || 0}</span>
-                        </button>
-                    </div>
-                </article>`;
-            container.insertAdjacentHTML('beforeend', html);
+        function removeMedia() {
+            fileInput.value = "";
+            document.getElementById('previewContainer').classList.add('hidden');
         }
 
-        // File Preview
-        document.getElementById('fileInput').onchange = function() {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                document.getElementById('imagePreview').src = e.target.result;
-                document.getElementById('mediaPreviewContainer').classList.remove('hidden');
-            };
-            reader.readAsDataURL(this.files[0]);
-        };
-
-        function clearMedia() {
-            document.getElementById('fileInput').value = '';
-            document.getElementById('mediaPreviewContainer').classList.add('hidden');
+        // Connect Logic
+        async function connectKin(id) {
+            alert("Sent kinship request to villager!");
         }
     </script>
 </body>
