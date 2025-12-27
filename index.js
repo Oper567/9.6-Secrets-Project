@@ -70,7 +70,7 @@ const sendVerificationEmail = async (toEmail, token) => {
 
   return transporter.sendMail(mailOptions);
 };
-const mediaUrl = req.file ? `/uploads/${req.file.filename}` : null;
+
 
 await db.query(`
     INSERT INTO forum_posts (title, content, category, author_id, media_url)
