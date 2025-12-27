@@ -1080,21 +1080,24 @@ app.post("/forum/new", checkVerified, async (req, res) => {
 // index.js or routes/forum.js
 
 // This handles the form submission
-app.post('/forum/create', upload.single('media'), async (req, res) => {
+// 1. THIS IS THE ROUTE (The "Local" scope)
+app.post("/forum/create", upload.single('media'), async (req, res) => {
     try {
+        // PASTE THE LINE HERE! Inside the curly braces { }
+        const mediaUrl = req.file ? `/uploads/${req.file.filename}` : null;
+        
         const { title, content, category } = req.body;
         const userId = req.user.id;
 
-        // Since we are using Raw SQL, we insert directly
         await db.query(`
-            INSERT INTO forum_posts (title, content, category, author_id, created_at)
-            VALUES ($1, $2, $3, $4, NOW())
-        `, [title, content, category, userId]);
+            INSERT INTO forum_posts (title, content, category, author_id, media_url)
+            VALUES ($1, $2, $3, $4, $5)
+        `, [title, content, category, userId, mediaUrl]);
 
-        res.redirect('/forum');
+        res.redirect("/forum");
     } catch (err) {
-        console.error("Database Insertion Error:", err);
-        res.status(500).send("The Village Ledger failed to record your post.");
+        console.error(err);
+        res.status(500).send("The scroll could not be saved.");
     }
 });
 
