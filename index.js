@@ -72,12 +72,7 @@ const sendVerificationEmail = async (toEmail, token) => {
 };
 
 
-await db.query(`
-    INSERT INTO forum_posts (title, content, category, author_id, media_url)
-    VALUES ($1, $2, $3, $4, $5)
-`, [title, content, category, userId, mediaUrl]);
 
-const upload = multer({ dest: 'uploads/' });
 
 
 /* ---------------- MIDDLEWARE ---------------- */
@@ -178,15 +173,8 @@ function isAdmin(req, res, next) {
   res.redirect("/feed");
 }
 // Protection middleware
-function ensureAuthenticated(req, res, next) {
-    if (req.isAuthenticated()) return next();
-    res.redirect("/login");
-}
 
-// Apply it to your route
-app.post("/forum/create", ensureAuthenticated, upload.single('media'), async (req, res) => {
-    const { title, content, category } = req.body;  
-});
+
 
 async function sendWelcomeNote(userId) {
   try {
@@ -1109,14 +1097,16 @@ app.post("/forum/new", checkVerified, async (req, res) => {
 // This handles the form submission
 // 1. THIS IS THE ROUTE (The "Local" scope)
 // This is your "POST" route for creating a forum thread
+/* ---------------- FORUM ROUTES ---------------- */
+
 app.post("/forum/create", upload.single('media'), async (req, res) => {
     try {
-        // MOVE LINE 77 TO HERE (Inside the curly brace)
-        const mediaUrl = req.file ? `/uploads/${req.file.filename}` : null;
-        
+        // Variables are defined HERE
         const { title, content, category } = req.body;
-        const userId = req.user.id;
+        const userId = req.user.id; 
+        const mediaUrl = req.file ? `/uploads/${req.file.filename}` : null;
 
+        // The query MUST be inside these curly braces
         await db.query(`
             INSERT INTO forum_posts (title, content, category, author_id, media_url)
             VALUES ($1, $2, $3, $4, $5)
@@ -1125,9 +1115,11 @@ app.post("/forum/create", upload.single('media'), async (req, res) => {
         res.redirect("/forum");
     } catch (err) {
         console.error(err);
-        res.status(500).send("The scroll could not be saved.");
+        res.status(500).send("Error");
     }
-});
+}); 
+
+// <--- MAKE SURE NOTHING IS PASTED HERE!
 
 
 
