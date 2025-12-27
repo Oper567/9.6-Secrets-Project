@@ -14,6 +14,9 @@ import multer from "multer";
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 import pkg from "@prisma/client";
+import pg from "pg";
+import session from "express-session";
+import pgSession from "connect-pg-simple";
 
 dotenv.config();
 const { PrismaClient } = pkg;
@@ -26,7 +29,28 @@ const app = express();
 const port = process.env.PORT || 3000;
 const saltRounds = 10;
 
+
+
+const pgPool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+});
+
 const PostgresStore = pgSession(session);
+
+app.use(
+  session({
+    store: new PostgresStore({
+      pool: pgPool,       // Must be a pg.Pool
+      tableName: "session",
+      createTableIfMissing: true,
+    }),
+    secret: process.env.SESSION_SECRET || "supersecret",
+    resave: false,
+    saveUninitialized: false,
+    cookie: { maxAge: 86400000 },
+  })
+);
 
 // Supabase & Resend
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
@@ -37,6 +61,8 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }
 });
+
+
 
 // ---------------- MIDDLEWARE ----------------
 app.set("trust proxy", 1);
