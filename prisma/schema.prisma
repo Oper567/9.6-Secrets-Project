@@ -1,196 +1,87 @@
+// schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
-/* ===================== USERS ===================== */
+// ---------------- USERS ----------------
 model User {
-  id                 Int       @id @default(autoincrement())
-  email              String    @unique
-  password           String
-  role               String    @default("user")
-  is_verified        Boolean   @default(false)
-  profile_pic        String?
-  last_active        DateTime? @default(now())
-  verification_token String?
-  reset_token        String?
-  reset_expires      DateTime?
-  created_at         DateTime  @default(now())
+  id           Int       @id @default(autoincrement())
+  name         String?
+  email        String    @unique
+  password     String?
+  googleId     String?   @unique
+  role         Role      @default(USER)
+  verified     Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   // Relations
-  events             Event[]
-  comments           Comment[]
-  likes              Like[]
-  notifications      Notification[]
-  forumThreads       ForumThread[]
-  forumReplies       ForumReply[]
-  reports            Report[]
-
-  // Chat Relations
-  sentMessages       Message[]    @relation("SentMessages")
-  receivedMessages   Message[]    @relation("ReceivedMessages")
-
-  // Social Relations
-  sentFriendships     Friendship[] @relation("SentFriendships")
-  receivedFriendships Friendship[] @relation("ReceivedFriendships")
-
-  @@map("users")
+  chats        Chat[]
+  forumThreads ForumThread[]
+  forumPosts   ForumPost[]
+  events       Event[]
+  likes        Like[]
 }
 
-/* ===================== EVENTS (FEED POSTS) ===================== */
-model Event {
-  id              Int       @id @default(autoincrement())
-  title           String
-  description     String
-  image_url       String?
-  media_type      String    @default("image")
-  is_announcement Boolean   @default(false)
-  is_pinned       Boolean   @default(false)
-  is_deleted      Boolean   @default(false)
-  created_at      DateTime  @default(now())
-
-  created_by      Int
-  author          User      @relation(fields: [created_by], references: [id])
-
-  likes           Like[]
-  comments        Comment[]
-  reports         Report[]
-
-  @@map("events")
+// ---------------- CHAT ----------------
+model Chat {
+  id        Int      @id @default(autoincrement())
+  message   String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
 }
 
-/* ===================== COMMENTS ===================== */
-model Comment {
-  id      Int    @id @default(autoincrement())
-  
-  // RENAME THIS: change 'comment_text' to 'content' 
-  // and add @map("comment_text") to keep the DB column name the same
-  content String @map("comment_text") 
-
-  post_id Int
-  post    Event  @relation(fields: [post_id], references: [id])
-  user_id Int
-  user    User   @relation(fields: [user_id], references: [id])
-
-  created_at DateTime @default(now())
-
-  @@map("comments")
-}
-
-/* ===================== LIKES ===================== */
-model Like {
-  id         Int      @id @default(autoincrement())
-  created_at DateTime @default(now())
-
-  event_id   Int
-  event      Event    @relation(fields: [event_id], references: [id])
-
-  user_id    Int
-  user       User     @relation(fields: [user_id], references: [id])
-
-  @@unique([event_id, user_id])
-  @@map("likes")
-}
-
-/* ===================== FRIENDSHIPS ===================== */
-model Friendship {
-  id          Int      @id @default(autoincrement())
-  sender_id   Int
-  receiver_id Int
-  status      String   @default("accepted")
-  created_at  DateTime @default(now())
-
-  sender      User     @relation("SentFriendships", fields: [sender_id], references: [id])
-  receiver    User     @relation("ReceivedFriendships", fields: [receiver_id], references: [id])
-
-  @@unique([sender_id, receiver_id])
-  @@map("friendships")
-}
-
-/* ===================== MESSAGES (CHAT) ===================== */
-model Message {
-  id          Int      @id @default(autoincrement())
-  sender_id   Int
-  receiver_id Int
-  content     String
-  is_read     Boolean  @default(false)
-  created_at  DateTime @default(now())
-
-  sender      User     @relation("SentMessages", fields: [sender_id], references: [id])
-  receiver    User     @relation("ReceivedMessages", fields: [receiver_id], references: [id])
-
-  @@map("messages")
-}
-
-/* ===================== NOTIFICATIONS ===================== */
-model Notification {
-  id         Int      @id @default(autoincrement())
-  user_id    Int
-  sender_id  Int?
-  message    String
-  is_read    Boolean  @default(false)
-  created_at DateTime @default(now())
-
-  user       User     @relation(fields: [user_id], references: [id])
-
-  @@map("notifications")
-}
-
-/* ===================== REPORTS ===================== */
-model Report {
-  id          Int      @id @default(autoincrement())
-  post_id     Int
-  reported_by Int
-  created_at  DateTime @default(now())
-
-  post        Event    @relation(fields: [post_id], references: [id])
-  reporter    User     @relation(fields: [reported_by], references: [id])
-
-  @@map("reports")
-}
-
-/* ===================== FORUM ===================== */
+// ---------------- FORUM ----------------
 model ForumThread {
-  id          Int      @id @default(autoincrement())
-  title       String
-  content     String
-  category    String
-  image_url   String?
-  view_count  Int      @default(0)
-  created_at  DateTime @default(now())
-
-  author_id   Int
-  author      User     @relation(fields: [author_id], references: [id])
-
-  replies     ForumReply[]
-
-  @@map("forum_threads")
+  id        Int        @id @default(autoincrement())
+  title     String
+  createdAt DateTime   @default(now())
+  author    User       @relation(fields: [authorId], references: [id])
+  authorId  Int
+  posts     ForumPost[]
 }
 
-model ForumReply {
-  id         Int      @id @default(autoincrement())
-  reply_text String
-  created_at DateTime @default(now())
-
-  thread_id  Int
-  thread     ForumThread @relation(fields: [thread_id], references: [id])
-
-  author_id  Int
-  author     User        @relation(fields: [author_id], references: [id])
-
-  @@map("forum_replies")
+model ForumPost {
+  id        Int        @id @default(autoincrement())
+  content   String
+  createdAt DateTime   @default(now())
+  thread    ForumThread @relation(fields: [threadId], references: [id])
+  threadId  Int
+  author    User       @relation(fields: [authorId], references: [id])
+  authorId  Int
 }
 
-/* ===================== SESSIONS ===================== */
-model Session {
-  sid    String   @id
-  sess   Json
-  expire DateTime
+// ---------------- EVENTS ----------------
+model Event {
+  id        Int      @id @default(autoincrement())
+  title     String
+  description String
+  imageUrl  String?
+  createdAt DateTime @default(now())
+  isDeleted Boolean  @default(false)
+  author    User     @relation(fields: [authorId], references: [id])
+  authorId  Int
+  likes     Like[]
+}
 
-  @@map("session")
+// ---------------- LIKES ----------------
+model Like {
+  user    User @relation(fields: [userId], references: [id])
+  userId  Int
+  event   Event @relation(fields: [eventId], references: [id])
+  eventId Int
+
+  @@id([userId, eventId]) // Composite primary key
+}
+
+// ---------------- ENUMS ----------------
+enum Role {
+  USER
+  ADMIN
 }
