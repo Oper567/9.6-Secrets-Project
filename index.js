@@ -31,7 +31,7 @@ const router = express.Router();
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, 
-  dest: 'public/uploads/'// Increased to 5MB for village media
+  dest: 'uploads/'// Increased to 5MB for village media
 });
 const prisma = new PrismaClient({
   datasourceUrl: process.env.DATABASE_URL,
@@ -725,13 +725,12 @@ const activeCat = req.query.cat || 'all';
 
 // 1. The route starts here
 app.post("/forum/create", upload.single('media'), async (req, res) => {
-    
-    // MOVE LINE 77 TO HERE (Inside the function)
-    const mediaUrl = req.file ? `/uploads/${req.file.filename}` : null;
-
     try {
+        // MOVED HERE: Now 'req' is defined because the route is active!
+        const mediaUrl = req.file ? `/uploads/${req.file.filename}` : null;
+        
         const { title, content, category } = req.body;
-        const userId = req.user.id;
+        const userId = req.user.id; // Ensure req.user exists via your auth middleware
 
         await db.query(`
             INSERT INTO forum_posts (title, content, category, author_id, media_url)
@@ -740,11 +739,10 @@ app.post("/forum/create", upload.single('media'), async (req, res) => {
 
         res.redirect("/forum");
     } catch (err) {
-        console.error(err);
-        res.status(500).send("Error saving post");
+        console.error("Upload Error:", err);
+        res.status(500).send("The Great Hall could not record your scroll.");
     }
 });
-
 /* ---------------- CHAT SYSTEM ---------------- */
 app.get("/messages", isAuth, async (req, res) => {
   try {
