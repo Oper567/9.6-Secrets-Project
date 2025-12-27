@@ -66,15 +66,18 @@ model Event {
 
 /* ===================== COMMENTS ===================== */
 model Comment {
-  id           Int      @id @default(autoincrement())
-  comment_text String
-  created_at   DateTime @default(now())
+  id      Int    @id @default(autoincrement())
+  
+  // RENAME THIS: change 'comment_text' to 'content' 
+  // and add @map("comment_text") to keep the DB column name the same
+  content String @map("comment_text") 
 
-  post_id      Int
-  post         Event    @relation(fields: [post_id], references: [id])
+  post_id Int
+  post    Event  @relation(fields: [post_id], references: [id])
+  user_id Int
+  user    User   @relation(fields: [user_id], references: [id])
 
-  user_id      Int
-  user         User     @relation(fields: [user_id], references: [id])
+  created_at DateTime @default(now())
 
   @@map("comments")
 }
