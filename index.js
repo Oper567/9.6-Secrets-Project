@@ -144,7 +144,15 @@ app.use(async (req, res, next) => {
   }
   next();
 });
-
+// Add this at the VERY BOTTOM of index.js, after all your routes
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).send("File is too large! Max limit is 5MB.");
+    }
+  }
+  res.status(500).send("An unknown error occurred.");
+});
 /* ---------------- AUTHENTICATION HELPERS ---------------- */
 // Example of a safe isAuth middleware
 function isAuth(req, res, next) {
@@ -728,14 +736,15 @@ const activeCat = req.query.cat || 'all';
 // This tells Express to wait for a "POST" request to /forum/create
 /* ---------------- FORUM POST ROUTE ---------------- */
 
+// This tells the server: "Wait for someone to submit the form"
 app.post("/forum/create", upload.single('media'), async (req, res) => {
     try {
-        // 1. These variables are born HERE
+        // 1. These variables are created ONLY when a request happens
         const { title, content, category } = req.body;
-        const userId = req.user.id;
+        const userId = req.user.id; 
         const mediaUrl = req.file ? `/uploads/${req.file.filename}` : null;
 
-        // 2. The query must live HERE so it can use those variables
+        // 2. The query must live HERE to use those variables
         await db.query(`
             INSERT INTO forum_posts (title, content, category, author_id, media_url)
             VALUES ($1, $2, $3, $4, $5)
@@ -744,7 +753,7 @@ app.post("/forum/create", upload.single('media'), async (req, res) => {
         res.redirect("/forum");
     } catch (err) {
         console.error("Database Error:", err);
-        res.status(500).send("The Great Hall is closed for repairs.");
+        res.status(500).send("The server could not process your post.");
     }
 });
 /* ---------------- CHAT SYSTEM ---------------- */
