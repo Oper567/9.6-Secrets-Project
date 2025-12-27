@@ -24,7 +24,7 @@ const __dirname = path.dirname(__filename);
 /* ---------------- SUPABASE ---------------- */
 const supabase = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
+  process.env.SUPABASE_ANON_KEY
 );
 // 2️⃣ Subscribe to a realtime channel
 const channel = supabase
