@@ -31,6 +31,9 @@ const router = express.Router();
 const prisma = new PrismaClient({
   datasourceUrl: process.env.DATABASE_URL,
 });
+// In your GET /forum route
+const activeCat = req.query.cat || 'all';
+// Use .toLowerCase() to ensure 'Marketplace' from a link matches 'marketplace' from the DB
 
 /* ---------------- SERVICES (DB, SUPABASE, MAIL) ---------------- */
 const db = new pg.Pool({
@@ -69,6 +72,12 @@ const sendVerificationEmail = async (toEmail, token) => {
 
   return transporter.sendMail(mailOptions);
 };
+const mediaUrl = req.file ? `/uploads/${req.file.filename}` : null;
+
+await db.query(`
+    INSERT INTO forum_posts (title, content, category, author_id, media_url)
+    VALUES ($1, $2, $3, $4, $5)
+`, [title, content, category, userId, mediaUrl]);
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -1062,28 +1071,19 @@ app.post("/forum/new", checkVerified, async (req, res) => {
 // This handles the form submission
 app.post('/forum/create', upload.single('media'), async (req, res) => {
     try {
-        // Now req.body will actually contain your data!
         const { title, content, category } = req.body;
         const userId = req.user.id;
-        
-        // If a file was uploaded, it's in req.file
-        const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
 
-        console.log("Form Data Received:", { title, content, category });
-
-        if (!title || !content) {
-            return res.status(400).send("Title and Content are required.");
-        }
-
+        // Since we are using Raw SQL, we insert directly
         await db.query(`
-            INSERT INTO forum_posts (title, content, category, author_id)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO forum_posts (title, content, category, author_id, created_at)
+            VALUES ($1, $2, $3, $4, NOW())
         `, [title, content, category, userId]);
 
         res.redirect('/forum');
     } catch (err) {
-        console.error(err);
-        res.status(500).send("Error creating discussion.");
+        console.error("Database Insertion Error:", err);
+        res.status(500).send("The Village Ledger failed to record your post.");
     }
 });
 
