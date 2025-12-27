@@ -724,23 +724,32 @@ const activeCat = req.query.cat || 'all';
 // ... imports at the top ...
 
 // 1. The route starts here
+/* ---------------- FORUM ROUTES ---------------- */
+
+// This is the "Container" that provides the 'req' and 'res' objects
 app.post("/forum/create", upload.single('media'), async (req, res) => {
     try {
-        // MOVED HERE: Now 'req' is defined because the route is active!
+        // 1. Check if a file was uploaded
         const mediaUrl = req.file ? `/uploads/${req.file.filename}` : null;
         
+        // 2. Get the text data from the form
         const { title, content, category } = req.body;
-        const userId = req.user.id; // Ensure req.user exists via your auth middleware
+        
+        // 3. Get the user ID (assuming you have passport/session set up)
+        const userId = req.user.id;
 
+        // 4. Run the database query
         await db.query(`
             INSERT INTO forum_posts (title, content, category, author_id, media_url)
             VALUES ($1, $2, $3, $4, $5)
         `, [title, content, category, userId, mediaUrl]);
 
+        // 5. Send the user back to the forum
         res.redirect("/forum");
+
     } catch (err) {
-        console.error("Upload Error:", err);
-        res.status(500).send("The Great Hall could not record your scroll.");
+        console.error("Village Forum Error:", err);
+        res.status(500).send("The Great Hall could not record your message.");
     }
 });
 /* ---------------- CHAT SYSTEM ---------------- */
