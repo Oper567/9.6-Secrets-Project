@@ -83,7 +83,7 @@ app.use(express.json());
 app.use(express.static("public"));
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
-
+app.use(express.urlencoded({ extended: true }));
 // HTTPS Redirect for Production
 app.use((req, res, next) => {
   if (
@@ -1060,28 +1060,30 @@ app.post("/forum/new", checkVerified, async (req, res) => {
 // index.js or routes/forum.js
 
 // This handles the form submission
-app.post('/forum/create', async (req, res) => {
+app.post('/forum/create', upload.single('media'), async (req, res) => {
     try {
-        // Destructure exactly what is in the 'name' attributes of your HTML
+        // Now req.body will actually contain your data!
         const { title, content, category } = req.body;
         const userId = req.user.id;
+        
+        // If a file was uploaded, it's in req.file
+        const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
 
-        // Debugging: Log this to your terminal to see if the data is actually arriving
         console.log("Form Data Received:", { title, content, category });
 
         if (!title || !content) {
-            return res.status(400).send("Title and Content are required to speak in the Hall.");
+            return res.status(400).send("Title and Content are required.");
         }
 
         await db.query(`
             INSERT INTO forum_posts (title, content, category, author_id)
             VALUES ($1, $2, $3, $4)
-        `, [title, content, category || 'General', userId]);
+        `, [title, content, category, userId]);
 
         res.redirect('/forum');
     } catch (err) {
-        console.error("Village Registry Error:", err);
-        res.status(500).send("The scroll could not be saved.");
+        console.error(err);
+        res.status(500).send("Error creating discussion.");
     }
 });
 
