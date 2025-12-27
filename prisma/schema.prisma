@@ -3,38 +3,175 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
+/* ===================== USERS ===================== */
 model User {
-  id           Int      @id @default(autoincrement())
-  // ... other fields
-  @@map("users")
+  id                Int       @id @default(autoincrement())
+  email             String    @unique
+  password          String
+  role              String    @default("user")
+  is_verified       Boolean   @default(false)
+  profile_pic       String?
+  last_active       DateTime?
+  verification_token String?
+  reset_token       String?
+  reset_expires     DateTime?
+
+  events            Event[]
+  comments          Comment[]
+  likes             Like[]
+  sentMessages      Message[] @relation("SentMessages")
+  receivedMessages  Message[] @relation("ReceivedMessages")
+  sentFriendships   Friendship[] @relation("SentFriendships")
+  receivedFriendships Friendship[] @relation("ReceivedFriendships")
+  notifications     Notification[]
+  forumThreads      ForumThread[]
+  forumReplies      ForumReply[]
+  reports           Report[]
+
+  created_at        DateTime  @default(now())
 }
 
-model Post {
-  id           Int       @id @default(autoincrement())
-  description  String
-  image_url    String?
-  
-  // CHANGE THIS: Change String to Int so it matches User.id
-  author       Int       @map("created_by") 
-  
-  created_at   DateTime  @default(now())
-  comments     Comment[]
+/* ===================== EVENTS (FEED POSTS) ===================== */
+model Event {
+  id              Int       @id @default(autoincrement())
+  title           String
+  description     String
+  image_url       String?
+  media_type      String    @default("image")
+  is_announcement Boolean   @default(false)
+  is_pinned       Boolean   @default(false)
+  is_deleted      Boolean   @default(false)
 
-  @@map("events")
+  created_by      Int
+  author          User      @relation(fields: [created_by], references: [id])
+
+  likes           Like[]
+  comments        Comment[]
+  reports         Report[]
+
+  created_at      DateTime  @default(now())
 }
 
+/* ===================== COMMENTS ===================== */
 model Comment {
-  id           Int      @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   comment_text String
-  post_id      Int
-  post         Post     @relation(fields: [post_id], references: [id])
-  user_id      Int
-  created_at   DateTime @default(now())
 
-  @@map("comments")
+  post_id    Int
+  post       Event    @relation(fields: [post_id], references: [id])
+
+  user_id    Int
+  user       User     @relation(fields: [user_id], references: [id])
+
+  created_at DateTime @default(now())
+}
+
+/* ===================== LIKES ===================== */
+model Like {
+  id        Int   @id @default(autoincrement())
+
+  event_id Int
+  event    Event @relation(fields: [event_id], references: [id])
+
+  user_id  Int
+  user     User  @relation(fields: [user_id], references: [id])
+
+  created_at DateTime @default(now())
+
+  @@unique([event_id, user_id])
+}
+
+/* ===================== FRIENDSHIPS ===================== */
+model Friendship {
+  id          Int    @id @default(autoincrement())
+  sender_id   Int
+  receiver_id Int
+  status      String @default("accepted")
+
+  sender      User @relation("SentFriendships", fields: [sender_id], references: [id])
+  receiver    User @relation("ReceivedFriendships", fields: [receiver_id], references: [id])
+
+  created_at  DateTime @default(now())
+
+  @@unique([sender_id, receiver_id])
+}
+
+/* ===================== MESSAGES (CHAT) ===================== */
+model Message {
+  id          Int      @id @default(autoincrement())
+  sender_id   Int
+  receiver_id Int
+  content     String
+  is_read     Boolean  @default(false)
+
+  sender      User @relation("SentMessages", fields: [sender_id], references: [id])
+  receiver    User @relation("ReceivedMessages", fields: [receiver_id], references: [id])
+
+  created_at  DateTime @default(now())
+}
+
+/* ===================== NOTIFICATIONS ===================== */
+model Notification {
+  id         Int      @id @default(autoincrement())
+  user_id    Int
+  sender_id  Int?
+  message    String
+  is_read    Boolean  @default(false)
+
+  user       User     @relation(fields: [user_id], references: [id])
+
+  created_at DateTime @default(now())
+}
+
+/* ===================== REPORTS ===================== */
+model Report {
+  id          Int      @id @default(autoincrement())
+  post_id     Int
+  reported_by Int
+
+  post        Event    @relation(fields: [post_id], references: [id])
+  reporter    User     @relation(fields: [reported_by], references: [id])
+
+  created_at  DateTime @default(now())
+}
+
+/* ===================== FORUM ===================== */
+model ForumThread {
+  id          Int      @id @default(autoincrement())
+  title       String
+  content     String
+  category    String
+  image_url   String?
+  view_count  Int      @default(0)
+
+  author_id   Int
+  author      User     @relation(fields: [author_id], references: [id])
+
+  replies     ForumReply[]
+
+  created_at  DateTime @default(now())
+}
+
+model ForumReply {
+  id         Int      @id @default(autoincrement())
+  reply_text String
+
+  thread_id  Int
+  thread     ForumThread @relation(fields: [thread_id], references: [id])
+
+  author_id  Int
+  author     User     @relation(fields: [author_id], references: [id])
+
+  created_at DateTime @default(now())
+}
+
+/* ===================== SESSIONS (connect-pg-simple) ===================== */
+model Session {
+  sid     String   @id
+  sess    Json
+  expire  DateTime
 }
