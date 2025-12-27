@@ -431,9 +431,11 @@ app.post("/reset-password/:token", async (req, res) => {
 app.get("/feed", checkVerified, async (req, res) => {
   const search = req.query.search || "";
   try {
-    // Inside your GET /feed route
     const result = await db.query(`
-    SELECT e.*, u.username AS author, u.is_verified 
+    SELECT 
+        e.*, 
+        u.email AS author, -- Or u.name if that's what you have
+        u.is_verified 
     FROM events e 
     JOIN users u ON e.created_by = u.id 
     ORDER BY e.created_at DESC
@@ -634,15 +636,12 @@ app.post("/event/:id/like", async (req, res) => {
 app.post('/event/:id/delete', async (req, res) => {
     try {
         const { id } = req.params;
-        const userId = req.user.id;
-
-        // Security: Only delete if the user owns the post
-        await db.query('DELETE FROM events WHERE id = $1 AND created_by = $2', [id, userId]);
-        
+        // Verify user owns the post before deleting
+        await db.query('DELETE FROM events WHERE id = $1 AND created_by = $2', [id, req.user.id]);
         res.redirect('/feed');
     } catch (err) {
         console.error(err);
-        res.status(500).send("Village Error");
+        res.status(500).send("Error deleting whisper");
     }
 });
 app.post('/event/create', upload.single('localMedia'), async (req, res) => {
