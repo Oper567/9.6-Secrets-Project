@@ -1178,6 +1178,47 @@ router.post('/event/:id/like', async (req, res) => {
         res.status(500).json({ success: false });
     }
 });
+
+router.post('/event/create', upload.single('localMedia'), async (req, res) => {
+    try {
+        const { description } = req.body;
+        const userId = req.user.id; 
+        
+        // If a file was uploaded, save the path, otherwise null
+        const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+
+        await db.query(
+            'INSERT INTO events (description, image_url, created_by, created_at) VALUES ($1, $2, $3, NOW())',
+            [description, imageUrl, userId]
+        );
+
+        res.redirect('/feed');
+    } catch (err) {
+        console.error("Village Error:", err);
+        res.status(500).send("The scroll could not be written.");
+    }
+});
+router.post('/event/:id/delete', async (req, res) => {
+    const eventId = req.params.id;
+    const userId = req.user.id;
+
+    try {
+        // Only the creator of the whisper can delete it
+        const result = await db.query(
+            'DELETE FROM events WHERE id = $1 AND created_by = $2',
+            [eventId, userId]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(403).json({ error: "This is not your whisper to erase." });
+        }
+
+        res.redirect('/feed');
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("The whisper refused to fade.");
+    }
+});
 async function fetchMessages() {
     if (!currentFriendId) return;
     try {
