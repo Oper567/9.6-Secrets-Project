@@ -726,28 +726,25 @@ const activeCat = req.query.cat || 'all';
 // This is the "Container" that provides the 'req' and 'res' objects
 // 1. THIS is the "building" (the route handler)
 // This tells Express to wait for a "POST" request to /forum/create
+/* ---------------- FORUM POST ROUTE ---------------- */
+
 app.post("/forum/create", upload.single('media'), async (req, res) => {
     try {
-        // 1. Define mediaUrl INSIDE the function
-        const mediaUrl = req.file ? `/uploads/${req.file.filename}` : null;
-        
-        // 2. Extract the text data from the form body
+        // 1. These variables are born HERE
         const { title, content, category } = req.body;
-        
-        // 3. Get the user ID from the session
         const userId = req.user.id;
+        const mediaUrl = req.file ? `/uploads/${req.file.filename}` : null;
 
-        // 4. NOW run the query, because title and userId are finally defined!
+        // 2. The query must live HERE so it can use those variables
         await db.query(`
             INSERT INTO forum_posts (title, content, category, author_id, media_url)
             VALUES ($1, $2, $3, $4, $5)
         `, [title, content, category, userId, mediaUrl]);
 
         res.redirect("/forum");
-
     } catch (err) {
         console.error("Database Error:", err);
-        res.status(500).send("Something went wrong in the village square.");
+        res.status(500).send("The Great Hall is closed for repairs.");
     }
 });
 /* ---------------- CHAT SYSTEM ---------------- */
