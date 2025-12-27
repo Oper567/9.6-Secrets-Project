@@ -28,7 +28,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 const saltRounds = 10;
 const router = express.Router();
-const upload = multer({ dest: 'uploads/' });
+
 const prisma = new PrismaClient({
   datasourceUrl: process.env.DATABASE_URL,
 });
@@ -77,6 +77,7 @@ await db.query(`
     VALUES ($1, $2, $3, $4, $5)
 `, [title, content, category, userId, mediaUrl]);
 
+const upload = multer({ dest: 'uploads/' });
 
 
 /* ---------------- MIDDLEWARE ---------------- */
