@@ -18,6 +18,10 @@ import { Resend } from "resend";
 import pkg from "@prisma/client";
 dotenv.config();
 
+const upload = multer({ 
+  dest: 'uploads/' 
+});
+
 /* ---------------- INITIAL SETUP ---------------- */
 const PostgresStore = pgSession(session);
 const __filename = fileURLToPath(import.meta.url);
