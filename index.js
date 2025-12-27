@@ -1081,9 +1081,10 @@ app.post("/forum/new", checkVerified, async (req, res) => {
 
 // This handles the form submission
 // 1. THIS IS THE ROUTE (The "Local" scope)
+// This is your "POST" route for creating a forum thread
 app.post("/forum/create", upload.single('media'), async (req, res) => {
     try {
-        // PASTE THE LINE HERE! Inside the curly braces { }
+        // MOVE LINE 77 TO HERE (Inside the curly brace)
         const mediaUrl = req.file ? `/uploads/${req.file.filename}` : null;
         
         const { title, content, category } = req.body;
