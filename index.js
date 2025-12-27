@@ -1046,6 +1046,100 @@ app.post('/forum/create', async (req, res) => {
         res.status(500).send("The Town Hall is closed due to a server error.");
     }
 });
+
+router.get('/feed', async (req, res) => {
+    try {
+        // 1. Pagination & Search Parameters
+        const page = parseInt(req.query.page) || 1;
+        const limit = 10;
+        const offset = (page - 1) * limit;
+        const searchQuery = req.query.search || '';
+
+        // 2. Fetch Posts with Author Details (JOIN)
+        // We join 'events' with 'users' to get the username for the feed
+        const postsResult = await db.query(`
+            SELECT 
+                e.*, 
+                u.username, 
+                u.is_verified,
+                (SELECT COUNT(*) FROM likes WHERE event_id = e.id) as likes_count
+            FROM events e
+            JOIN users u ON e.created_by = u.id
+            WHERE e.description ILIKE $1
+            ORDER BY e.created_at DESC
+            LIMIT $2 OFFSET $3
+        `, [`%${searchQuery}%`, limit, offset]);
+
+        const posts = postsResult.rows;
+
+        // 3. Handle AJAX Requests (Infinite Scroll)
+        // Check if the request header 'X-Requested-With' is 'XMLHttpRequest'
+        if (req.xhr || req.headers['x-requested-with'] === 'XMLHttpRequest') {
+            return res.json({
+                success: true,
+                posts: posts,
+                currentPage: page
+            });
+        }
+
+        // 4. Data for the Sidebar (Only needed on initial page load)
+        
+        // Suggested Villagers (Users who aren't the current user)
+        const suggestedResult = await db.query(`
+            SELECT id, username FROM users 
+            WHERE id != $1 
+            ORDER BY RANDOM() LIMIT 5
+        `, [req.user.id]);
+
+        // Trending Whispers (Posts with most interaction)
+        const trendingResult = await db.query(`
+            SELECT id, description FROM events 
+            ORDER BY created_at DESC LIMIT 4
+        `);
+
+        // 5. Render the Full Page
+        res.render('feed', {
+            user: req.user,
+            posts: posts,
+            friends: suggestedResult.rows, // Used for the "Villagers" sections
+            trending: trendingResult.rows,
+            search: searchQuery,
+            unreadCount: 0 // Replace with your actual notifications logic
+        });
+
+    } catch (err) {
+        console.error("Feed Error:", err);
+        res.status(500).send("The Village Square is currently closed for maintenance.");
+    }
+});
+
+router.post('/event/:id/like', async (req, res) => {
+    const eventId = req.params.id;
+    const userId = req.user.id;
+
+    try {
+        // Check if already liked
+        const checkLike = await db.query(
+            'SELECT * FROM likes WHERE event_id = $1 AND user_id = $2',
+            [eventId, userId]
+        );
+
+        if (checkLike.rows.length > 0) {
+            // Unlike
+            await db.query('DELETE FROM likes WHERE event_id = $1 AND user_id = $2', [eventId, userId]);
+        } else {
+            // Like
+            await db.query('INSERT INTO likes (event_id, user_id) VALUES ($1, $2)', [eventId, userId]);
+        }
+
+        // Get new total
+        const countResult = await db.query('SELECT COUNT(*) FROM likes WHERE event_id = $1', [eventId]);
+        
+        res.json({ success: true, newCount: countResult.rows[0].count });
+    } catch (err) {
+        res.status(500).json({ success: false });
+    }
+});
 // POST /event/:id/like
 router.post('/event/:id/like', async (req, res) => {
     const postId = req.params.id;
