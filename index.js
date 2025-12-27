@@ -1062,21 +1062,26 @@ app.post("/forum/new", checkVerified, async (req, res) => {
 // This handles the form submission
 app.post('/forum/create', async (req, res) => {
     try {
-        // 1. Get data from the form
+        // Destructure exactly what is in the 'name' attributes of your HTML
         const { title, content, category } = req.body;
-        const userId = req.user.id; 
+        const userId = req.user.id;
 
-        // 2. Simple SQL Insert
-        // Using $1, $2, etc. prevents SQL Injection
+        // Debugging: Log this to your terminal to see if the data is actually arriving
+        console.log("Form Data Received:", { title, content, category });
+
+        if (!title || !content) {
+            return res.status(400).send("Title and Content are required to speak in the Hall.");
+        }
+
         await db.query(`
-            INSERT INTO forum_posts (title, content, category, author_id, created_at)
-            VALUES ($1, $2, $3, $4, NOW())
+            INSERT INTO forum_posts (title, content, category, author_id)
+            VALUES ($1, $2, $3, $4)
         `, [title, content, category || 'General', userId]);
 
         res.redirect('/forum');
     } catch (err) {
         console.error("Village Registry Error:", err);
-        res.status(500).send("The Town Hall records are full.");
+        res.status(500).send("The scroll could not be saved.");
     }
 });
 
