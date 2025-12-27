@@ -26,30 +26,20 @@
             border: 1px solid rgba(255, 255, 255, 0.05);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        
-        /* Custom scrollbar hide */
+        .post-card:hover {
+            border-color: rgba(59, 130, 246, 0.4);
+            background: rgba(15, 23, 42, 0.6);
+        }
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
+        .comment-section { display: none; }
+        .comment-section.open { display: block; }
+
         .vibe-pop { animation: heartPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
         @keyframes heartPop {
             0% { transform: scale(1); }
-            50% { transform: scale(1.5); }
+            50% { transform: scale(1.4); }
             100% { transform: scale(1); }
-        }
-
-        .comment-section {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.4s ease-out;
-        }
-        .comment-section.open { max-height: 2000px; }
-
-        .avatar-container {
-            width: 44px; height: 44px; flex-shrink: 0;
-            overflow: hidden; background: #1e293b;
-            display: flex; align-items: center; justify-content: center;
-            border-radius: 12px;
         }
     </style>
 </head>
@@ -57,327 +47,240 @@
 
     <nav class="glass-nav sticky top-0 z-50">
         <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between gap-6">
+            <h1 class="text-2xl font-black text-blue-500 italic tracking-tighter cursor-pointer" onclick="window.location.href='/feed'">APUGO</h1>
             <div class="flex items-center gap-6">
-                <h1 class="text-2xl font-black text-blue-500 italic tracking-tighter cursor-pointer" onclick="window.location.href='/feed'">APUGO</h1>
-                <div class="hidden lg:block w-80 relative group">
-                    <form action="/feed" method="GET">
-                        <input type="text" name="search" placeholder="Search whispers..." value="<%= locals.search || '' %>" 
-                            class="w-full bg-white/5 border border-white/5 rounded-2xl py-2 px-10 text-[11px] font-bold uppercase tracking-widest outline-none focus:border-blue-500/50 text-white">
-                        <i class="fas fa-search absolute left-4 top-2.5 text-slate-600 text-[10px]"></i>
-                    </form>
-                </div>
-            </div>
-            <div class="flex items-center gap-6">
-                <a href="/notifications" class="relative group">
-                    <i class="far fa-bell text-xl text-slate-400 group-hover:text-blue-500 transition-colors"></i>
-                    <% if (locals.unreadCount && unreadCount > 0) { %>
-                        <span class="absolute -top-1 -right-1 bg-blue-600 text-[8px] w-4 h-4 flex items-center justify-center rounded-full font-black border-2 border-[#020617]"><%= unreadCount %></span>
-                    <% } %>
-                </a>
-                <a href="/profile" class="w-8 h-8 rounded-full overflow-hidden bg-slate-800 flex items-center justify-center border border-white/10">
-                    <i class="fas fa-user text-xs text-slate-500"></i>
+                <a href="/forum" class="hidden md:block text-[10px] font-black uppercase text-blue-400 tracking-widest">Town Hall</a>
+                <a href="/profile" class="w-8 h-8 rounded-full overflow-hidden border border-white/10">
+                    <img src="<%= user.profile_pic || '/default-avatar.png' %>" class="w-full h-full object-cover">
                 </a>
             </div>
         </div>
     </nav>
 
-    <main class="max-w-6xl mx-auto px-4 mt-6 lg:mt-8 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10">
+    <main class="max-w-6xl mx-auto px-4 mt-8 grid grid-cols-1 lg:grid-cols-12 gap-10">
         
         <div class="lg:col-span-8 space-y-8">
             
-            <section class="bg-slate-900/50 border border-white/5 rounded-[2.5rem] p-6 shadow-2xl">
+            <section class="bg-slate-900/50 border border-white/5 rounded-[2.5rem] p-6 lg:p-8">
                 <form action="/event/create" method="POST" enctype="multipart/form-data" id="postForm">
-                    <div class="flex gap-4">
-                        <div class="avatar-container ring-2 ring-white/5">
-                            <i class="fas fa-user text-slate-500"></i>
-                        </div>
-                        <div class="w-full">
-                            <textarea name="description" id="postContent" placeholder="What's the word in the square?" required 
-                                class="w-full bg-transparent outline-none h-20 resize-none text-[16px] text-slate-200 placeholder-slate-600 mt-1 font-medium"></textarea>
-                            <div id="mediaPreviewContainer" class="hidden mt-4 relative w-32 h-32 rounded-2xl overflow-hidden border border-white/10">
-                                <img id="imagePreview" class="w-full h-full object-cover">
-                                <button type="button" onclick="clearMedia()" class="absolute top-2 right-2 bg-black/60 text-white w-6 h-6 rounded-full text-[10px]"><i class="fas fa-times"></i></button>
-                            </div>
-                        </div>
+                    <textarea name="description" id="postContent" placeholder="What's the word in the square?" required 
+                        class="w-full bg-transparent outline-none h-20 resize-none text-[16px] text-slate-200 placeholder-slate-600 font-medium"></textarea>
+                    
+                    <div id="mediaPreviewContainer" class="hidden mt-4 relative w-32 h-32 rounded-2xl overflow-hidden border border-white/10">
+                        <img id="imagePreview" class="w-full h-full object-cover">
+                        <button type="button" onclick="clearMedia()" class="absolute top-2 right-2 bg-black/60 text-white w-5 h-5 rounded-full text-[10px]"><i class="fas fa-times"></i></button>
                     </div>
+
                     <div class="flex items-center justify-between border-t border-white/5 mt-6 pt-6">
-                        <label for="fileInput" class="cursor-pointer bg-white/5 hover:bg-blue-600/10 text-slate-300 px-5 py-3 rounded-2xl text-[10px] font-black uppercase flex items-center gap-3 tracking-widest">
+                        <label for="fileInput" class="cursor-pointer bg-white/5 px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-300">
+                            <i class="fas fa-camera text-blue-500 mr-2"></i> Media
                             <input type="file" name="localMedia" id="fileInput" class="hidden" accept="image/*,video/*">
-                            <i class="fas fa-camera text-blue-500"></i> Media
                         </label>
-                        <button type="submit" class="bg-blue-600 hover:bg-blue-500 px-10 py-3.5 rounded-2xl font-black text-[10px] text-white uppercase tracking-widest">Publish</button>
+                        <button type="submit" id="publishBtn" class="bg-blue-600 px-10 py-3.5 rounded-2xl font-black text-[10px] text-white uppercase tracking-widest">Publish</button>
                     </div>
                 </form>
-            </section>
-
-            <section class="lg:hidden">
-                <div class="flex items-center justify-between px-2 mb-4">
-                    <h3 class="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em]">New Villagers</h3>
-                    <a href="/users" class="text-[9px] font-black text-slate-500 uppercase">View All</a>
-                </div>
-                <div class="flex gap-4 overflow-x-auto no-scrollbar pb-2">
-                    <% if (locals.friends) { %>
-                        <% friends.forEach(f => { %>
-                            <div class="flex flex-col items-center gap-2 shrink-0">
-                                <div class="w-16 h-16 rounded-[1.5rem] bg-slate-900 border border-white/10 flex items-center justify-center relative group">
-                                    <i class="fas fa-user text-slate-600 text-xl"></i>
-                                    <button class="absolute -bottom-1 -right-1 bg-blue-600 w-6 h-6 rounded-full border-2 border-[#020617] flex items-center justify-center text-[10px] text-white">
-                                        <i class="fas fa-plus"></i>
-                                    </button>
-                                </div>
-                                <span class="text-[10px] font-bold text-slate-400">@<%= (f.username || 'user').split('@')[0] %></span>
-                            </div>
-                        <% }) %>
-                    <% } %>
-                    </div>
             </section>
 
             <div class="space-y-6" id="feedContainer">
                 <% if (locals.posts && posts.length > 0) { %>
                     <% posts.forEach(p => { %>
-                        <article class="post-card rounded-[2.5rem] overflow-hidden">
-                            <div class="p-6 flex justify-between items-center">
-                                <div class="flex items-center gap-4">
-                                    <div class="avatar-container bg-slate-800 rounded-2xl ring-1 ring-white/10">
-                                        <i class="fas fa-user text-slate-600"></i>
-                                    </div>
-                                    <div>
-                                        <p class="font-bold text-[14px] text-white">@<%= p.author ? p.author.split('@')[0] : 'villager' %></p>
-                                        <p class="text-[8px] text-slate-600 uppercase font-black tracking-widest"><%= new Date(p.created_at).toLocaleDateString() %></p>
-                                    </div>
-                                </div>
-                                <button class="text-slate-700 p-2"><i class="fas fa-ellipsis-h"></i></button>
+                        <article class="post-card rounded-[2.5rem] overflow-hidden" id="post-<%= p.id %>">
+                            <div class="p-6">
+                                <p class="font-bold text-[14px] text-white">@<%= p.author ? p.author.split('@')[0] : 'villager' %></p>
+                                <p class="text-[8px] text-slate-600 uppercase font-black tracking-widest"><%= new Date(p.created_at).toLocaleDateString() %></p>
                             </div>
-                            <div class="px-8 pb-5 text-slate-300 text-[15px]"><%= p.description %></div>
+
+                            <div class="px-8 pb-5 text-slate-300 text-[15px] leading-relaxed"><%= p.description %></div>
+
                             <% if (p.image_url) { %>
                                 <div class="px-4 pb-4">
-                                    <img src="<%= p.image_url %>" class="rounded-[2rem] w-full border border-white/5">
+                                    <div class="rounded-[2rem] overflow-hidden bg-black/20 border border-white/5">
+                                        <img src="<%= p.image_url %>" class="w-full h-auto max-h-[600px] object-cover">
+                                    </div>
                                 </div>
                             <% } %>
+
                             <div class="px-8 py-5 border-t border-white/5 flex gap-8">
-                                <button onclick="sendVibe(this, '<%= p.id %>')" class="flex items-center gap-2 text-[10px] font-black uppercase text-slate-500">
-                                    <i class="far fa-heart text-lg"></i> <span class="vibe-count"><%= p.likes_count || 0 %></span>
+                                <button onclick="sendVibe(this, '<%= p.id %>')" class="flex items-center gap-2 text-[10px] font-black uppercase text-slate-500 <%= p.liked_by_me ? 'text-red-500' : '' %>">
+                                    <i class="<%= p.liked_by_me ? 'fas' : 'far' %> fa-heart text-lg"></i> 
+                                    <span class="vibe-count"><%= p.likes_count || 0 %></span>
                                 </button>
                                 <button onclick="toggleEchoes('<%= p.id %>')" class="flex items-center gap-2 text-[10px] font-black uppercase text-slate-500">
-                                    <i class="far fa-comment-dots text-lg"></i> <span>Echoes</span>
+                                    <i class="far fa-comment-dots text-lg"></i> 
+                                    <span><%= (p.comments && p.comments.length) || 0 %> Echoes</span>
                                 </button>
+                            </div>
+
+                            <div id="echoes-<%= p.id %>" class="comment-section bg-black/20 border-t border-white/5">
+                                <div class="p-6 space-y-4 max-h-60 overflow-y-auto no-scrollbar">
+                                    <% if (p.comments && p.comments.length > 0) { %>
+                                        <% p.comments.forEach(c => { %>
+                                            <div class="bg-white/5 rounded-2xl p-3 border border-white/5">
+                                                <p class="text-[9px] font-black text-blue-500">@<%= c.username || 'villager' %></p>
+                                                <p class="text-xs text-slate-300"><%= c.comment_text || c.content %></p>
+                                            </div>
+                                        <% }) %>
+                                    <% } %>
+                                </div>
+                                <form action="/event/<%= p.id %>/comment" method="POST" class="p-4 flex gap-3">
+                                    <input type="text" name="comment" placeholder="Add an echo..." class="flex-1 bg-slate-900 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none">
+                                    <button class="bg-blue-600 w-10 h-10 rounded-xl text-white"><i class="fas fa-paper-plane"></i></button>
+                                </form>
                             </div>
                         </article>
                     <% }) %>
                 <% } %>
             </div>
+
+            <div id="scrollLoader" class="py-10 text-center hidden">
+                <i class="fas fa-circle-notch animate-spin text-blue-500 text-2xl"></i>
+            </div>
         </div>
 
-        <aside class="hidden lg:block lg:col-span-4 space-y-8">
-            <div class="bg-gradient-to-br from-blue-600 to-blue-800 rounded-[2.5rem] p-7 group cursor-pointer relative overflow-hidden" onclick="window.location.href='/forum'">
-                <div class="relative z-10">
-                    <h3 class="text-xl font-black text-white italic tracking-tighter">TOWN HALL</h3>
-                    <p class="text-blue-100/70 text-[11px] mt-2 font-medium">Official village debates and decrees.</p>
-                </div>
-                <i class="fas fa-landmark absolute -right-4 -bottom-4 text-7xl text-black/10"></i>
-            </div>
-
-            <div class="bg-slate-900/40 border border-white/5 rounded-[2.5rem] p-8">
-                <h3 class="text-[10px] font-black text-blue-500 uppercase tracking-[0.4em] mb-6">Your Kin</h3>
+        <aside class="hidden lg:block lg:col-span-4">
+            <div class="bg-slate-900/40 border border-white/5 rounded-[2.5rem] p-8 sticky top-24">
+                <h3 class="text-[10px] font-black text-blue-500 uppercase tracking-[0.4em] mb-6">Hot Whispers</h3>
                 <div class="space-y-4">
-                    <% if (locals.friends) { %>
-                        <% friends.slice(0, 5).forEach(f => { %>
-                            <div class="flex items-center justify-between group cursor-pointer">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center border border-white/10"><i class="fas fa-user text-xs text-slate-500"></i></div>
-                                    <p class="text-[11px] font-bold text-slate-300">@<%= f.username %></p>
-                                </div>
-                                <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                            </div>
-                        <% }) %>
-                    <% } %>
+                    <p class="text-xs text-slate-500 italic">No trending whispers yet...</p>
                 </div>
             </div>
         </aside>
     </main>
 
-    <div class="lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-2xl border border-white/10 px-8 py-4 rounded-full flex gap-10 shadow-2xl z-50">
-        <a href="/feed" class="text-blue-500"><i class="fas fa-home text-lg"></i></a>
-        <a href="/forum" class="text-slate-500"><i class="fas fa-landmark text-lg"></i></a>
-        <a href="/profile" class="text-slate-500"><i class="fas fa-user text-lg"></i></a>
-    </div>
+    <script>
+      // --- EXISTING LOGIC ---
+let page = 0;
+let loading = false;
+let hasMore = true;
 
-  <script>
-    /**
-     * STATE MANAGEMENT
-     */
-    let page = 1;
-    let loading = false;
-    let hasMore = true;
+function toggleEchoes(postId) {
+    document.getElementById(`echoes-${postId}`).classList.toggle('open');
+}
 
-    /**
-     * 1. VIBE (LIKE) SYSTEM
-     * Updates the UI instantly (Optimistic UI) and syncs with the database
-     */
-    async function sendVibe(btn, postId) {
-        const icon = btn.querySelector('i');
-        const countSpan = btn.querySelector('.vibe-count');
-        const isLiked = icon.classList.contains('fas');
+async function sendVibe(btn, postId) {
+    const icon = btn.querySelector('i');
+    const countSpan = btn.querySelector('.vibe-count');
+    const isLiked = icon.classList.contains('fas');
+    let count = parseInt(countSpan.innerText);
 
-        // Animation & UI Toggle
+    if (isLiked) {
+        icon.classList.replace('fas', 'far');
+        btn.classList.replace('text-red-500', 'text-slate-500');
+        countSpan.innerText = Math.max(0, count - 1);
+    } else {
+        icon.classList.replace('far', 'fas');
+        btn.classList.replace('text-slate-500', 'text-red-500');
+        countSpan.innerText = count + 1;
         btn.classList.add('vibe-pop');
-        icon.classList.toggle('fas');
-        icon.classList.toggle('far');
-        btn.classList.toggle('text-red-500');
-        btn.classList.toggle('text-slate-500');
+        setTimeout(() => btn.classList.remove('vibe-pop'), 400);
+    }
 
-        // Optimistic Update
-        let currentCount = parseInt(countSpan.innerText);
-        countSpan.innerText = isLiked ? currentCount - 1 : currentCount + 1;
+    try {
+        const response = await fetch(`/event/${postId}/like`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+        if (data.success) countSpan.innerText = data.newCount;
+    } catch (err) { console.error("Vibe sync failed", err); }
+}
+
+// --- NEW INFINITE SCROLL LOGIC ---
+
+window.onscroll = async function() {
+    // If user is 800px from the bottom, load more
+    if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 800 && !loading && hasMore) {
+        loading = true;
+        page++;
+        
+        // Optional: show a small loader at bottom
+        console.log(`Fetching page ${page}...`);
 
         try {
-            const response = await fetch(`/event/${postId}/like`, { 
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+            const response = await fetch(`/feed?page=${page}`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
             });
             const data = await response.json();
+
+            if (!data.posts || data.posts.length === 0) {
+                hasMore = false;
+                return;
+            }
+
+            data.posts.forEach(post => {
+                appendPostToFeed(post);
+            });
             
-            if (!data.success) {
-                // Revert UI if server fails
-                icon.classList.toggle('fas');
-                icon.classList.toggle('far');
-                countSpan.innerText = currentCount;
-            }
+            loading = false;
         } catch (err) {
-            console.error("Vibe sync failed:", err);
-        } finally {
-            setTimeout(() => btn.classList.remove('vibe-pop'), 400);
+            console.error("Scroll fetch failed", err);
+            loading = false;
         }
     }
+};
 
-    /**
-     * 2. ECHOES (COMMENTS) TOGGLE
-     */
-    function toggleEchoes(id) {
-        const section = document.getElementById(`echoes-${id}`);
-        if (section) {
-            section.classList.toggle('open');
-        }
-    }
-
-    /**
-     * 3. MEDIA PREVIEW LOGIC
-     * Handles image and video previews before uploading
-     */
-    const fileInput = document.getElementById('fileInput');
-    if (fileInput) {
-        fileInput.onchange = function() {
-            const file = this.files[0];
-            if (file) {
-                const reader = new FileReader();
-                const previewContainer = document.getElementById('mediaPreviewContainer');
-                const imagePreview = document.getElementById('imagePreview');
-
-                reader.onload = function(e) {
-                    imagePreview.src = e.target.result;
-                    previewContainer.classList.remove('hidden');
-                    previewContainer.classList.add('flex');
-                };
-                reader.readAsDataURL(file);
-            }
-        };
-    }
-
-    function clearMedia() {
-        const fileInput = document.getElementById('fileInput');
-        const previewContainer = document.getElementById('mediaPreviewContainer');
-        if (fileInput) fileInput.value = '';
-        if (previewContainer) previewContainer.classList.add('hidden');
-    }
-
-    /**
-     * 4. INFINITE SCROLL
-     * Detects when user reaches bottom and fetches next page of posts
-     */
-    window.onscroll = async () => {
-        if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 1000) {
-            if (loading || !hasMore) return;
-
-            loading = true;
-            document.getElementById('loadingIndicator')?.classList.remove('hidden');
-
-            try {
-                const res = await fetch(`/feed?page=${page + 1}`, {
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                });
-                const data = await res.json();
-
-                if (data.posts && data.posts.length > 0) {
-                    data.posts.forEach(post => appendPostToFeed(post));
-                    page++;
-                } else {
-                    hasMore = false;
-                }
-            } catch (err) {
-                console.error("Error loading more whispers:", err);
-            } finally {
-                loading = false;
-                document.getElementById('loadingIndicator')?.classList.add('hidden');
-            }
-        }
-    };
-
-    /**
-     * 5. DYNAMIC POST RENDERING
-     * Helper to inject new posts from infinite scroll into the DOM
-     */
-    function appendPostToFeed(p) {
-        const container = document.getElementById('feedContainer');
-        const postHTML = `
-            <article class="post-card rounded-[2.5rem] overflow-hidden mb-6" id="post-${p.id}">
-                <div class="p-6 flex justify-between items-center">
-                    <div class="flex items-center gap-4">
-                        <div class="avatar-container bg-slate-800 rounded-2xl ring-1 ring-white/10">
-                            <i class="fas fa-user text-slate-600"></i>
+function appendPostToFeed(p) {
+    const container = document.getElementById('feedContainer');
+    const date = new Date(p.created_at).toLocaleDateString();
+    const authorHandle = p.author ? p.author.split('@')[0] : 'villager';
+    
+    // This matches your refactored "post-card" structure exactly
+    const postHTML = `
+        <article class="post-card rounded-[2.5rem] overflow-hidden" id="post-${p.id}">
+            <div class="p-6 flex justify-between items-center">
+                <div class="flex items-center gap-4">
+                    <div class="avatar-container bg-slate-800 rounded-2xl overflow-hidden ring-1 ring-white/10">
+                        <img src="${p.profile_pic || '/default-avatar.png'}" class="w-full h-full object-cover">
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <p class="font-bold text-[14px] text-white">@${authorHandle}</p>
+                            ${p.is_verified ? '<i class="fas fa-certificate text-blue-500 text-[9px]"></i>' : ''}
                         </div>
-                        <div>
-                            <p class="font-bold text-[14px] text-white">@${p.username || 'villager'}</p>
-                            <p class="text-[8px] text-slate-600 uppercase font-black tracking-widest">Recently Added</p>
-                        </div>
+                        <p class="text-[8px] text-slate-600 uppercase font-black tracking-widest">${date}</p>
                     </div>
                 </div>
-                <div class="px-8 pb-5 text-slate-300 text-[15px] leading-relaxed">
-                    ${p.description}
-                </div>
-                ${p.image_url ? `
-                    <div class="px-4 pb-4">
-                        <img src="${p.image_url}" class="rounded-[2rem] w-full border border-white/5">
-                    </div>
-                ` : ''}
-                <div class="px-8 py-5 border-t border-white/5 flex gap-8">
-                    <button onclick="sendVibe(this, '${p.id}')" class="flex items-center gap-2 text-[10px] font-black uppercase text-slate-500">
-                        <i class="far fa-heart text-lg"></i> <span class="vibe-count">0</span>
-                    </button>
-                    <button onclick="toggleEchoes('${p.id}')" class="flex items-center gap-2 text-[10px] font-black uppercase text-slate-500">
-                        <i class="far fa-comment-dots text-lg"></i> <span>Echoes</span>
-                    </button>
-                </div>
-            </article>
-        `;
-        container.insertAdjacentHTML('beforeend', postHTML);
-    }
+            </div>
 
-    /**
-     * 6. KIN CONNECTION (VILLAGERS)
-     */
-    async function connectKin(userId) {
-        try {
-            const res = await fetch(`/connect/${userId}`, { method: 'POST' });
-            const data = await res.json();
-            if (data.success) {
-                alert("Kinship request sent to the village!");
-                // Optionally hide the user from the list
-                event.target.closest('.shrink-0')?.remove();
-            }
-        } catch (err) {
-            console.error("Connection failed");
-        }
+            <div class="px-8 pb-5 text-slate-300 text-[15px] leading-relaxed">
+                ${p.description}
+            </div>
+
+            ${p.image_url ? `
+                <div class="px-4 pb-4">
+                    <div class="rounded-[2rem] overflow-hidden bg-black/20 border border-white/5">
+                        ${(p.media_type === 'video' || p.image_url.includes('.mp4')) 
+                            ? `<video controls class="w-full max-h-[500px] object-cover"><source src="${p.image_url}" type="video/mp4"></video>`
+                            : `<img src="${p.image_url}" class="w-full h-auto max-h-[600px] object-cover" loading="lazy">`
+                        }
+                    </div>
+                </div>
+            ` : ''}
+
+            <div class="px-8 py-5 border-t border-white/5 bg-white/[0.01] flex gap-8">
+                <button type="button" onclick="sendVibe(this, '${p.id}')" 
+                    class="vibe-btn flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all ${p.liked_by_me ? 'text-red-500' : 'text-slate-500 hover:text-red-400'}">
+                    <i class="${p.liked_by_me ? 'fas' : 'far'} fa-heart text-lg"></i> 
+                    <span class="vibe-count">${p.likes_count || 0}</span>
+                </button>
+                
+                <button onclick="toggleEchoes('${p.id}')" class="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-blue-400">
+                    <i class="far fa-comment-dots text-lg"></i> 
+                    <span>${p.comments_list ? p.comments_list.length : 0} Echoes</span>
+                </button>
+            </div>
+
+            <div id="echoes-${p.id}" class="comment-section bg-black/20 border-t border-white/5">
+                <form action="/event/${p.id}/comment" method="POST" class="p-4 flex gap-3 border-t border-white/5">
+                    <input type="text" name="comment" placeholder="Add an echo..." class="flex-1 bg-slate-900 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none">
+                    <button class="bg-blue-600 w-10 h-10 rounded-xl text-[10px]"><i class="fas fa-paper-plane"></i></button>
+                </form>
+            </div>
+        </article>
+    `;
+    
+    container.insertAdjacentHTML('beforeend', postHTML);
     }
-</script>
+    </script>
 </body>
 </html>
