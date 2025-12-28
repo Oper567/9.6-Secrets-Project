@@ -456,23 +456,15 @@ app.post("/reset-password/:token", async (req, res) => {
 app.get("/feed", checkVerified, async (req, res) => {
   const search = req.query.search || "";
   try {
-    // 1. Fetch Announcements
-    const announcements = await db.query(`
-      SELECT e.*, u.email AS author FROM events e 
-      JOIN users u ON e.created_by = u.id 
-      WHERE is_announcement = true AND is_deleted = false 
-      ORDER BY created_at DESC
-    `);
-
-    // 2. Fetch Trending
+    // 1. Fetch Trending (Using forum_posts table)
     const trending = await db.query(`
-      SELECT e.id, e.description, COUNT(l.id) as likes_count 
-      FROM events e LEFT JOIN likes l ON e.id = l.event_id 
-      WHERE e.is_deleted = false 
-      GROUP BY e.id ORDER BY likes_count DESC LIMIT 3
+      SELECT p.id, p.content, COUNT(l.id) as likes_count 
+      FROM forum_posts p LEFT JOIN likes l ON p.id = l.post_id 
+      WHERE p.is_deleted = false 
+      GROUP BY p.id ORDER BY likes_count DESC LIMIT 3
     `);
 
-    // 3. Fetch Villagers (friends)
+    // 2. Fetch Villagers (friends)
     let villagerParams = [req.user.id];
     let villagerSearchQuery = `SELECT id, email, profile_pic FROM users WHERE id != $1`;
     if (search) {
@@ -481,37 +473,35 @@ app.get("/feed", checkVerified, async (req, res) => {
     }
     const suggestedUsers = await db.query(villagerSearchQuery + ` LIMIT 10`, villagerParams);
 
-    // 4. Main Posts Query
+    // 3. Main Posts Query (Synced with feed.ejs variables)
     let params = [req.user.id];
     let postsQuery = `
-      SELECT e.*, u.email AS author, u.profile_pic, u.is_verified,
-      (SELECT COUNT(*) FROM likes WHERE event_id = e.id) AS likes_count,
-      (SELECT EXISTS (SELECT 1 FROM likes WHERE event_id = e.id AND user_id = $1)) AS liked_by_me,
+      SELECT p.*, u.email AS author_email, u.profile_pic, u.is_verified,
+      (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes_count,
+      (SELECT EXISTS (SELECT 1 FROM likes WHERE post_id = p.id AND user_id = $1)) AS liked_by_me,
       (SELECT JSON_AGG(json_build_object(
-          'id', c.id, 
-          'comment_text', c.content, 
-          'username', cu.email, 
-          'user_id', c.user_id
-      )) FROM comments c JOIN users cu ON c.user_id = cu.id WHERE c.event_id = e.id) as comments_list
-      FROM events e 
-      JOIN users u ON e.created_by = u.id 
-      WHERE is_announcement = false AND is_deleted = false
+          'username', split_part(cu.email, '@', 1), 
+          'comment_text', r.reply_text, 
+          'user_pic', cu.profile_pic
+      )) FROM forum_replies r JOIN users cu ON r.author_id = cu.id WHERE r.post_id = p.id) as comments_list
+      FROM forum_posts p 
+      JOIN users u ON p.author_id = u.id 
+      WHERE p.is_deleted = false
     `;
 
     if (search) {
-      postsQuery += ` AND (e.description ILIKE $2 OR u.email ILIKE $2)`;
+      postsQuery += ` AND (p.content ILIKE $2 OR u.email ILIKE $2)`;
       params.push(`%${search}%`);
     }
 
-    postsQuery += ` ORDER BY e.is_pinned DESC, e.created_at DESC`;
+    postsQuery += ` ORDER BY p.created_at DESC`;
     const posts = await db.query(postsQuery, params);
 
-    // 5. Final Render
+    // 4. Final Render
     res.render("feed", {
-      announcements: announcements.rows,
       posts: posts.rows,
       trending: trending.rows,
-      friends: suggestedUsers.rows, // Matched to your EJS variable name
+      friends: suggestedUsers.rows,
       search: search,
       unreadCount: res.locals.unreadCount || 0,
       user: req.user,
