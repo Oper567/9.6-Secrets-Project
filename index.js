@@ -1151,32 +1151,39 @@ app.get("/forum", async (req, res) => {
 
 app.get("/forum/thread/:id", async (req, res) => {
     try {
-        const threadId = req.params.id;
+        const postId = req.params.id;
 
-        // Fetch the specific post and its author's email
+        // 1. Fetch the main thread
         const threadResult = await db.query(`
-            SELECT forum_posts.*, users.email AS author_email, users.profile_pic AS author_pic 
-            FROM forum_posts 
-            LEFT JOIN users ON forum_posts.author_id = users.id 
-            WHERE forum_posts.id = $1
-        `, [threadId]);
-
-        if (threadResult.rows.length === 0) {
-            return res.status(404).send("This scroll has been lost to time (Thread not found).");
-        }
+            SELECT f.*, u.email AS author_email, u.profile_pic AS author_pic 
+            FROM forum_posts f 
+            JOIN users u ON f.author_id = u.id 
+            WHERE f.id = $1`, [postId]);
 
         const thread = threadResult.rows[0];
 
-        // If you have a replies table, you would fetch them here
-        // const replies = await db.query("SELECT * FROM forum_replies WHERE thread_id = $1", [threadId]);
+        if (!thread) {
+            return res.status(404).send("This scroll has been lost to time.");
+        }
 
-        res.render("thread", { 
-            thread: thread, 
-            user: req.user || null 
+        // 2. Fetch the replies AND the author emails (Critical!)
+        const repliesResult = await db.query(`
+            SELECT r.*, u.email AS author_email 
+            FROM forum_replies r 
+            JOIN users u ON r.author_id = u.id 
+            WHERE r.post_id = $1 
+            ORDER BY r.created_at ASC`, [postId]);
+
+        // 3. Render the page with BOTH variables
+        res.render("thread", {
+            thread: thread,
+            replies: repliesResult.rows, // Ensure this name matches your EJS loop
+            user: req.user
         });
+
     } catch (err) {
-        console.error("Thread Loading Error:", err);
-        res.status(500).send("The Great Hall archives are stuck.");
+        console.error("GET THREAD ERROR:", err);
+        res.status(500).send("The Great Hall is having trouble reading this scroll.");
     }
 });
 
