@@ -10,6 +10,7 @@ import pgSession from "connect-pg-simple";
 import flash from "connect-flash";
 import dotenv from "dotenv";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import multer from "multer";
 import { createClient } from "@supabase/supabase-js";
@@ -33,6 +34,10 @@ const app = express();
 const port = process.env.PORT || 3000;
 const saltRounds = 10;
 const router = express.Router();
+// 3. Create it if it's missing (Requires the 'fs' import above)
+if (!fs.existsSync(uploadDir)){
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
 
 
 /* ---------------- FILE STORAGE SETUP ---------------- */
