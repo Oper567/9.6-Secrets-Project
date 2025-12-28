@@ -1210,10 +1210,29 @@ app.post("/forum/thread/:id/reply", async (req, res) => {
 // DELETE THREAD
 app.post("/forum/thread/:id/delete", async (req, res) => {
     try {
-        await db.query("DELETE FROM forum_posts WHERE id = $1 AND author_id = $2", [req.params.id, req.user.id]);
+        const postId = req.params.id;
+        const userId = req.user.id;
+
+        // 1. Delete all likes associated with this post
+        await db.query("DELETE FROM likes WHERE post_id = $1", [postId]);
+
+        // 2. Delete all replies associated with this post
+        await db.query("DELETE FROM forum_replies WHERE post_id = $1", [postId]);
+
+        // 3. Finally, delete the post itself (only if the user owns it)
+        const result = await db.query(
+            "DELETE FROM forum_posts WHERE id = $1 AND author_id = $2", 
+            [postId, userId]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(403).send("You do not have permission to burn this scroll.");
+        }
+
         res.redirect("/forum");
     } catch (err) {
-        res.status(500).send("Delete failed.");
+        console.error("DELETE ERROR:", err);
+        res.status(500).send("The Great Hall could not process this deletion.");
     }
 });
 app.post("/forum/post/:id/like", async (req, res) => {
