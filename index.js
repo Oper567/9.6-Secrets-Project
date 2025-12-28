@@ -22,17 +22,7 @@ dotenv.config();
 // 2. Configure Multer for Memory (Required for Supabase)
 
 
-const upload = multer({
-    storage: storage,
-    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
-    fileFilter: (req, file, cb) => {
-        const filetypes = /jpeg|jpg|png|gif|mp4|mov|webm/;
-        const mimetype = filetypes.test(file.mimetype);
-        const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
-        if (mimetype && extname) return cb(null, true);
-        cb(new Error("Only images and videos are allowed!"));
-    }
-});
+
 /* ---------------- INITIAL SETUP ---------------- */
 const PostgresStore = pgSession(session);
 const __filename = fileURLToPath(import.meta.url);
@@ -58,6 +48,18 @@ const storage = multer.diskStorage({
     },
     filename: (req, file, cb) => {
         cb(null, Date.now() + path.extname(file.originalname).toLowerCase());
+    }
+});
+
+const upload = multer({
+    storage: storage,
+    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+    fileFilter: (req, file, cb) => {
+        const filetypes = /jpeg|jpg|png|gif|mp4|mov|webm/;
+        const mimetype = filetypes.test(file.mimetype);
+        const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+        if (mimetype && extname) return cb(null, true);
+        cb(new Error("Only images and videos are allowed!"));
     }
 });
 
