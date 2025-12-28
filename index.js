@@ -20,27 +20,16 @@ dotenv.config();
 
 // WRONG for Supabase: multer.diskStorage(...)
 // 2. Configure Multer for Memory (Required for Supabase)
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, 'public/uploads/'); // Make sure this folder exists!
-    },
-    filename: (req, file, cb) => {
-        // Creates a unique name: 1715200000-myvideo.mp4
-        cb(null, Date.now() + path.extname(file.originalname).toLowerCase());
-    }
-});
+
 
 const upload = multer({
     storage: storage,
-    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
+    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
     fileFilter: (req, file, cb) => {
         const filetypes = /jpeg|jpg|png|gif|mp4|mov|webm/;
         const mimetype = filetypes.test(file.mimetype);
         const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
-
-        if (mimetype && extname) {
-            return cb(null, true);
-        }
+        if (mimetype && extname) return cb(null, true);
         cb(new Error("Only images and videos are allowed!"));
     }
 });
@@ -55,8 +44,21 @@ const port = process.env.PORT || 3000;
 const saltRounds = 10;
 const router = express.Router();
 
-const prisma = new PrismaClient({
-  datasourceUrl: process.env.DATABASE_URL,
+
+/* ---------------- FILE STORAGE SETUP ---------------- */
+// Ensure upload directory exists so the server doesn't crash
+const uploadDir = path.join(__dirname, 'public/uploads');
+if (!fs.existsSync(uploadDir)){
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, 'public/uploads/');
+    },
+    filename: (req, file, cb) => {
+        cb(null, Date.now() + path.extname(file.originalname).toLowerCase());
+    }
 });
 
 /* ---------------- SERVICES (DB, SUPABASE, MAIL) ---------------- */
@@ -112,6 +114,7 @@ app.set("trust proxy", 1);
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static("public"));
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 app.use(express.urlencoded({ extended: true }));
@@ -474,9 +477,10 @@ app.post("/reset-password/:token", async (req, res) => {
 /* ---------------- FEED & EVENTS ---------------- */
 app.get("/feed", checkVerified, async (req, res) => {
   const search = req.query.search || "";
+  const userId = req.user.id; // Using current logged-in user ID
+
   try {
-    // 1. Fetch Trending VIDEOS (For the Leaderboard scroller)
-    // We fetch posts that have media_type 'video' and order by views_count
+    // 1. Fetch Trending VIDEOS (Leaderboard)
     const trending = await db.query(`
       SELECT p.id, p.content, p.views_count, p.image_url
       FROM forum_posts p 
@@ -485,7 +489,7 @@ app.get("/feed", checkVerified, async (req, res) => {
     `);
 
     // 2. Fetch Villagers (friends/suggested)
-    let villagerParams = [req.user.id];
+    let villagerParams = [userId];
     let villagerSearchQuery = `SELECT id, email, profile_pic FROM users WHERE id != $1`;
     if (search) {
       villagerSearchQuery += ` AND email ILIKE $2`;
@@ -493,8 +497,8 @@ app.get("/feed", checkVerified, async (req, res) => {
     }
     const suggestedUsers = await db.query(villagerSearchQuery + ` LIMIT 10`, villagerParams);
 
-    // 3. Main Posts Query (Including views_count and media_type)
-    let params = [req.user.id];
+    // 3. Main Posts Query
+    let params = [userId];
     let postsQuery = `
       SELECT p.*, u.email AS author_email, u.profile_pic, u.is_verified,
       (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes_count,
@@ -520,16 +524,16 @@ app.get("/feed", checkVerified, async (req, res) => {
     // 4. Final Render
     res.render("feed", {
       posts: posts.rows,
-      trending: trending.rows, // Now contains most viewed videos
-      friends: suggestedUsers.rows,
+      trending: trending.rows,
+      friends: suggestedUsers.rows, // Matches the 'friends' variable in your EJS
       search: search,
-      unreadCount: res.locals.unreadCount || 0,
       user: req.user,
+      unreadCount: res.locals.unreadCount || 0
     });
 
   } catch (err) {
     console.error("FEED ERROR:", err);
-    res.status(500).send("Village Feed Error: " + err.message);
+    res.status(500).render("error", { message: "The village square is temporarily closed." });
   }
 });
 
@@ -622,14 +626,11 @@ app.post("/event/:id/like", async (req, res) => {
   }
 });
 
-app.post('/event/:id/view', async (req, res) => {
+app.post("/event/:id/view", isAuth, async (req, res) => {
     try {
-        const { id } = req.params;
-        // Increment the views_count for this specific post
-        await pool.query('UPDATE posts SET views_count = views_count + 1 WHERE id = $1', [id]);
+        await db.query("UPDATE forum_posts SET views_count = views_count + 1 WHERE id = $1", [req.params.id]);
         res.json({ success: true });
     } catch (err) {
-        console.error("View Count Error:", err);
         res.status(500).json({ success: false });
     }
 });
