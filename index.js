@@ -620,7 +620,7 @@ app.post("/event/:id/like", isAuth, async (req, res) => {
     const userId = req.user.id;
 
     try {
-        // 1. FIRST: Find out who owns the post
+        // 1. Fetch ONLY the author_id. Do NOT use SELECT * // This prevents the image buffer from being fetched.
         const postOwnerQuery = await db.query(
             "SELECT author_id FROM forum_posts WHERE id = $1", 
             [postId]
@@ -632,7 +632,7 @@ app.post("/event/:id/like", isAuth, async (req, res) => {
         
         const postAuthorId = postOwnerQuery.rows[0].author_id;
 
-        // 2. SECOND: Toggle the like
+        // 2. Toggle the kinship (Like)
         const existingLike = await db.query(
             "SELECT id FROM likes WHERE post_id = $1 AND user_id = $2",
             [postId, userId]
@@ -646,7 +646,8 @@ app.post("/event/:id/like", isAuth, async (req, res) => {
             await db.query("INSERT INTO likes (post_id, user_id) VALUES ($1, $2)", [postId, userId]);
             isLiked = true;
 
-            // 3. THIRD: Create the notification (Now postAuthorId is defined!)
+            // 3. Create Notification (Inside the 'else' so it only notifies on new likes)
+            // Prevent users from notifying themselves
             if (postAuthorId !== userId) {
                 await db.query(
                     "INSERT INTO notifications (user_id, sender_id, type, message) VALUES ($1, $2, $3, $4)",
@@ -655,8 +656,10 @@ app.post("/event/:id/like", isAuth, async (req, res) => {
             }
         }
 
-        // 4. FOURTH: Get new count and respond
+        // 4. Get the fresh count
         const countRes = await db.query("SELECT COUNT(*) FROM likes WHERE post_id = $1", [postId]);
+        
+        // 5. Send JSON response
         res.json({ 
             success: true, 
             isLiked: isLiked, 
@@ -664,8 +667,11 @@ app.post("/event/:id/like", isAuth, async (req, res) => {
         });
 
     } catch (err) {
-        console.error("Critical Like Error:", err);
-        res.status(500).json({ success: false });
+        console.error("LIKE ERROR:", err);
+        // Important: check if response was already sent
+        if (!res.headersSent) {
+            res.json({ success: false });
+        }
     }
 });
 
