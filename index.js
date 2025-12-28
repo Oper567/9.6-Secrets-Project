@@ -56,6 +56,16 @@ const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_ANON_KEY
 );
+// ... after supabase.storage.from('apugo_village').upload(...)
+
+const { data: publicUrlData } = supabase.storage
+  .from('apugo_village') // MUST match bucket name
+  .getPublicUrl(uploadData.path);
+
+const finalImageUrl = publicUrlData.publicUrl;
+
+// This finalImageUrl should be: 
+// https://[YOUR_PROJECT].supabase.co/storage/v1/object/public/apugo_village/[FILENAME]
 /* ---------------- MAIL SERVICE (RESEND) ---------------- */
 const resend = new Resend(process.env.EMAIL_PASS);
 // Verification Function
@@ -1152,21 +1162,24 @@ app.get("/forum", async (req, res) => {
 app.get("/forum/thread/:id", async (req, res) => {
     try {
         const postId = req.params.id;
+        const userId = req.user ? req.user.id : 0; // Use 0 if not logged in
 
-        // 1. Fetch the main thread
+        // 1. Fetch Thread + Likes + Author Info
         const threadResult = await db.query(`
-            SELECT f.*, u.email AS author_email, u.profile_pic AS author_pic 
+            SELECT f.*, u.email AS author_email, u.profile_pic AS author_pic,
+            (SELECT COUNT(*) FROM likes WHERE post_id = f.id) AS likes_count,
+            (SELECT EXISTS (SELECT 1 FROM likes WHERE post_id = f.id AND user_id = $2)) AS liked_by_me
             FROM forum_posts f 
             JOIN users u ON f.author_id = u.id 
-            WHERE f.id = $1`, [postId]);
+            WHERE f.id = $1`, [postId, userId]);
 
         const thread = threadResult.rows[0];
 
         if (!thread) {
-            return res.status(404).send("This scroll has been lost to time.");
+            return res.status(404).send("Scroll not found.");
         }
 
-        // 2. Fetch the replies AND the author emails (Critical!)
+        // 2. Fetch Replies + Reply Author Info
         const repliesResult = await db.query(`
             SELECT r.*, u.email AS author_email 
             FROM forum_replies r 
@@ -1174,16 +1187,15 @@ app.get("/forum/thread/:id", async (req, res) => {
             WHERE r.post_id = $1 
             ORDER BY r.created_at ASC`, [postId]);
 
-        // 3. Render the page with BOTH variables
         res.render("thread", {
             thread: thread,
-            replies: repliesResult.rows, // Ensure this name matches your EJS loop
+            replies: repliesResult.rows,
             user: req.user
         });
 
     } catch (err) {
-        console.error("GET THREAD ERROR:", err);
-        res.status(500).send("The Great Hall is having trouble reading this scroll.");
+        console.error("DATABASE ERROR:", err);
+        res.status(500).send("Error reading the scroll.");
     }
 });
 
@@ -1199,10 +1211,9 @@ function formatTimeAgo(date) {
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
   return date.toLocaleDateString();
 }
-
 app.post("/forum/thread/:id/reply", async (req, res) => {
     try {
-        const { reply_text } = req.body;
+        const { reply_text } = req.body; // Matches <textarea name="reply_text">
         const postId = req.params.id;
         const userId = req.user.id;
 
@@ -1214,7 +1225,32 @@ app.post("/forum/thread/:id/reply", async (req, res) => {
         res.redirect(`/forum/thread/${postId}`);
     } catch (err) {
         console.error("REPLY ERROR:", err);
-        res.status(500).send("The Great Hall rejected your reply: " + err.message);
+        res.status(500).send("The Great Hall rejected your reply.");
+    }
+});
+
+app.post("/forum/thread/:id/delete", async (req, res) => {
+    try {
+        const postId = req.params.id;
+        const userId = req.user.id;
+
+        // Verify ownership before deleting
+        const result = await db.query(
+            "DELETE FROM forum_posts WHERE id = $1 AND author_id = $2 RETURNING media_url",
+            [postId, userId]
+        );
+
+        if (result.rowCount > 0) {
+            console.log("Thread deleted successfully.");
+            // Optional: If you want to delete the image from Supabase Storage too:
+            // const mediaUrl = result.rows[0].media_url;
+            // if (mediaUrl) { /* Add supabase storage delete logic here */ }
+        }
+
+        res.redirect("/forum");
+    } catch (err) {
+        console.error("DELETE ERROR:", err);
+        res.status(500).send("Could not delete the scroll.");
     }
 });
 app.post("/forum/post/:id/like", async (req, res) => {

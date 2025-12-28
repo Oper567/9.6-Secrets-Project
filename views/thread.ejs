@@ -12,6 +12,7 @@
             background: radial-gradient(circle at top right, #020617, #0f172a); 
             color: #e2e8f0; 
             font-family: 'Plus Jakarta Sans', sans-serif; 
+            line-height: 1.6;
         }
         .glass-card { 
             background: rgba(30, 41, 59, 0.3); 
@@ -31,16 +32,34 @@
             background: #3b82f6;
             border-radius: 2px;
         }
+        /* Fix for image visibility */
+        .post-image {
+            display: block;
+            width: 100%;
+            height: auto;
+            max-height: 600px;
+            object-fit: contain;
+            background: rgba(0,0,0,0.2);
+        }
     </style>
 </head>
 <body class="min-h-screen pb-20">
-    <nav class="p-6 sticky top-0 z-50 backdrop-blur-md">
+    <nav class="p-6 sticky top-0 z-50 backdrop-blur-md border-b border-white/5">
         <div class="max-w-4xl mx-auto flex justify-between items-center">
             <a href="/forum" class="text-blue-500 font-black text-[10px] uppercase tracking-[0.3em] hover:text-white transition-all">
                 <i class="fas fa-arrow-left mr-2"></i> Return to Hall
             </a>
-            <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                Discussion ID: #<%= thread.id %>
+            <div class="flex items-center gap-4">
+                <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                    Scroll #<%= thread.id %>
+                </div>
+                <% if (user && user.id === thread.author_id) { %>
+                    <form action="/forum/thread/<%= thread.id %>/delete" method="POST" onsubmit="return confirm('Burn this scroll forever?')">
+                        <button type="submit" class="text-red-500/50 hover:text-red-500 transition-colors text-xs">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </form>
+                <% } %>
             </div>
         </div>
     </nav>
@@ -48,7 +67,7 @@
     <main class="max-w-4xl mx-auto px-4 mt-8">
         <div class="glass-card rounded-[2.5rem] p-8 md:p-12 mb-10 shadow-2xl">
             <div class="flex items-center gap-4 mb-8">
-                <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center font-bold text-white overflow-hidden">
+                <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center font-bold text-white overflow-hidden shadow-lg shadow-blue-900/20">
                     <% if (thread.author_pic) { %>
                         <img src="<%= thread.author_pic %>" class="w-full h-full object-cover">
                     <% } else { %>
@@ -59,8 +78,8 @@
                     <p class="text-[10px] font-black text-blue-500 uppercase tracking-widest">
                         Initiated by <%= thread.author_email.split('@')[0] %>
                     </p>
-                    <p class="text-slate-500 text-[10px] uppercase">
-                        <%= new Date(thread.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' }) %>
+                    <p class="text-slate-500 text-[10px] uppercase font-bold">
+                        <%= new Date(thread.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) %>
                     </p>
                 </div>
             </div>
@@ -73,9 +92,12 @@
                 <%= thread.content %>
             </p>
 
-            <% if (thread.media_url) { %>
-                <div class="rounded-[2rem] overflow-hidden border border-white/5 mb-10">
-                    <img src="<%= thread.media_url %>" class="w-full object-cover max-h-[600px]" alt="Shared Media">
+            <% if (thread.media_url && thread.media_url.length > 5) { %>
+                <div class="rounded-[2rem] overflow-hidden border border-white/10 mb-10 bg-black/20 shadow-inner">
+                    <img src="<%= thread.media_url %>" 
+                         class="post-image" 
+                         alt="Shared Media"
+                         onerror="this.style.display='none'; console.error('Image failed to load at:', this.src)">
                 </div>
             <% } %>
 
@@ -103,10 +125,10 @@
         <div class="space-y-8">
             <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] ml-4">Village Responses</h3>
             
-            <div id="reply-form-box" class="glass-card rounded-[2rem] p-4">
+            <div id="reply-form-box" class="glass-card rounded-[2rem] p-4 mb-12">
                 <form action="/forum/thread/<%= thread.id %>/reply" method="POST" class="flex flex-col md:flex-row gap-4">
                     <textarea name="reply_text" placeholder="Share your perspective..." required 
-                              class="flex-grow bg-white/5 border border-white/10 rounded-2xl p-6 text-white outline-none focus:border-blue-500/50 text-sm h-24 md:h-auto resize-none"></textarea>
+                              class="flex-grow bg-white/5 border border-white/10 rounded-2xl p-6 text-white outline-none focus:border-blue-500/50 text-sm h-24 md:h-auto resize-none transition-all"></textarea>
                     <button type="submit" class="bg-blue-600 text-white px-8 py-4 rounded-[1.5rem] font-black text-[10px] uppercase tracking-[0.2em] hover:bg-blue-500 transition-all active:scale-95 shadow-xl shadow-blue-600/20">
                         Post Reply
                     </button>
@@ -118,14 +140,25 @@
                     <% replies.forEach(reply => { %>
                         <div class="glass-card rounded-3xl p-6 ml-4 reply-line">
                             <div class="flex justify-between items-start mb-3">
-                                <span class="text-[10px] font-black text-blue-400 uppercase tracking-widest">
-                                    <%= reply.author_email.split('@')[0] %>
-                                </span>
-                                <span class="text-[9px] text-slate-600 font-bold uppercase">
-                                    <%= new Date(reply.created_at).toLocaleDateString() %>
-                                </span>
+                                <div class="flex flex-col">
+                                    <span class="text-[10px] font-black text-blue-400 uppercase tracking-widest">
+                                        <%= reply.author_email.split('@')[0] %>
+                                    </span>
+                                    <span class="text-[8px] text-slate-600 font-bold uppercase mt-1">
+                                        <%= new Date(reply.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) %>
+                                    </span>
+                                </div>
+                                
+                                <% if (user && user.id === reply.author_id) { %>
+                                    <form action="/forum/reply/<%= reply.id %>/delete" method="POST" onsubmit="return confirm('Remove your response?')">
+                                        <input type="hidden" name="post_id" value="<%= thread.id %>">
+                                        <button type="submit" class="text-slate-600 hover:text-red-500 text-[10px] transition-colors p-2">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </form>
+                                <% } %>
                             </div>
-                            <p class="text-slate-300 text-sm leading-relaxed"><%= reply.content %></p>
+                            <p class="text-slate-300 text-sm leading-relaxed"><%= reply.reply_text %></p>
                         </div>
                     <% }) %>
                 <% } else { %>
@@ -143,7 +176,6 @@
             const countSpan = document.getElementById('support-count');
             
             try {
-                // Route must match your app.post in index.js
                 const response = await fetch(`/forum/post/${postId}/like`, { 
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
@@ -153,7 +185,6 @@
                     const data = await response.json();
                     countSpan.innerText = `${data.likesCount} Support`;
                     
-                    // UI Toggle
                     if (btn.classList.contains('text-blue-500')) {
                         btn.classList.replace('text-blue-500', 'text-slate-400');
                     } else {
