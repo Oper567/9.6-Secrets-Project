@@ -21,9 +21,18 @@ dotenv.config();
 // WRONG for Supabase: multer.diskStorage(...)
 // 2. Configure Multer for Memory (Required for Supabase)
 const storage = multer.memoryStorage();
-const upload = multer({ 
+const upload = multer({
     storage: storage,
-    limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+    fileFilter: (req, file, cb) => {
+        const filetypes = /jpeg|jpg|png|gif|mp4|mov|webm/; // Added video formats
+        const mimetype = filetypes.test(file.mimetype);
+        const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+
+        if (mimetype && extname) {
+            return cb(null, true);
+        }
+        cb(new Error("Only images and videos are allowed!"));
+    }
 });
 
 /* ---------------- INITIAL SETUP ---------------- */
@@ -602,26 +611,29 @@ app.post("/event/:id/like", async (req, res) => {
 });
 // POST: Create a new Whisper (Forum Post)
 app.post("/event/create", checkVerified, upload.single("localMedia"), async (req, res) => {
-    // 1. Destructure correctly (matching your EJS textarea name="description")
-    const { description } = req.body; 
+    const { description } = req.body;
     const authorId = req.user.id;
-    
-    // 2. Handle the file upload path
-    const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+    let imageUrl = null;
+    let mediaType = 'image'; // Default
+
+    if (req.file) {
+        imageUrl = `/uploads/${req.file.filename}`;
+        // Check if the file is a video
+        if (req.file.mimetype.startsWith('video/')) {
+            mediaType = 'video';
+        }
+    }
 
     try {
-        // 3. Ensure column names match your database (content, author_id, image_url)
         await db.query(
-            `INSERT INTO forum_posts (author_id, content, image_url, created_at, is_deleted) 
-             VALUES ($1, $2, $3, NOW(), false)`,
-            [authorId, description, imageUrl]
+            `INSERT INTO forum_posts (author_id, title, content, image_url, media_type, created_at) 
+             VALUES ($1, $2, $3, $4, $5, NOW())`,
+            [authorId, description.substring(0, 30), description, imageUrl, mediaType]
         );
-
         res.redirect("/feed");
     } catch (err) {
-        console.error("DATABASE INSERT ERROR:", err);
-        // This provides more detail in your terminal while you're debugging
-        res.status(500).send("Village Feed Error: " + err.message);
+        console.error(err);
+        res.status(500).send("Error creating whisper.");
     }
 });
 app.post("/event/:id/report", checkVerified, async (req, res) => {
