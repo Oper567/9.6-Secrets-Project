@@ -444,73 +444,83 @@ app.post("/reset-password/:token", async (req, res) => {
 
 /* ---------------- FEED & EVENTS ---------------- */
 app.get("/feed", checkVerified, async (req, res) => {
-  const search = req.query.search || "";
-  try {
-    // 1. Fetch Announcements
-    const announcements = await db.query(`
-      SELECT e.*, u.email AS author FROM events e 
-      JOIN users u ON e.created_by = u.id 
-      WHERE is_announcement = true AND is_deleted = false 
-      ORDER BY created_at DESC
-    `);
+    const search = req.query.search || "";
+    const userId = req.user.id;
 
-    // 2. Fetch Trending
-    const trending = await db.query(`
-      SELECT e.id, e.description, COUNT(l.id) as likes_count 
-      FROM events e LEFT JOIN likes l ON e.id = l.event_id 
-      WHERE e.is_deleted = false 
-      GROUP BY e.id ORDER BY likes_count DESC LIMIT 3
-    `);
+    try {
+        // 1. Fetch Announcements (Now pulling from forum_posts where category is 'news/announcement')
+        const announcements = await db.query(`
+            SELECT f.*, u.email AS author 
+            FROM forum_posts f 
+            JOIN users u ON f.author_id = u.id 
+            WHERE f.category = 'announcement' AND f.is_deleted = false 
+            ORDER BY f.created_at DESC LIMIT 3
+        `);
 
-    // 3. Fetch Villagers (friends)
-    let villagerParams = [req.user.id];
-    let villagerSearchQuery = `SELECT id, email, profile_pic FROM users WHERE id != $1`;
-    if (search) {
-      villagerSearchQuery += ` AND email ILIKE $2`;
-      villagerParams.push(`%${search}%`);
+        // 2. Fetch Trending (Based on Likes)
+        const trending = await db.query(`
+            SELECT f.id, f.title, COUNT(l.id) as likes_count 
+            FROM forum_posts f 
+            LEFT JOIN likes l ON f.id = l.post_id 
+            WHERE f.is_deleted = false 
+            GROUP BY f.id ORDER BY likes_count DESC LIMIT 3
+        `);
+
+        // 3. Fetch Villagers (Suggested Friends)
+        let villagerParams = [userId];
+        let villagerSearchQuery = `SELECT id, email, profile_pic FROM users WHERE id != $1`;
+        if (search) {
+            villagerSearchQuery += ` AND email ILIKE $2`;
+            villagerParams.push(`%${search}%`);
+        }
+        const suggestedUsers = await db.query(villagerSearchQuery + ` LIMIT 10`, villagerParams);
+
+        // 4. Main Posts Query (The Heart of the Feed)
+        let params = [userId];
+        let postsQuery = `
+            SELECT 
+                f.*, 
+                u.email AS author, 
+                u.profile_pic, 
+                u.is_verified,
+                (SELECT COUNT(*) FROM likes WHERE post_id = f.id) AS likes_count,
+                (SELECT EXISTS (SELECT 1 FROM likes WHERE post_id = f.id AND user_id = $1)) AS liked_by_me,
+                (SELECT JSON_AGG(json_build_object(
+                    'id', c.id, 
+                    'comment_text', c.content, 
+                    'username', cu.email, 
+                    'user_id', c.user_id
+                )) FROM comments c JOIN users cu ON c.user_id = cu.id WHERE c.post_id = f.id) as comments_list
+            FROM forum_posts f 
+            JOIN users u ON f.author_id = u.id 
+            WHERE f.is_deleted = false
+        `;
+
+        if (search) {
+            // Note: f.content replaces e.description
+            postsQuery += ` AND (f.content ILIKE $2 OR f.title ILIKE $2 OR u.email ILIKE $2)`;
+            params.push(`%${search}%`);
+        }
+
+        postsQuery += ` ORDER BY f.created_at DESC`;
+        
+        const posts = await db.query(postsQuery, params);
+
+        // 5. Final Render
+        res.render("feed", {
+            announcements: announcements.rows,
+            posts: posts.rows,
+            trending: trending.rows,
+            friends: suggestedUsers.rows,
+            search: search,
+            unreadCount: res.locals.unreadCount || 0,
+            user: req.user,
+        });
+
+    } catch (err) {
+        console.error("FEED LOGIC ERROR:", err);
+        res.status(500).send("Village Feed Error: " + err.message);
     }
-    const suggestedUsers = await db.query(villagerSearchQuery + ` LIMIT 10`, villagerParams);
-
-    // 4. Main Posts Query
-    let params = [req.user.id];
-    let postsQuery = `
-      SELECT e.*, u.email AS author, u.profile_pic, u.is_verified,
-      (SELECT COUNT(*) FROM likes WHERE event_id = e.id) AS likes_count,
-      (SELECT EXISTS (SELECT 1 FROM likes WHERE event_id = e.id AND user_id = $1)) AS liked_by_me,
-      (SELECT JSON_AGG(json_build_object(
-          'id', c.id, 
-          'comment_text', c.content, 
-          'username', cu.email, 
-          'user_id', c.user_id
-      )) FROM comments c JOIN users cu ON c.user_id = cu.id WHERE c.event_id = e.id) as comments_list
-      FROM events e 
-      JOIN users u ON e.created_by = u.id 
-      WHERE is_announcement = false AND is_deleted = false
-    `;
-
-    if (search) {
-      postsQuery += ` AND (e.description ILIKE $2 OR u.email ILIKE $2)`;
-      params.push(`%${search}%`);
-    }
-
-    postsQuery += ` ORDER BY e.is_pinned DESC, e.created_at DESC`;
-    const posts = await db.query(postsQuery, params);
-
-    // 5. Final Render
-    res.render("feed", {
-      announcements: announcements.rows,
-      posts: posts.rows,
-      trending: trending.rows,
-      friends: suggestedUsers.rows, // Matched to your EJS variable name
-      search: search,
-      unreadCount: res.locals.unreadCount || 0,
-      user: req.user,
-    });
-
-  } catch (err) {
-    console.error("FEED ERROR:", err);
-    res.status(500).send("Village Feed Error: " + err.message);
-  }
 });
 function appendPostToFeed(p) {
   // ... (previous logic for post body)
