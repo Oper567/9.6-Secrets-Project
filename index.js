@@ -1074,28 +1074,40 @@ app.post("/user/:id/follow", isAuth, async (req, res) => {
 // --- DO NOT PUT IT HERE (Global Scope) ---
 
 app.get("/forum", async (req, res) => {
-    // --- MOVE IT HERE (Route Scope) ---
     try {
-        const activeCat = req.query.cat || 'all'; 
+        const activeCat = req.query.cat || 'all';
+        let query;
+        let params = [];
+
+        if (activeCat === 'all') {
+            // Make sure you are JOINING with users to get the author name/pic
+            query = `
+                SELECT forum_posts.*, users.username AS author_username, users.profile_pic AS author_pic 
+                FROM forum_posts 
+                JOIN users ON forum_posts.author_id = users.id 
+                ORDER BY created_at DESC`;
+        } else {
+            query = `
+                SELECT forum_posts.*, users.username AS author_username, users.profile_pic AS author_pic 
+                FROM forum_posts 
+                JOIN users ON forum_posts.author_id = users.id 
+                WHERE category = $1 
+                ORDER BY created_at DESC`;
+            params = [activeCat];
+        }
+
+        const result = await db.query(query, params);
         
-        // Now you can use activeCat in your database query
-        const posts = await db.query("SELECT * FROM forum_posts WHERE category = $1 OR $1 = 'all'", [activeCat]);
-        
-        res.render("forum", { posts, activeCat });
+        // Use 'threads' as the variable name because your HTML uses 'threads'
+        res.render("forum", { 
+            threads: result.rows, 
+            activeCat: activeCat,
+            user: req.user 
+        });
     } catch (err) {
         console.error(err);
-        res.status(500).send("Error loading forum");
+        res.status(500).send("Error loading the Great Hall.");
     }
-});
-
-// CREATE NEW TOPIC
-app.post("/forum/new", checkVerified, async (req, res) => {
-  const { title, category } = req.body;
-  await db.query(
-    "INSERT INTO forum_topics (title, category, creator_id) VALUES ($1, $2, $3)",
-    [title, category, req.user.id]
-  );
-  res.redirect("/forum");
 });
 // index.js or routes/forum.js
 
