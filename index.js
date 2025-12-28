@@ -473,54 +473,64 @@ app.post("/reset-password/:token", async (req, res) => {
 
 /* ---------------- FEED & EVENTS ---------------- */
 app.get("/feed", checkVerified, async (req, res) => {
-    const search = req.query.search || "";
-    const userId = req.user.id;
+  const search = req.query.search || "";
+  try {
+    // 1. Fetch Trending VIDEOS (For the Leaderboard scroller)
+    // We fetch posts that have media_type 'video' and order by views_count
+    const trending = await db.query(`
+      SELECT p.id, p.content, p.views_count, p.image_url
+      FROM forum_posts p 
+      WHERE p.is_deleted = false AND p.media_type = 'video'
+      ORDER BY p.views_count DESC LIMIT 5
+    `);
 
-    try {
-        // 1. Fetch Trending VIDEOS (Leaderboard)
-        const trending = await db.query(`
-            SELECT id, content, views_count 
-            FROM forum_posts 
-            WHERE is_deleted = false AND media_type = 'video'
-            ORDER BY views_count DESC LIMIT 5
-        `);
-
-        // 2. Main Posts Query
-        let params = [userId];
-        let postsQuery = `
-            SELECT p.*, u.email AS author_email, u.profile_pic,
-            (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes_count,
-            (SELECT EXISTS (SELECT 1 FROM likes WHERE post_id = p.id AND user_id = $1)) AS liked_by_me,
-            (SELECT JSON_AGG(json_build_object(
-                'username', split_part(cu.email, '@', 1), 
-                'comment_text', r.reply_text
-            )) FROM forum_replies r JOIN users cu ON r.author_id = cu.id WHERE r.post_id = p.id) as comments_list
-            FROM forum_posts p 
-            JOIN users u ON p.author_id = u.id 
-            WHERE p.is_deleted = false
-        `;
-
-        // Add Search Filter if exists
-        if (search) {
-            postsQuery += ` AND (p.content ILIKE $2 OR u.email ILIKE $2)`;
-            params.push(`%${search}%`);
-        }
-
-        postsQuery += ` ORDER BY p.created_at DESC`;
-        const posts = await db.query(postsQuery, params);
-
-        res.render("feed", {
-            posts: posts.rows,
-            trending: trending.rows,
-            search: search,
-            user: req.user,
-            unreadCount: res.locals.unreadCount || 0
-        });
-
-    } catch (err) {
-        console.error("FEED ERROR:", err);
-        res.status(500).send("Village Square is currently closed for maintenance.");
+    // 2. Fetch Villagers (friends/suggested)
+    let villagerParams = [req.user.id];
+    let villagerSearchQuery = `SELECT id, email, profile_pic FROM users WHERE id != $1`;
+    if (search) {
+      villagerSearchQuery += ` AND email ILIKE $2`;
+      villagerParams.push(`%${search}%`);
     }
+    const suggestedUsers = await db.query(villagerSearchQuery + ` LIMIT 10`, villagerParams);
+
+    // 3. Main Posts Query (Including views_count and media_type)
+    let params = [req.user.id];
+    let postsQuery = `
+      SELECT p.*, u.email AS author_email, u.profile_pic, u.is_verified,
+      (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes_count,
+      (SELECT EXISTS (SELECT 1 FROM likes WHERE post_id = p.id AND user_id = $1)) AS liked_by_me,
+      (SELECT JSON_AGG(json_build_object(
+          'username', split_part(cu.email, '@', 1), 
+          'comment_text', r.reply_text, 
+          'user_pic', cu.profile_pic
+      )) FROM forum_replies r JOIN users cu ON r.author_id = cu.id WHERE r.post_id = p.id) as comments_list
+      FROM forum_posts p 
+      JOIN users u ON p.author_id = u.id 
+      WHERE p.is_deleted = false
+    `;
+
+    if (search) {
+      postsQuery += ` AND (p.content ILIKE $2 OR u.email ILIKE $2)`;
+      params.push(`%${search}%`);
+    }
+
+    postsQuery += ` ORDER BY p.created_at DESC`;
+    const posts = await db.query(postsQuery, params);
+
+    // 4. Final Render
+    res.render("feed", {
+      posts: posts.rows,
+      trending: trending.rows, // Now contains most viewed videos
+      friends: suggestedUsers.rows,
+      search: search,
+      unreadCount: res.locals.unreadCount || 0,
+      user: req.user,
+    });
+
+  } catch (err) {
+    console.error("FEED ERROR:", err);
+    res.status(500).send("Village Feed Error: " + err.message);
+  }
 });
 
 function appendPostToFeed(p) {
@@ -578,42 +588,79 @@ app.get("/discover", checkVerified, async (req, res) => {
 
 // Ensure this is in your main file or the router linked to '/event'
 // POST: Toggle Like (Vibe)
-app.post("/event/:id/view", async (req, res) => {
+app.post("/event/:id/like", async (req, res) => {
+  const postId = req.params.id;
+  const userId = req.user.id;
+
+  try {
+    // Check if the user already liked the post
+    const existingLike = await db.query(
+      "SELECT id FROM likes WHERE post_id = $1 AND user_id = $2",
+      [postId, userId]
+    );
+
+    let isLiked;
+    if (existingLike.rows.length > 0) {
+      await db.query("DELETE FROM likes WHERE id = $1", [existingLike.rows[0].id]);
+      isLiked = false;
+    } else {
+      await db.query("INSERT INTO likes (post_id, user_id) VALUES ($1, $2)", [postId, userId]);
+      isLiked = true;
+    }
+
+    // Get the updated total count
+    const countRes = await db.query("SELECT COUNT(*) FROM likes WHERE post_id = $1", [postId]);
+    
+    res.json({ 
+      success: true, 
+      isLiked: isLiked, 
+      newCount: parseInt(countRes.rows[0].count) 
+    });
+  } catch (err) {
+    console.error("LIKE ERROR:", err);
+    res.json({ success: false });
+  }
+});
+
+app.post('/event/:id/view', async (req, res) => {
     try {
         const { id } = req.params;
-        // Increment view count in the forum_posts table
-        await db.query(
-            "UPDATE forum_posts SET views_count = COALESCE(views_count, 0) + 1 WHERE id = $1",
-            [id]
-        );
-        res.status(200).json({ success: true });
+        // Increment the views_count for this specific post
+        await pool.query('UPDATE posts SET views_count = views_count + 1 WHERE id = $1', [id]);
+        res.json({ success: true });
     } catch (err) {
+        console.error("View Count Error:", err);
         res.status(500).json({ success: false });
     }
 });
-
-
 // POST: Create a new Whisper (Forum Post)
-app.post("/event/create", upload.single('localMedia'), async (req, res) => {
+app.post("/event/create", upload.single("localMedia"), async (req, res) => {
     const { description } = req.body;
     const authorId = req.user.id;
+    
     let mediaUrl = null;
-    let mediaType = null;
+    let mediaType = 'image'; // Default
 
     if (req.file) {
+        // This creates the URL /uploads/123456.mp4
         mediaUrl = `/uploads/${req.file.filename}`;
-        mediaType = req.file.mimetype.startsWith('video/') ? 'video' : 'image';
+        
+        // Detect if it's a video
+        if (req.file.mimetype.startsWith('video/')) {
+            mediaType = 'video';
+        }
     }
 
     try {
         await db.query(
-            "INSERT INTO forum_posts (author_id, content, image_url, media_type, created_at) VALUES ($1, $2, $3, $4, NOW())",
-            [authorId, description, mediaUrl, mediaType]
+            `INSERT INTO forum_posts (author_id, title, content, image_url, media_type, created_at) 
+             VALUES ($1, $2, $3, $4, $5, NOW())`,
+            [authorId, description.substring(0, 20), description, mediaUrl, mediaType]
         );
-        res.status(200).send("Whisper Published");
+        res.redirect("/feed");
     } catch (err) {
         console.error(err);
-        res.status(500).send("Failed to seal the scroll.");
+        res.status(500).send("Error saving post.");
     }
 });
 app.post("/event/:id/report", checkVerified, async (req, res) => {
@@ -637,41 +684,28 @@ app.post("/event/:id/report", checkVerified, async (req, res) => {
   }
 });
 // POST: Add an Echo (Reply)
-app.post("/event/:id/echo", checkVerified, async (req, res) => {
-    const postId = req.params.id;
-    const authorId = req.user.id;
-    const { comment } = req.body;
+app.post("/event/:id/comment", async (req, res) => {
+  const { comment } = req.body;
+  const postId = req.params.id;
+  const authorId = req.user.id;
 
-    if (!comment || comment.trim() === "") {
-        return res.status(400).json({ success: false, message: "Echo cannot be empty." });
-    }
+  if (!comment || comment.trim() === "") return res.json({ success: false });
 
-    try {
-        // Insert into your replies/comments table
-        const result = await db.query(
-            `INSERT INTO forum_replies (post_id, author_id, reply_text, created_at) 
-             VALUES ($1, $2, $3, NOW()) RETURNING id`,
-            [postId, authorId, comment]
-        );
+  try {
+    await db.query(
+      `INSERT INTO forum_replies (post_id, author_id, reply_text, created_at) 
+       VALUES ($1, $2, $3, NOW())`,
+      [postId, authorId, comment]
+    );
 
-        // Optional: Create a notification for the post owner
-        const postOwner = await db.query("SELECT author_id FROM forum_posts WHERE id = $1", [postId]);
-        if (postOwner.rows[0].author_id !== authorId) {
-            await db.query(
-                "INSERT INTO notifications (user_id, sender_id, type, post_id) VALUES ($1, $2, $3, $4)",
-                [postOwner.rows[0].author_id, authorId, 'comment', postId]
-            );
-        }
-
-        res.json({ 
-            success: true, 
-            username: req.user.email.split('@')[0], 
-            text: comment 
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false });
-    }
+    res.json({ 
+      success: true, 
+      username: req.user.email.split('@')[0] 
+    });
+  } catch (err) {
+    console.error("COMMENT ERROR:", err);
+    res.json({ success: false });
+  }
 });
 app.post("/event/:id/delete", checkVerified, async (req, res) => {
     const postId = req.params.id;
