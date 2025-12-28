@@ -1070,6 +1070,48 @@ app.get("/profile", isAuth, async (req, res) => {
         res.status(500).send("The spirits are restless. Could not enter the hut.");
     }
 });
+app.get("/profile/:id", isAuth, async (req, res) => {
+    const profileId = req.params.id;
+    const loggedInUserId = req.user.id;
+
+    try {
+        // 1. Get the profile owner's info
+        const userResult = await db.query("SELECT id, email, role, is_verified FROM users WHERE id = $1", [profileId]);
+        
+        if (userResult.rows.length === 0) {
+            return res.status(404).send("This villager has vanished.");
+        }
+
+        const profileUser = userResult.rows[0];
+
+        // 2. Get their posts (echoes)
+        const postsResult = await db.query(`
+            SELECT p.*, 
+            (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes_count,
+            (SELECT COUNT(*) FROM forum_replies WHERE post_id = p.id) AS comments_count
+            FROM forum_posts p 
+            WHERE p.author_id = $1 AND p.is_deleted = false
+            ORDER BY p.created_at DESC`, 
+            [profileId]
+        );
+
+        // 3. Get kinship (friend) count
+        const friendsResult = await db.query(
+            "SELECT COUNT(*) FROM friendships WHERE (user_id = $1 OR friend_id = $1) AND status = 'accepted'",
+            [profileId]
+        );
+
+        res.render("profile", {
+            user: profileUser, // The user whose profile we are viewing
+            viewer: req.user,  // The person currently looking at the page
+            posts: postsResult.rows,
+            friendCount: friendsResult.rows[0].count
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("The village paths are blocked.");
+    }
+});
 
 app.get("/notifications", isAuth, async (req, res) => {
     const userId = req.user.id;
