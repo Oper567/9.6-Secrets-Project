@@ -57,12 +57,22 @@ const supabase = createClient(
   process.env.SUPABASE_ANON_KEY
 );
 // ... after supabase.storage.from('apugo_village').upload(...)
+// 1. Upload the file
+const { data: uploadResult, error: uploadError } = await supabase.storage
+    .from('apugo_village')
+    .upload(fileName, file.buffer, {
+        contentType: file.mimetype,
+        upsert: false
+    });
 
+if (uploadError) throw uploadError;
+
+// 2. Get the Public URL using the correct variable name (uploadResult)
 const { data: publicUrlData } = supabase.storage
-  .from('apugo_village') // MUST match bucket name
-  .getPublicUrl(uploadData.path);
+    .from('apugo_village')
+    .getPublicUrl(uploadResult.path); // Use uploadResult.path, not uploadData.path
 
-const finalImageUrl = publicUrlData.publicUrl;
+const mediaUrl = publicUrlData.publicUrl;
 
 // This finalImageUrl should be: 
 // https://[YOUR_PROJECT].supabase.co/storage/v1/object/public/apugo_village/[FILENAME]
