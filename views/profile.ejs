@@ -102,7 +102,10 @@
 
         <div class="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-4">
             <% if (typeof posts !== 'undefined' && posts.length > 0) { %>
-                <% posts.forEach(post => { %>
+                <% posts.forEach(post => { 
+                    // Safety check: Fallback to an empty string if both content and description are missing
+                    const textContent = post.content || post.description || "";
+                %>
                     <div class="post-grid-item aspect-square bg-slate-900/50 rounded-3xl md:rounded-[2.5rem] overflow-hidden border border-white/5 group relative">
                         <% if (post.image_url) { %>
                             <% if (post.media_type === 'video') { %>
@@ -115,7 +118,9 @@
                             <% } %>
                         <% } else { %>
                             <div class="w-full h-full flex items-center justify-center p-4 text-center bg-slate-950/20">
-                                <p class="text-[9px] md:text-[10px] text-slate-600 italic font-medium leading-tight">"<%= post.description.substring(0, 40) %><%= post.description.length > 40 ? '...' : '' %>"</p>
+                                <p class="text-[9px] md:text-[10px] text-slate-600 italic font-medium leading-tight">
+                                    "<%= textContent.substring(0, 40) %><%= textContent.length > 40 ? '...' : '' %>"
+                                </p>
                             </div>
                         <% } %>
 
@@ -125,7 +130,7 @@
                                 <span class="flex items-center gap-1"><i class="fas fa-comment text-blue-500 text-[8px]"></i> <%= post.comments_count || 0 %></span>
                             </div>
                             
-                            <form action="/event/<%= post.id %>/delete" method="POST" onsubmit="return confirm('Burn this secret?')">
+                            <form action="/event/<%= post.id %>/delete" method="POST" onsubmit="return confirm('Burn this secret forever?')">
                                 <button type="submit" class="bg-red-500/20 backdrop-blur-md border border-red-500/20 text-red-500 text-[7px] font-black px-4 py-2 rounded-full uppercase tracking-tighter hover:bg-red-600 hover:text-white transition-all">
                                     Burn
                                 </button>
