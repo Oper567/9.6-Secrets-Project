@@ -615,44 +615,58 @@ app.get("/discover", isAuth, async (req, res) => {
 
 // Ensure this is in your main file or the router linked to '/event'
 // POST: Toggle Like (Vibe)
-app.post("/event/:id/like", async (req, res) => {
-  const postId = req.params.id;
-  const userId = req.user.id;
+app.post("/event/:id/like", isAuth, async (req, res) => {
+    const postId = req.params.id;
+    const userId = req.user.id;
 
-  try {
-    // Check if the user already liked the post
-    const existingLike = await db.query(
-      "SELECT id FROM likes WHERE post_id = $1 AND user_id = $2",
-      [postId, userId]
-    );
+    try {
+        // 1. FIRST: Find out who owns the post
+        const postOwnerQuery = await db.query(
+            "SELECT author_id FROM forum_posts WHERE id = $1", 
+            [postId]
+        );
+        
+        if (postOwnerQuery.rows.length === 0) {
+            return res.json({ success: false, message: "Post not found" });
+        }
+        
+        const postAuthorId = postOwnerQuery.rows[0].author_id;
 
-    let isLiked;
-    if (existingLike.rows.length > 0) {
-      await db.query("DELETE FROM likes WHERE id = $1", [existingLike.rows[0].id]);
-      isLiked = false;
-    } else {
-      await db.query("INSERT INTO likes (post_id, user_id) VALUES ($1, $2)", [postId, userId]);
-      isLiked = true;
+        // 2. SECOND: Toggle the like
+        const existingLike = await db.query(
+            "SELECT id FROM likes WHERE post_id = $1 AND user_id = $2",
+            [postId, userId]
+        );
+
+        let isLiked;
+        if (existingLike.rows.length > 0) {
+            await db.query("DELETE FROM likes WHERE id = $1", [existingLike.rows[0].id]);
+            isLiked = false;
+        } else {
+            await db.query("INSERT INTO likes (post_id, user_id) VALUES ($1, $2)", [postId, userId]);
+            isLiked = true;
+
+            // 3. THIRD: Create the notification (Now postAuthorId is defined!)
+            if (postAuthorId !== userId) {
+                await db.query(
+                    "INSERT INTO notifications (user_id, sender_id, type, message) VALUES ($1, $2, $3, $4)",
+                    [postAuthorId, userId, 'like', 'admired your echo']
+                );
+            }
+        }
+
+        // 4. FOURTH: Get new count and respond
+        const countRes = await db.query("SELECT COUNT(*) FROM likes WHERE post_id = $1", [postId]);
+        res.json({ 
+            success: true, 
+            isLiked: isLiked, 
+            newCount: parseInt(countRes.rows[0].count) 
+        });
+
+    } catch (err) {
+        console.error("Critical Like Error:", err);
+        res.status(500).json({ success: false });
     }
-
-    // Get the updated total count
-    const countRes = await db.query("SELECT COUNT(*) FROM likes WHERE post_id = $1", [postId]);
-    
-    res.json({ 
-      success: true, 
-      isLiked: isLiked, 
-      newCount: parseInt(countRes.rows[0].count) 
-    });
-  } catch (err) {
-    console.error("LIKE ERROR:", err);
-    res.json({ success: false });
-  }
-
-  // Inside your app.post("/like/:id")
-  await db.query(
-    "INSERT INTO notifications (user_id, sender_id, type, message) VALUES ($1, $2, $3, $4)",
-    [postAuthorId, req.user.id, 'like', 'admired your echo']
-);
 });
 
 app.post("/event/:id/view", isAuth, async (req, res) => {
