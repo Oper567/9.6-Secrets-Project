@@ -1077,11 +1077,10 @@ app.get("/forum", async (req, res) => {
     try {
         const activeCat = req.query.cat || 'all';
         
-        // We use LEFT JOIN so that even if a user is deleted, the post still shows
         let query = `
             SELECT 
                 forum_posts.*, 
-                COALESCE(users.username, 'Village Ghost') AS author_username, 
+                users.email AS author_email, 
                 users.profile_pic AS author_pic 
             FROM forum_posts 
             LEFT JOIN users ON forum_posts.author_id = users.id
@@ -1097,14 +1096,14 @@ app.get("/forum", async (req, res) => {
 
         const result = await db.query(query, params);
 
+        // This makes sure the template has 'threads' and 'user'
         res.render("forum", { 
             threads: result.rows, 
             activeCat: activeCat,
-            user: req.user || {} // Prevents 'user is not defined' errors
+            user: req.user || null 
         });
     } catch (err) {
         console.error("FORUM RENDER ERROR:", err);
-        // This sends the actual error to your browser so you can see what's wrong
         res.status(500).send(`The Great Hall is blocked: ${err.message}`);
     }
 });
