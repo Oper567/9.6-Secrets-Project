@@ -482,12 +482,12 @@ app.get("/feed", checkVerified, async (req, res) => {
   const userId = req.user.id;
 
   try {
-    // 1. Fetch Trending VIDEOS
+    // 1. Fetch Trending VIDEOS (Added p.media_type here!)
     const trendingRes = await db.query(`
-      SELECT id, content, views_count, image_url
-      FROM forum_posts 
-      WHERE is_deleted = false AND media_type = 'video'
-      ORDER BY views_count DESC LIMIT 5
+      SELECT p.id, p.content, p.views_count, p.image_url, p.media_type
+      FROM forum_posts p 
+      WHERE p.is_deleted = false AND p.media_type = 'video'
+      ORDER BY p.views_count DESC LIMIT 5
     `);
 
     // 2. Fetch Villagers
@@ -499,7 +499,7 @@ app.get("/feed", checkVerified, async (req, res) => {
     }
     const suggestedUsers = await db.query(villagerSearchQuery + ` LIMIT 10`, villagerParams);
 
-    // 3. Main Posts Query - SPECIFY columns to avoid fetching hidden binary blobs
+    // 3. Main Posts Query
     let params = [userId];
     let postsQuery = `
       SELECT 
@@ -525,8 +525,9 @@ app.get("/feed", checkVerified, async (req, res) => {
     postsQuery += ` ORDER BY p.created_at DESC`;
     const postsRes = await db.query(postsQuery, params);
 
-    // --- ULTIMATE BUFFER FIX STARTS HERE ---
+    // --- ULTIMATE BUFFER FIX ---
     const sanitizeMedia = (row) => {
+      // If image_url is a Buffer, convert it to a Data URI string
       if (row.image_url && Buffer.isBuffer(row.image_url)) {
         const type = row.media_type === 'video' ? 'video/mp4' : 'image/jpeg';
         row.image_url = `data:${type};base64,${row.image_url.toString('base64')}`;
@@ -536,7 +537,6 @@ app.get("/feed", checkVerified, async (req, res) => {
 
     const cleanPosts = postsRes.rows.map(sanitizeMedia);
     const cleanTrending = trendingRes.rows.map(sanitizeMedia);
-    // --- ULTIMATE BUFFER FIX ENDS HERE ---
 
     res.render("feed", {
       posts: cleanPosts,
