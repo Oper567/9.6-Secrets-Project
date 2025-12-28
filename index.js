@@ -1195,31 +1195,19 @@ function formatTimeAgo(date) {
 
 app.post("/forum/thread/:id/reply", async (req, res) => {
     try {
-        // 1. Safety check: Is the user logged in?
-        if (!req.user) {
-            return res.status(401).send("You must be logged in to reply to the scroll.");
-        }
-
-        const { content } = req.body;
+        const { content } = req.body; // This must match the 'name' attribute in your textarea
         const postId = req.params.id;
         const userId = req.user.id;
 
-        // 2. Insert into the database
-        const result = await db.query(`
-            INSERT INTO forum_replies (content, post_id, author_id)
+        await db.query(`
+            INSERT INTO forum_replies (content, post_id, author_id) 
             VALUES ($1, $2, $3)
-            RETURNING *
         `, [content, postId, userId]);
 
-        console.log("Reply recorded successfully:", result.rows[0].id);
-
-        // 3. Redirect back to the thread
         res.redirect(`/forum/thread/${postId}`);
-
     } catch (err) {
-        console.error("REPLY DATABASE ERROR:", err);
-        // This will tell you EXACTLY why it failed in your browser
-        res.status(500).send(`The Great Hall rejected your reply: ${err.message}`);
+        console.error(err);
+        res.status(500).send("The Great Hall rejected your reply: " + err.message);
     }
 });
 app.post("/forum/post/:id/like", async (req, res) => {
