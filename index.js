@@ -563,150 +563,124 @@ app.get("/discover", checkVerified, async (req, res) => {
 });
 
 // ADD THIS: Single Post Detail Route
-app.get("/event/:id", checkVerified, async (req, res) => {
-  try {
-    const result = await db.query(
-      `
-            SELECT e.*, u.email AS author, u.profile_pic, u.is_verified,
-            (SELECT COUNT(*) FROM likes WHERE event_id=e.id) AS likes_count,
-            (SELECT JSON_AGG(json_build_object('content', c.content, 'author', cu.email, 'pic', cu.profile_pic)) 
-             FROM comments c JOIN users cu ON c.user_id = cu.id 
-             WHERE c.event_id = e.id ORDER BY c.created_at ASC) as comments_list
-            FROM events e JOIN users u ON e.created_by=u.id 
-            WHERE e.id = $1 AND e.is_deleted = false`,
-      [req.params.id]
-    );
 
-    if (!result.rows.length) return res.status(404).send("Whisper not found.");
-    res.render("event_detail", { post: result.rows[0] });
-  } catch (err) {
-    res.redirect("/feed");
-  }
-});
 
-app.post(
-  "/event/create",
-  checkVerified,
-  upload.single("localMedia"),
-  async (req, res) => {
-    try {
-      let mediaUrl = null,
-        mediaType = "image";
-      if (req.file) {
-        const fileName = `${Date.now()}-${req.file.originalname}`;
-        await supabase.storage
-          .from("apugo_village")
-          .upload(fileName, req.file.buffer, {
-            contentType: req.file.mimetype,
-            upsert: true,
-          });
-        mediaUrl = supabase.storage.from("apugo_village").getPublicUrl(fileName)
-          .data.publicUrl;
-        mediaType = req.file.mimetype.startsWith("video") ? "video" : "image";
-      }
-      await db.query(
-        "INSERT INTO events (title, description, image_url, created_by, is_announcement, media_type) VALUES ($1,$2,$3,$4,$5,$6)",
-        [
-          "Post",
-          req.body.description,
-          mediaUrl,
-          req.user.id,
-          req.user.role === "admin",
-          mediaType,
-        ]
-      );
-      res.redirect("/feed");
-    } catch (err) {
-      res.redirect("/feed");
-    }
-  }
-);
-app.post("/event/:id/like", async (req, res) => {
-  try {
-    const postId = req.params.id;
-
-    // 1. Logic to increment like count in your DB
-    // 2. Fetch the new total
-    const newCount = 10; // This would be the result from your DB
-
-    res.json({ success: true, newCount: newCount });
-  } catch (err) {
-    res.status(500).json({ success: false });
-  }
-});
 // Ensure this is in your main file or the router linked to '/event'
-app.post('/event/:id/delete', async (req, res) => {
-    try {
-        const { id } = req.params;
-        // Verify user owns the post before deleting
-        await db.query('DELETE FROM events WHERE id = $1 AND created_by = $2', [id, req.user.id]);
-        res.redirect('/feed');
-    } catch (err) {
-        console.error(err);
-        res.status(500).send("Error deleting whisper");
-    }
-});
-app.post('/event/create', upload.single('localMedia'), async (req, res) => {
-    const { description } = req.body;
-    // If you don't use upload.single(), 'description' will be UNDEFINED here.
-    
-    // ... your DB insert logic
-    res.redirect('/feed');
-});
-app.post("/event/:id/report", async (req, res) => {
+// POST: Toggle Like (Vibe)
+app.post("/event/:id/like", async (req, res) => {
   const postId = req.params.id;
-  const userId = req.user.id; // Assuming the user is logged in
+  const userId = req.user.id;
 
   try {
-    // Option A: Just log it in a 'reports' table (Recommended)
-    await db.query(
-      "INSERT INTO reports (post_id, reported_by, created_at) VALUES ($1, $2, NOW())",
+    // Check if the user already liked the post
+    const existingLike = await db.query(
+      "SELECT id FROM likes WHERE post_id = $1 AND user_id = $2",
       [postId, userId]
     );
 
-    // Option B: Mark the post directly as 'under_review'
-    // await db.query("UPDATE posts SET status = 'under_review' WHERE id = $1", [postId]);
+    let isLiked;
+    if (existingLike.rows.length > 0) {
+      await db.query("DELETE FROM likes WHERE id = $1", [existingLike.rows[0].id]);
+      isLiked = false;
+    } else {
+      await db.query("INSERT INTO likes (post_id, user_id) VALUES ($1, $2)", [postId, userId]);
+      isLiked = true;
+    }
 
-    console.log(`⚠️ Post ${postId} was reported by user ${userId}`);
+    // Get the updated total count
+    const countRes = await db.query("SELECT COUNT(*) FROM likes WHERE post_id = $1", [postId]);
+    
+    res.json({ 
+      success: true, 
+      isLiked: isLiked, 
+      newCount: parseInt(countRes.rows[0].count) 
+    });
+  } catch (err) {
+    console.error("LIKE ERROR:", err);
+    res.json({ success: false });
+  }
+});
+// POST: Create a new Whisper (Forum Post)
+app.post("/event/create", upload.single("localMedia"), async (req, res) => {
+  const { description } = req.body;
+  const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+  const authorId = req.user.id;
 
-    req.flash(
-      "success",
-      "Thank you. The Village Elders will review this whisper."
+  try {
+    await db.query(
+      `INSERT INTO forum_posts (author_id, content, image_url, created_at) 
+       VALUES ($1, $2, $3, NOW())`,
+      [authorId, description, imageUrl]
     );
     res.redirect("/feed");
   } catch (err) {
-    console.error("Report Error:", err);
-    res.redirect("/feed");
+    console.error("CREATE POST ERROR:", err);
+    res.status(500).send("Error creating whisper.");
   }
 });
-app.post("/event/:id/comment", async (req, res) => {
+app.post("/event/:id/report", checkVerified, async (req, res) => {
+  const postId = req.params.id;
+  const reporterId = req.user.id;
+  const { reason } = req.body; // You can pass a reason from a prompt or modal
+
   try {
-    const postId = parseInt(req.params.id); // Ensure ID is a number
-    const { comment } = req.body;
+    await db.query(
+      "INSERT INTO reports (post_id, reporter_id, reason) VALUES ($1, $2, $3)",
+      [postId, reporterId, reason || "Unspecified"]
+    );
 
-    // Use the user ID from the session (adjust based on your auth)
-    const userId = req.session.userId || 1;
+    // Optional: If a post gets more than 5 reports, hide it automatically
+    // await db.query("UPDATE forum_posts SET is_deleted = true WHERE id = $1 AND (SELECT COUNT(*) FROM reports WHERE post_id = $1) > 5", [postId]);
 
-    if (!comment) {
-      return res.redirect("/feed");
+    res.json({ success: true, message: "Whisper reported to the elders." });
+  } catch (err) {
+    console.error("REPORT ERROR:", err);
+    res.json({ success: false });
+  }
+});
+// POST: Add an Echo (Reply)
+app.post("/event/:id/comment", async (req, res) => {
+  const { comment } = req.body;
+  const postId = req.params.id;
+  const authorId = req.user.id;
+
+  if (!comment || comment.trim() === "") return res.json({ success: false });
+
+  try {
+    await db.query(
+      `INSERT INTO forum_replies (post_id, author_id, reply_text, created_at) 
+       VALUES ($1, $2, $3, NOW())`,
+      [postId, authorId, comment]
+    );
+
+    res.json({ 
+      success: true, 
+      username: req.user.email.split('@')[0] 
+    });
+  } catch (err) {
+    console.error("COMMENT ERROR:", err);
+    res.json({ success: false });
+  }
+});
+app.post("/event/:id/delete", checkVerified, async (req, res) => {
+  const postId = req.params.id;
+  const userId = req.user.id;
+
+  try {
+    // Ensure the person deleting is the owner of the post
+    const result = await db.query(
+      "UPDATE forum_posts SET is_deleted = true WHERE id = $1 AND author_id = $2",
+      [postId, userId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(403).send("You are not authorized to delete this whisper.");
     }
 
-    // Save the comment using Prisma
-    await prisma.comment.create({
-      data: {
-        comment_text: comment,
-        post_id: postId,
-        user_id: userId,
-        // created_at is usually handled automatically by Prisma
-      },
-    });
-
-    console.log(`Success: Echo saved on post ${postId}`);
     res.redirect("/feed");
   } catch (err) {
-    console.error("Prisma Comment Error:", err);
-    // Redirecting even on error prevents the 502/Infinite Loading screen
-    res.redirect("/feed");
+    console.error("DELETE ERROR:", err);
+    res.status(500).send("Error erasing whisper.");
   }
 });
 app.post("/comment/:id/delete", isAuth, async (req, res) => {
@@ -740,43 +714,29 @@ app.post("/comment/:id/delete", isAuth, async (req, res) => {
 
 // This tells the server: "Wait for someone to submit the form"
 // This is the "Container". Code inside here only runs when a user submits the form.
-app.post("/forum/create", upload.single('media'), async (req, res) => {
+// Ensure the route matches the form action (/forum/create)
+app.post("/forum/create", isAuth, upload.single('media'), async (req, res) => {
     try {
-        const { title, content } = req.body;
-        const file = req.file;
-        let mediaUrl = null;
+        const { content } = req.body; // Using 'content' from feed.ejs
+        const authorId = req.user.id;
+        
+        // Ensure the path matches how you serve static files
+        const mediaUrl = req.file ? `/uploads/${req.file.filename}` : null;
 
-        if (file) {
-            const fileName = `${Date.now()}_${file.originalname}`;
-            
-            // 1. Upload to Supabase
-            const { data: uploadResult, error: uploadError } = await supabase.storage
-                .from('apugo_village')
-                .upload(fileName, file.buffer, {
-                    contentType: file.mimetype,
-                    upsert: false
-                });
-
-            if (uploadError) throw uploadError;
-
-            // 2. Get the Public URL
-            const { data: publicUrlData } = supabase.storage
-                .from('apugo_village')
-                .getPublicUrl(uploadResult.path);
-
-            mediaUrl = publicUrlData.publicUrl;
+        if (!content) {
+            return res.status(400).send("The scroll cannot be empty.");
         }
 
-        // 3. Save to Postgres
         await db.query(
-            "INSERT INTO forum_posts (title, content, author_id, media_url) VALUES ($1, $2, $3, $4)",
-            [title, content, req.user.id, mediaUrl]
+            "INSERT INTO forum_posts (author_id, content, media_url, is_deleted) VALUES ($1, $2, $3, false)",
+            [authorId, content, mediaUrl]
         );
 
-        res.redirect("/forum");
+        res.redirect("/feed");
     } catch (err) {
-        console.error("FORUM CREATE ERROR:", err);
-        res.status(500).send("The Village Scroll could not be sealed.");
+        console.error("POST ERROR:", err);
+        // This is where your error message is coming from
+        res.status(500).send("The Village Scroll could not be sealed: " + err.message);
     }
 });
 /* ---------------- CHAT SYSTEM ---------------- */
