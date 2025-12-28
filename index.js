@@ -479,18 +479,18 @@ app.post("/reset-password/:token", async (req, res) => {
 /* ---------------- FEED & EVENTS ---------------- */
 app.get("/feed", checkVerified, async (req, res) => {
   const search = req.query.search || "";
-  const userId = req.user.id; // Using current logged-in user ID
+  const userId = req.user.id;
 
   try {
-    // 1. Fetch Trending VIDEOS (Leaderboard)
-    const trending = await db.query(`
-      SELECT p.id, p.content, p.views_count, p.image_url
-      FROM forum_posts p 
-      WHERE p.is_deleted = false AND p.media_type = 'video'
-      ORDER BY p.views_count DESC LIMIT 5
+    // 1. Fetch Trending VIDEOS
+    const trendingRes = await db.query(`
+      SELECT id, content, views_count, image_url
+      FROM forum_posts 
+      WHERE is_deleted = false AND media_type = 'video'
+      ORDER BY views_count DESC LIMIT 5
     `);
 
-    // 2. Fetch Villagers (friends/suggested)
+    // 2. Fetch Villagers
     let villagerParams = [userId];
     let villagerSearchQuery = `SELECT id, email, profile_pic FROM users WHERE id != $1`;
     if (search) {
@@ -499,17 +499,19 @@ app.get("/feed", checkVerified, async (req, res) => {
     }
     const suggestedUsers = await db.query(villagerSearchQuery + ` LIMIT 10`, villagerParams);
 
-    // 3. Main Posts Query
+    // 3. Main Posts Query - SPECIFY columns to avoid fetching hidden binary blobs
     let params = [userId];
     let postsQuery = `
-      SELECT p.*, u.email AS author_email, u.profile_pic, u.is_verified,
-      (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes_count,
-      (SELECT EXISTS (SELECT 1 FROM likes WHERE post_id = p.id AND user_id = $1)) AS liked_by_me,
-      (SELECT JSON_AGG(json_build_object(
-          'username', split_part(cu.email, '@', 1), 
-          'comment_text', r.reply_text, 
-          'user_pic', cu.profile_pic
-      )) FROM forum_replies r JOIN users cu ON r.author_id = cu.id WHERE r.post_id = p.id) as comments_list
+      SELECT 
+        p.id, p.content, p.image_url, p.media_type, p.created_at, p.author_id,
+        u.email AS author_email, u.profile_pic, u.is_verified,
+        (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes_count,
+        (SELECT EXISTS (SELECT 1 FROM likes WHERE post_id = p.id AND user_id = $1)) AS liked_by_me,
+        (SELECT JSON_AGG(json_build_object(
+            'username', split_part(cu.email, '@', 1), 
+            'comment_text', r.reply_text, 
+            'user_pic', cu.profile_pic
+        )) FROM forum_replies r JOIN users cu ON r.author_id = cu.id WHERE r.post_id = p.id) as comments_list
       FROM forum_posts p 
       JOIN users u ON p.author_id = u.id 
       WHERE p.is_deleted = false
@@ -521,13 +523,25 @@ app.get("/feed", checkVerified, async (req, res) => {
     }
 
     postsQuery += ` ORDER BY p.created_at DESC`;
-    const posts = await db.query(postsQuery, params);
+    const postsRes = await db.query(postsQuery, params);
 
-    // 4. Final Render
+    // --- ULTIMATE BUFFER FIX STARTS HERE ---
+    const sanitizeMedia = (row) => {
+      if (row.image_url && Buffer.isBuffer(row.image_url)) {
+        const type = row.media_type === 'video' ? 'video/mp4' : 'image/jpeg';
+        row.image_url = `data:${type};base64,${row.image_url.toString('base64')}`;
+      }
+      return row;
+    };
+
+    const cleanPosts = postsRes.rows.map(sanitizeMedia);
+    const cleanTrending = trendingRes.rows.map(sanitizeMedia);
+    // --- ULTIMATE BUFFER FIX ENDS HERE ---
+
     res.render("feed", {
-      posts: posts.rows,
-      trending: trending.rows,
-      friends: suggestedUsers.rows, // Matches the 'friends' variable in your EJS
+      posts: cleanPosts,
+      trending: cleanTrending,
+      friends: suggestedUsers.rows,
       search: search,
       user: req.user,
       unreadCount: res.locals.unreadCount || 0
@@ -535,7 +549,7 @@ app.get("/feed", checkVerified, async (req, res) => {
 
   } catch (err) {
     console.error("FEED ERROR:", err);
-    res.status(500).render("error", { message: "The village square is temporarily closed." });
+    res.status(500).send("The village square is temporarily closed.");
   }
 });
 
@@ -1057,28 +1071,39 @@ app.get("/profile", isAuth, async (req, res) => {
     const userId = req.user.id;
 
     try {
-        // 1. Fetch all posts by this specific user
+        // 1. Fetch posts with specific columns (avoiding hidden binary blobs)
         const userPosts = await db.query(`
-            SELECT p.*, 
-            (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes_count,
-            (SELECT COUNT(*) FROM forum_replies WHERE post_id = p.id) AS comments_count
+            SELECT 
+                p.id, p.content, p.image_url, p.media_type, p.created_at,
+                (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes_count,
+                (SELECT COUNT(*) FROM forum_replies WHERE post_id = p.id) AS comments_count
             FROM forum_posts p
             WHERE p.author_id = $1 AND p.is_deleted = false
             ORDER BY p.created_at DESC`, 
             [userId]
         );
 
-        // 2. Fetch "Kinship" count (Friends/Followers)
-        // Assuming you have a 'friends' or 'follows' table
+        // 2. Fetch "Kinship" count
         const kinship = await db.query(
-            "SELECT COUNT(*) FROM users WHERE id != $1", // Placeholder: replace with actual follow logic
+            "SELECT COUNT(*) FROM users WHERE id != $1", 
             [userId]
         );
 
-        // 3. Render the page
+        // --- ULTIMATE BUFFER FIX ---
+        // This converts raw database binary into a viewable web string
+        const cleanPosts = userPosts.rows.map(post => {
+            if (post.image_url && Buffer.isBuffer(post.image_url)) {
+                const mimeType = post.media_type === 'video' ? 'video/mp4' : 'image/jpeg';
+                post.image_url = `data:${mimeType};base64,${post.image_url.toString('base64')}`;
+            }
+            return post;
+        });
+
+        // 3. Render the page with 'cleanPosts'
         res.render("profile", {
             user: req.user,
-            posts: userPosts.rows,
+            viewer: req.user, // Added this so profile.ejs knows you are the owner
+            posts: cleanPosts,
             friendCount: kinship.rows[0].count,
             unreadCount: res.locals.unreadCount || 0
         });
