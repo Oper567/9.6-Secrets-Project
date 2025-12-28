@@ -574,19 +574,40 @@ function appendPostToFeed(p) {
 }
 
 // ADD THIS: Discover Route (Random media gallery)
-app.get("/discover", checkVerified, async (req, res) => {
-  try {
-    const result = await db.query(`
-            SELECT e.*, u.email as author 
-            FROM events e 
-            JOIN users u ON e.created_by = u.id 
-            WHERE e.image_url IS NOT NULL AND e.is_deleted = false 
-            ORDER BY RANDOM() LIMIT 24
-        `);
-    res.render("discover", { posts: result.rows });
-  } catch (err) {
-    res.redirect("/feed");
-  }
+app.get("/discover", isAuth, async (req, res) => {
+    const searchQuery = req.query.search || "";
+    const userId = req.user.id;
+
+    try {
+        let params = [];
+        let sql = `
+            SELECT p.*, u.email AS author, u.id AS created_by,
+            (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes,
+            (SELECT COUNT(*) FROM forum_replies WHERE post_id = p.id) AS comments_count
+            FROM forum_posts p
+            JOIN users u ON p.author_id = u.id
+            WHERE p.is_deleted = false
+        `;
+
+        if (searchQuery) {
+            sql += ` AND (p.content ILIKE $1 OR u.email ILIKE $1)`;
+            params.push(`%${searchQuery}%`);
+        }
+
+        // Randomize for "Discover" feel, or order by most likes/views
+        sql += ` ORDER BY RANDOM() LIMIT 20`;
+
+        const result = await db.query(sql, params);
+
+        res.render("discover", {
+            posts: result.rows,
+            user: req.user,
+            search: searchQuery
+        });
+    } catch (err) {
+        console.error("Discover Error:", err);
+        res.status(500).send("The wilds are too misty to explore right now.");
+    }
 });
 
 // ADD THIS: Single Post Detail Route
@@ -626,6 +647,12 @@ app.post("/event/:id/like", async (req, res) => {
     console.error("LIKE ERROR:", err);
     res.json({ success: false });
   }
+
+  // Inside your app.post("/like/:id")
+  await db.query(
+    "INSERT INTO notifications (user_id, sender_id, type, message) VALUES ($1, $2, $3, $4)",
+    [postAuthorId, req.user.id, 'like', 'admired your echo']
+);
 });
 
 app.post("/event/:id/view", isAuth, async (req, res) => {
@@ -710,38 +737,30 @@ app.post("/event/:id/comment", async (req, res) => {
     res.json({ success: false });
   }
 });
-app.post("/event/:id/delete", checkVerified, async (req, res) => {
+app.post("/event/:id/delete", isAuth, async (req, res) => {
     const postId = req.params.id;
     const userId = req.user.id;
-    const userRole = req.user.role; // Assumes you have a 'role' column in your users table
 
     try {
-        let result;
-        
-        if (userRole === 'admin') {
-            // Admin can delete anything
-            result = await db.query(
-                "UPDATE forum_posts SET is_deleted = true WHERE id = $1",
-                [postId]
-            );
-        } else {
-            // Regular users can only delete their own
-            result = await db.query(
-                "UPDATE forum_posts SET is_deleted = true WHERE id = $1 AND author_id = $2",
-                [postId, userId]
-            );
-        }
+        // We check author_id = $2 to ensure users can't delete other people's posts
+        const result = await db.query(
+            "UPDATE forum_posts SET is_deleted = true WHERE id = $1 AND author_id = $2",
+            [postId, userId]
+        );
 
         if (result.rowCount === 0) {
-            return res.status(403).send("Unauthorized: You cannot delete this whisper.");
+            req.flash("error", "You cannot burn what isn't yours.");
+        } else {
+            req.flash("success", "The echo has faded into ash.");
         }
-
-        res.redirect("/feed");
+        
+        res.redirect("/profile");
     } catch (err) {
-        console.error("DELETE ERROR:", err);
-        res.status(500).send("Failed to delete whisper.");
+        console.error("Delete Error:", err);
+        res.status(500).send("The flame flickered out.");
     }
 });
+
 app.post("/comment/:id/delete", isAuth, async (req, res) => {
   try {
     const comment = await db.query(
@@ -928,39 +947,36 @@ app.delete("/api/chat/clear/:friendId", isAuth, async (req, res) => {
 /* ---------------- FRIENDSHIP SYSTEM ---------------- */
 // 1. CONNECT / REQUEST KINSHIP
 app.post("/friends/request/:id", isAuth, async (req, res) => {
-  const senderId = req.user.id;
-  const receiverId = req.params.id;
+    const targetUserId = req.params.id;
+    const senderId = req.user.id;
 
-  if (parseInt(senderId) === parseInt(receiverId)) return res.redirect("/feed");
+    if (targetUserId == senderId) return res.redirect("/discover");
 
-  try {
-    // We check if any relationship exists (either way)
-    const check = await db.query(
-      "SELECT * FROM friendships WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)",
-      [senderId, receiverId]
-    );
+    try {
+        // Check if request already exists
+        const existing = await db.query(
+            "SELECT * FROM friendships WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)",
+            [senderId, targetUserId]
+        );
 
-    if (check.rows.length === 0) {
-      // Option A: Instant Friends (status='accepted')
-      // Option B: Needs approval (status='pending')
-      const status = "accepted";
+        if (existing.rows.length === 0) {
+            await db.query(
+                "INSERT INTO friendships (user_id, friend_id, status) VALUES ($1, $2, 'pending')",
+                [senderId, targetUserId]
+            );
+            
+            // Optional: Create a notification for the receiver
+            await db.query(
+                "INSERT INTO notifications (user_id, sender_id, message) VALUES ($1, $2, $3)",
+                [targetUserId, senderId, "Someone wants to start a kinship with you!"]
+            );
+        }
 
-      await db.query(
-        "INSERT INTO friendships (sender_id, receiver_id, status) VALUES ($1, $2, $3)",
-        [senderId, receiverId, status]
-      );
-
-      await db.query(
-        "INSERT INTO notifications (user_id, sender_id, message) VALUES ($1, $2, $3)",
-        [receiverId, senderId, "added you as kin!"]
-      );
+        res.redirect("/discover");
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("The messenger got lost.");
     }
-
-    res.redirect(req.get("Referrer") || "/feed");
-  } catch (err) {
-    console.error("KINSHIP ERROR:", err);
-    res.status(500).send("Error connecting souls.");
-  }
 });
 
 // 2. SEVER KINSHIP (UNFRIEND)
@@ -978,6 +994,28 @@ app.post("/friends/unfriend/:id", isAuth, async (req, res) => {
     console.error(err);
     res.status(500).send("Failed to sever kinship.");
   }
+});
+app.post("/friends/accept/:senderId", isAuth, async (req, res) => {
+    const senderId = req.params.senderId;
+    const userId = req.user.id;
+
+    try {
+        // Update friendship status
+        await db.query(
+            "UPDATE friendships SET status = 'accepted' WHERE user_id = $1 AND friend_id = $2",
+            [senderId, userId]
+        );
+
+        // Mark notification as resolved so buttons disappear
+        await db.query(
+            "UPDATE notifications SET is_resolved = true WHERE user_id = $1 AND sender_id = $2 AND type = 'friend_request'",
+            [userId, senderId]
+        );
+
+        res.redirect("/notifications");
+    } catch (err) {
+        res.status(500).send("Could not seal the kinship.");
+    }
 });
 
 // FIX: Delete Chat (Assuming it deletes the message history between two users)
@@ -998,58 +1036,81 @@ app.post("/messages/delete/:userId", checkVerified, async (req, res) => {
 
 /* ---------------- PROFILE & SETTINGS ---------------- */
 app.get("/profile", isAuth, async (req, res) => {
-  try {
-    const posts = await db.query(
-      "SELECT * FROM events WHERE created_by = $1 AND is_deleted = false ORDER BY created_at DESC",
-      [req.user.id]
-    );
-    const friends = await db.query(
-      "SELECT COUNT(*) FROM friendships WHERE (sender_id = $1 OR receiver_id = $1) AND status = 'accepted'",
-      [req.user.id]
-    );
-    res.render("profile", {
-      user: req.user,
-      posts: posts.rows,
-      friendCount: friends.rows[0].count,
-    });
-  } catch (error) {
-    res.status(500).send("Profile Error");
-  }
+    const userId = req.user.id;
+
+    try {
+        // 1. Fetch all posts by this specific user
+        const userPosts = await db.query(`
+            SELECT p.*, 
+            (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes_count,
+            (SELECT COUNT(*) FROM forum_replies WHERE post_id = p.id) AS comments_count
+            FROM forum_posts p
+            WHERE p.author_id = $1 AND p.is_deleted = false
+            ORDER BY p.created_at DESC`, 
+            [userId]
+        );
+
+        // 2. Fetch "Kinship" count (Friends/Followers)
+        // Assuming you have a 'friends' or 'follows' table
+        const kinship = await db.query(
+            "SELECT COUNT(*) FROM users WHERE id != $1", // Placeholder: replace with actual follow logic
+            [userId]
+        );
+
+        // 3. Render the page
+        res.render("profile", {
+            user: req.user,
+            posts: userPosts.rows,
+            friendCount: kinship.rows[0].count,
+            unreadCount: res.locals.unreadCount || 0
+        });
+
+    } catch (err) {
+        console.error("Profile Load Error:", err);
+        res.status(500).send("The spirits are restless. Could not enter the hut.");
+    }
 });
 
 app.get("/notifications", isAuth, async (req, res) => {
-  try {
-    const result = await db.query(
-      `
-            SELECT n.*, u.email as actor_name, u.profile_pic as actor_pic 
-            FROM notifications n 
-            LEFT JOIN users u ON n.actor_id = u.id 
-            WHERE n.user_id = $1 
-            ORDER BY n.created_at DESC LIMIT 50`,
-      [req.user.id]
-    );
+    const userId = req.user.id;
 
-    res.render("notifications", { notifications: result.rows });
-  } catch (err) {
-    res.redirect("/feed");
-  }
+    try {
+        // 1. Fetch notifications with sender details
+        const result = await db.query(`
+            SELECT n.*, u.email AS sender_name, u.profile_pic AS sender_pic
+            FROM notifications n
+            LEFT JOIN users u ON n.sender_id = u.id
+            WHERE n.user_id = $1
+            ORDER BY n.created_at DESC
+            LIMIT 50`, 
+            [userId]
+        );
+
+        // 2. Mark all as read once the page is opened
+        await db.query(
+            "UPDATE notifications SET is_read = true WHERE user_id = $1 AND is_read = false",
+            [userId]
+        );
+
+        res.render("notifications", {
+            notifications: result.rows,
+            user: req.user,
+            unreadCount: 0 // Reset since we just marked them as read
+        });
+    } catch (err) {
+        console.error("Alerts Error:", err);
+        res.status(500).send("The village drums are silent. Error fetching alerts.");
+    }
 });
 
 // ADD THIS: Clear Notifications Route
 app.post("/notifications/clear", isAuth, async (req, res) => {
-  try {
-    // Use user_id (matches your middleware)
-    await db.query(
-      "UPDATE notifications SET is_read = true WHERE user_id = $1",
-      [req.user.id]
-    );
-
-    // This stops the infinite loading and refreshes the page
-    res.redirect("/notifications");
-  } catch (err) {
-    console.error("NOTIFICATION CLEAR ERROR:", err);
-    res.status(500).send("The spirits failed to clear the echoes.");
-  }
+    try {
+        await db.query("DELETE FROM notifications WHERE user_id = $1", [req.user.id]);
+        res.redirect("/notifications");
+    } catch (err) {
+        res.status(500).send("The echoes refused to fade.");
+    }
 });
 
 app.get("/settings", isAuth, (req, res) =>
@@ -1301,6 +1362,11 @@ app.get("/villagers", checkVerified, async (req, res) => {
   } catch (err) {
     res.redirect("/feed");
   }
+  // Inside your app.post("/like/:id")
+  await db.query(
+    "INSERT INTO notifications (user_id, sender_id, type, message) VALUES ($1, $2, $3, $4)",
+    [postAuthorId, req.user.id, 'like', 'admired your echo']
+);
 });
 app.get("/admin", isAdmin, async (req, res) => {
   const users = await db.query(
