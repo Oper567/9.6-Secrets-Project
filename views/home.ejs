@@ -9,14 +9,8 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
         
-        :root {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-        }
-
-        body { 
-            background-color: #020617; 
-            -webkit-tap-highlight-color: transparent;
-        }
+        :root { font-family: 'Plus Jakarta Sans', sans-serif; }
+        body { background-color: #020617; -webkit-tap-highlight-color: transparent; }
 
         .glass-card {
             background: rgba(15, 23, 42, 0.4);
@@ -46,16 +40,8 @@
         .shimmer::after {
             content: '';
             position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: linear-gradient(
-                to bottom right,
-                rgba(255, 255, 255, 0) 0%,
-                rgba(255, 255, 255, 0.1) 50%,
-                rgba(255, 255, 255, 0) 100%
-            );
+            top: -50%; left: -50%; width: 200%; height: 200%;
+            background: linear-gradient(to bottom right, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.1) 50%, rgba(255, 255, 255, 0) 100%);
             transform: rotate(45deg);
             animation: shimmer 3s infinite linear;
         }
@@ -65,8 +51,11 @@
             100% { transform: translate(100%, 100%) rotate(45deg); }
         }
 
-        /* Prevent content jump on mobile */
-        .min-h-screen { min-height: 100dvh; }
+        .video-container {
+            aspect-ratio: 16/9;
+            overflow: hidden;
+            border-radius: 1rem;
+        }
     </style>
 </head>
 <body class="text-slate-200 overflow-x-hidden selection:bg-blue-500/30">
@@ -82,10 +71,13 @@
                 <span class="text-xl font-extrabold italic tracking-tighter text-white">APUGO<span class="text-blue-500">.</span></span>
             </div>
             <div class="flex items-center gap-3">
-                <a href="/login" class="text-xs font-bold text-slate-400 hover:text-white px-3 py-2 transition">Login</a>
-                <a href="/register" class="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-500 active:scale-95 transition-all shadow-lg shadow-blue-500/20">
-                    Join
-                </a>
+                <% if (typeof user !== 'undefined' && user) { %>
+                    <a href="/feed" class="text-xs font-bold text-slate-400 hover:text-white px-3 py-2 transition">Enter Square</a>
+                    <a href="/profile" class="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-500 transition-all">Profile</a>
+                <% } else { %>
+                    <a href="/login" class="text-xs font-bold text-slate-400 hover:text-white px-3 py-2 transition">Login</a>
+                    <a href="/register" class="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-500 transition-all shadow-lg shadow-blue-500/20">Join</a>
+                <% } %>
             </div>
         </div>
     </nav>
@@ -98,7 +90,7 @@
                     <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
                     <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
                 </span>
-                Village Pulse: Live Updates
+                The Village is Live
             </div>
 
             <h1 class="text-5xl md:text-8xl font-extrabold tracking-tighter text-white mb-6 animate__animated animate__fadeInUp leading-[1.1]">
@@ -107,62 +99,58 @@
             </h1>
 
             <p class="text-slate-400 text-base md:text-xl max-w-2xl mx-auto mb-10 animate__animated animate__fadeInUp animate__delay-1s leading-relaxed font-medium">
-                A private, high-speed digital sanctuary for our community. Share whispers, stay updated, and bridge the gap with your neighbors.
+                Our digital sanctuary. Share your echoes, watch the latest village clips, and stay connected with your neighbors.
             </p>
 
             <div class="flex flex-col sm:flex-row items-center justify-center gap-6 animate__animated animate__fadeInUp animate__delay-1s">
                 <a href="/register" class="shimmer w-full sm:w-auto bg-blue-600 px-10 py-4 rounded-2xl font-extrabold text-lg hover:bg-blue-500 active:scale-95 transition-all shadow-2xl shadow-blue-500/30">
-                    Enter the Square
+                    Join the Community
                 </a>
-                
-                <div class="flex items-center gap-3 bg-white/5 border border-white/5 px-4 py-2 rounded-2xl">
-                    <div class="flex -space-x-2">
-                        <div class="w-8 h-8 rounded-full border-2 border-slate-950 bg-slate-800 flex items-center justify-center text-[10px] font-bold">JD</div>
-                        <div class="w-8 h-8 rounded-full border-2 border-slate-950 bg-blue-600 flex items-center justify-center text-[10px] font-bold">MK</div>
-                        <div class="w-8 h-8 rounded-full border-2 border-slate-950 bg-indigo-600 flex items-center justify-center text-[10px] font-bold">SA</div>
-                    </div>
-                    <span class="text-[11px] text-slate-400 font-bold uppercase tracking-tight">200+ Active Neighbors</span>
-                </div>
             </div>
         </main>
 
-        <section class="w-full max-w-6xl grid grid-cols-1 md:grid-cols-3 gap-4 px-6 pb-24 animate__animated animate__fadeInUp animate__delay-1s">
-            <div class="glass-card p-8 rounded-[2rem] flex flex-col items-start">
-                <div class="w-12 h-12 bg-blue-500/20 rounded-2xl flex items-center justify-center text-2xl mb-6">📢</div>
-                <h3 class="text-lg font-bold text-white mb-2">Live News</h3>
-                <p class="text-slate-400 text-sm leading-relaxed font-medium">Instant announcements from village elders and event organizers, pinned to your feed.</p>
-            </div>
-            
-            <div class="glass-card p-8 rounded-[2rem] flex flex-col items-start">
-                <div class="w-12 h-12 bg-indigo-500/20 rounded-2xl flex items-center justify-center text-2xl mb-6">🤝</div>
-                <h3 class="text-lg font-bold text-white mb-2">Kinship</h3>
-                <p class="text-slate-400 text-sm leading-relaxed font-medium">Build a verified network of neighbors. Your square, your family, your rules.</p>
+        <section class="w-full max-w-6xl px-6 pb-24 animate__animated animate__fadeInUp animate__delay-1s">
+            <div class="flex items-center justify-between mb-8">
+                <h2 class="text-2xl font-extrabold text-white">Trending Echoes</h2>
+                <a href="/feed" class="text-xs font-bold text-blue-500 uppercase tracking-widest hover:underline">View All</a>
             </div>
 
-            <div class="glass-card p-8 rounded-[2rem] flex flex-col items-start">
-                <div class="w-12 h-12 bg-purple-500/20 rounded-2xl flex items-center justify-center text-2xl mb-6">⚡</div>
-                <h3 class="text-lg font-bold text-white mb-2">Whispers</h3>
-                <p class="text-slate-400 text-sm leading-relaxed font-medium">Real-time messaging with ultra-low latency. Stay connected even on weak signals.</p>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <% if (typeof trending !== 'undefined' && trending.length > 0) { %>
+                    <% trending.forEach(item => { %>
+                        <div class="glass-card p-4 rounded-[2rem]">
+                            <% if (item.media_type === 'video') { %>
+                                <div class="video-container mb-4">
+                                    <video class="w-full h-full object-cover" muted loop onmouseover="this.play()" onmouseout="this.pause()">
+                                        <source src="<%= item.image_url %>" type="video/mp4">
+                                    </video>
+                                </div>
+                            <% } else if (item.image_url) { %>
+                                <img src="<%= item.image_url %>" class="w-full h-48 object-cover rounded-2xl mb-4" alt="Trending">
+                            <% } %>
+                            <p class="text-sm font-medium text-slate-300 line-clamp-2"><%= item.content %></p>
+                            <div class="flex items-center gap-2 mt-4 text-[10px] font-bold text-blue-400 uppercase">
+                                <span>🔥 <%= item.views_count %> Views</span>
+                            </div>
+                        </div>
+                    <% }) %>
+                <% } else { %>
+                    <div class="glass-card p-8 rounded-[2rem] flex flex-col items-start">
+                        <div class="w-12 h-12 bg-blue-500/20 rounded-2xl flex items-center justify-center text-2xl mb-6">📢</div>
+                        <h3 class="text-lg font-bold text-white mb-2">Live News</h3>
+                        <p class="text-slate-400 text-sm leading-relaxed">Instant updates from village elders pinned to your feed.</p>
+                    </div>
+                    <% } %>
             </div>
         </section>
 
-        <footer class="w-full py-12 border-t border-white/5 flex flex-col items-center gap-4 text-center">
+        <footer class="w-full py-12 border-t border-white/5 flex flex-col items-center gap-4 text-center mt-auto">
             <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.4em]">Apugo Village Digital &copy; 2025</p>
             <div class="flex gap-4">
-                <div class="w-2 h-2 rounded-full bg-green-500/50"></div>
-                <span class="text-[9px] font-bold text-slate-600 uppercase tracking-widest">All Systems Operational</span>
+                <div class="w-2 h-2 rounded-full bg-green-500/50 animate-pulse"></div>
+                <span class="text-[9px] font-bold text-slate-600 uppercase tracking-widest">Village Grid Online</span>
             </div>
         </footer>
     </div>
-
-    <script>
-        // Simple script to handle mobile view height issues
-        const setVh = () => {
-            let vh = window.innerHeight * 0.01;
-            document.documentElement.style.setProperty('--vh', `${vh}px`);
-        };
-        window.addEventListener('resize', setVh);
-        setVh();
-    </script>
 </body>
 </html>
