@@ -1147,6 +1147,37 @@ app.post("/forum/create", upload.single('media'), async (req, res) => {
     }
 });
 
+app.get("/forum/thread/:id", async (req, res) => {
+    try {
+        const threadId = req.params.id;
+
+        // Fetch the specific post and its author's email
+        const threadResult = await db.query(`
+            SELECT forum_posts.*, users.email AS author_email, users.profile_pic AS author_pic 
+            FROM forum_posts 
+            LEFT JOIN users ON forum_posts.author_id = users.id 
+            WHERE forum_posts.id = $1
+        `, [threadId]);
+
+        if (threadResult.rows.length === 0) {
+            return res.status(404).send("This scroll has been lost to time (Thread not found).");
+        }
+
+        const thread = threadResult.rows[0];
+
+        // If you have a replies table, you would fetch them here
+        // const replies = await db.query("SELECT * FROM forum_replies WHERE thread_id = $1", [threadId]);
+
+        res.render("thread", { 
+            thread: thread, 
+            user: req.user || null 
+        });
+    } catch (err) {
+        console.error("Thread Loading Error:", err);
+        res.status(500).send("The Great Hall archives are stuck.");
+    }
+});
+
 // <--- MAKE SURE NOTHING IS PASTED HERE!
 
 
