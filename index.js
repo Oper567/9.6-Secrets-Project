@@ -20,11 +20,21 @@ dotenv.config();
 
 // WRONG for Supabase: multer.diskStorage(...)
 // 2. Configure Multer for Memory (Required for Supabase)
-const storage = multer.memoryStorage();
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, 'public/uploads/'); // Make sure this folder exists!
+    },
+    filename: (req, file, cb) => {
+        // Creates a unique name: 1715200000-myvideo.mp4
+        cb(null, Date.now() + path.extname(file.originalname).toLowerCase());
+    }
+});
+
 const upload = multer({
     storage: storage,
+    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
     fileFilter: (req, file, cb) => {
-        const filetypes = /jpeg|jpg|png|gif|mp4|mov|webm/; // Added video formats
+        const filetypes = /jpeg|jpg|png|gif|mp4|mov|webm/;
         const mimetype = filetypes.test(file.mimetype);
         const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
 
@@ -34,7 +44,6 @@ const upload = multer({
         cb(new Error("Only images and videos are allowed!"));
     }
 });
-
 /* ---------------- INITIAL SETUP ---------------- */
 const PostgresStore = pgSession(session);
 const __filename = fileURLToPath(import.meta.url);
@@ -171,7 +180,7 @@ app.use((err, req, res, next) => {
   }
   res.status(500).send("An unknown error occurred.");
 });
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 /* ---------------- AUTHENTICATION HELPERS ---------------- */
 // Example of a safe isAuth middleware
 function isAuth(req, res, next) {
@@ -610,15 +619,18 @@ app.post("/event/:id/like", async (req, res) => {
   }
 });
 // POST: Create a new Whisper (Forum Post)
-app.post("/event/create", checkVerified, upload.single("localMedia"), async (req, res) => {
+app.post("/event/create", upload.single("localMedia"), async (req, res) => {
     const { description } = req.body;
     const authorId = req.user.id;
-    let imageUrl = null;
+    
+    let mediaUrl = null;
     let mediaType = 'image'; // Default
 
     if (req.file) {
-        imageUrl = `/uploads/${req.file.filename}`;
-        // Check if the file is a video
+        // This creates the URL /uploads/123456.mp4
+        mediaUrl = `/uploads/${req.file.filename}`;
+        
+        // Detect if it's a video
         if (req.file.mimetype.startsWith('video/')) {
             mediaType = 'video';
         }
@@ -628,12 +640,12 @@ app.post("/event/create", checkVerified, upload.single("localMedia"), async (req
         await db.query(
             `INSERT INTO forum_posts (author_id, title, content, image_url, media_type, created_at) 
              VALUES ($1, $2, $3, $4, $5, NOW())`,
-            [authorId, description.substring(0, 30), description, imageUrl, mediaType]
+            [authorId, description.substring(0, 20), description, mediaUrl, mediaType]
         );
         res.redirect("/feed");
     } catch (err) {
         console.error(err);
-        res.status(500).send("Error creating whisper.");
+        res.status(500).send("Error saving post.");
     }
 });
 app.post("/event/:id/report", checkVerified, async (req, res) => {
