@@ -1193,6 +1193,44 @@ function formatTimeAgo(date) {
   return date.toLocaleDateString();
 }
 
+app.post("/forum/thread/:id/reply", async (req, res) => {
+    try {
+        const { content } = req.body;
+        const postId = req.params.id;
+        const userId = req.user.id;
+
+        await db.query(`
+            INSERT INTO forum_replies (content, post_id, author_id)
+            VALUES ($1, $2, $3)
+        `, [content, postId, userId]);
+
+        res.redirect(`/forum/thread/${postId}`);
+    } catch (err) {
+        res.status(500).send("Reply failed.");
+    }
+});
+
+app.post("/forum/post/:id/like", async (req, res) => {
+    try {
+        const postId = req.params.id;
+        const userId = req.user.id;
+
+        // Check if already liked
+        const existing = await db.query("SELECT * FROM likes WHERE post_id = $1 AND user_id = $2", [postId, userId]);
+
+        if (existing.rows.length > 0) {
+            await db.query("DELETE FROM likes WHERE post_id = $1 AND user_id = $2", [postId, userId]);
+        } else {
+            await db.query("INSERT INTO likes (post_id, user_id) VALUES ($1, $2)", [postId, userId]);
+        }
+
+        const count = await db.query("SELECT COUNT(*) FROM likes WHERE post_id = $1", [postId]);
+        res.json({ likesCount: count.rows[0].count });
+    } catch (err) {
+        res.status(500).json({ error: "Like failed" });
+    }
+});
+
 app.get("/villagers", checkVerified, async (req, res) => {
   const search = req.query.search || "";
   try {

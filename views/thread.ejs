@@ -6,22 +6,39 @@
     <title>Apugo | <%= thread.title %></title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
-        body { background: radial-gradient(circle at top right, #020617, #0f172a); color: #e2e8f0; font-family: 'Plus Jakarta Sans', sans-serif; }
-        .glass-card { background: rgba(30, 41, 59, 0.3); border: 1px solid rgba(255, 255, 255, 0.05); backdrop-filter: blur(12px); }
+        body { 
+            background: radial-gradient(circle at top right, #020617, #0f172a); 
+            color: #e2e8f0; 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+        }
+        .glass-card { 
+            background: rgba(30, 41, 59, 0.3); 
+            border: 1px solid rgba(255, 255, 255, 0.05); 
+            backdrop-filter: blur(12px); 
+        }
+        .reply-border {
+            border-left: 3px solid #3b82f6;
+        }
     </style>
 </head>
 <body class="min-h-screen pb-20">
-    <nav class="p-6">
-        <a href="/forum" class="text-blue-500 font-black text-[10px] uppercase tracking-widest hover:text-white transition-colors">
-            <i class="fas fa-arrow-left mr-2"></i> Return to Hall
-        </a>
+    <nav class="p-6 sticky top-0 z-50 backdrop-blur-md">
+        <div class="max-w-4xl mx-auto flex justify-between items-center">
+            <a href="/forum" class="text-blue-500 font-black text-[10px] uppercase tracking-[0.3em] hover:text-white transition-all">
+                <i class="fas fa-arrow-left mr-2"></i> Return to Hall
+            </a>
+            <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                Scroll #<%= thread.id %>
+            </div>
+        </div>
     </nav>
 
-    <main class="max-w-4xl mx-auto px-4">
-        <div class="glass-card rounded-[2.5rem] p-8 md:p-12 mb-8">
+    <main class="max-w-4xl mx-auto px-4 mt-8">
+        <div class="glass-card rounded-[2.5rem] p-8 md:p-12 mb-10">
             <div class="flex items-center gap-4 mb-8">
-                <div class="w-12 h-12 rounded-xl bg-blue-600 flex items-center justify-center font-bold text-white overflow-hidden">
+                <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center font-bold text-white overflow-hidden shadow-lg shadow-blue-900/20">
                     <% if (thread.author_pic) { %>
                         <img src="<%= thread.author_pic %>" class="w-full h-full object-cover">
                     <% } else { %>
@@ -29,36 +46,115 @@
                     <% } %>
                 </div>
                 <div>
-                    <p class="text-[10px] font-black text-blue-500 uppercase tracking-widest">Discussion by <%= thread.author_email.split('@')[0] %></p>
-                    <p class="text-slate-500 text-[10px] uppercase"><%= new Date(thread.created_at).toLocaleDateString() %></p>
+                    <p class="text-[10px] font-black text-blue-500 uppercase tracking-widest">
+                        Written by <%= thread.author_email.split('@')[0] %>
+                    </p>
+                    <p class="text-slate-500 text-[10px] uppercase tracking-tighter">
+                        <%= new Date(thread.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) %>
+                    </p>
                 </div>
             </div>
 
-            <h1 class="text-3xl md:text-4xl font-black text-white mb-6 leading-tight"><%= thread.title %></h1>
-            <p class="text-slate-300 text-lg leading-relaxed mb-8 whitespace-pre-wrap"><%= thread.content %></p>
+            <h1 class="text-3xl md:text-5xl font-black text-white mb-6 leading-tight tracking-tight">
+                <%= thread.title %>
+            </h1>
+            
+            <p class="text-slate-300 text-lg md:text-xl leading-relaxed mb-10 whitespace-pre-wrap font-medium">
+                <%= thread.content %>
+            </p>
 
             <% if (thread.media_url) { %>
-                <div class="rounded-3xl overflow-hidden border border-white/5 mb-8">
-                    <img src="<%= thread.media_url %>" class="w-full object-cover max-h-[500px]" alt="Discussion Media">
+                <div class="rounded-[2rem] overflow-hidden border border-white/5 mb-10 shadow-2xl">
+                    <img src="<%= thread.media_url %>" class="w-full object-cover max-h-[600px]" alt="Scroll Media">
                 </div>
             <% } %>
 
-            <div class="flex items-center gap-6 pt-8 border-t border-white/5">
-                <button class="text-slate-400 hover:text-blue-500 transition-colors flex items-center gap-2">
-                    <i class="far fa-heart"></i> <span class="text-xs font-black uppercase">Support</span>
+            <div class="flex items-center gap-8 pt-8 border-t border-white/5">
+                <button onclick="toggleSupport('<%= thread.id %>')" id="support-btn" 
+                        class="group flex items-center gap-3 transition-all <%= thread.liked_by_me ? 'text-blue-500' : 'text-slate-400' %>">
+                    <div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-blue-500/10 transition-all">
+                        <i class="fas fa-heart"></i>
+                    </div>
+                    <span id="support-count" class="text-[10px] font-black uppercase tracking-widest">
+                        <%= thread.likes_count || 0 %> Support
+                    </span>
                 </button>
-                <button class="text-slate-400 hover:text-blue-500 transition-colors flex items-center gap-2">
-                    <i class="far fa-comment"></i> <span class="text-xs font-black uppercase">Reply</span>
+
+                <button onclick="document.getElementById('reply-area').scrollIntoView({behavior:'smooth'})" 
+                        class="group flex items-center gap-3 text-slate-400 hover:text-white transition-all">
+                    <div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-white/10">
+                        <i class="fas fa-comment"></i>
+                    </div>
+                    <span class="text-[10px] font-black uppercase tracking-widest">Add Reply</span>
                 </button>
             </div>
         </div>
 
-        <div class="space-y-4">
-            <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-6">Village Responses</h3>
-            <div class="glass-card rounded-3xl p-6 text-center italic text-slate-500 text-sm">
-                The elders are currently silent... be the first to reply.
+        <div id="reply-area" class="space-y-8">
+            <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] ml-4">Village Responses</h3>
+            
+            <form action="/forum/thread/<%= thread.id %>/reply" method="POST" class="glass-card rounded-[2rem] p-2 flex flex-col md:flex-row gap-2">
+                <textarea name="content" placeholder="Share your wisdom..." required 
+                          class="flex-grow bg-transparent border-none rounded-2xl p-6 text-white outline-none placeholder:text-slate-600 text-sm h-24 md:h-auto resize-none"></textarea>
+                <button type="submit" class="bg-blue-600 text-white px-8 py-4 md:py-0 rounded-[1.5rem] font-black text-[10px] uppercase tracking-[0.2em] hover:bg-blue-500 transition-all active:scale-95">
+                    Post
+                </button>
+            </form>
+
+            <div class="space-y-4">
+                <% if (typeof replies !== 'undefined' && replies.length > 0) { %>
+                    <% replies.forEach(reply => { %>
+                        <div class="glass-card rounded-3xl p-6 reply-border animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            <div class="flex justify-between items-start mb-3">
+                                <p class="text-[10px] font-black text-blue-400 uppercase tracking-widest">
+                                    <%= reply.author_email.split('@')[0] %>
+                                </p>
+                                <span class="text-[9px] text-slate-600 uppercase">
+                                    <%= new Date(reply.created_at).toLocaleDateString() %>
+                                </span>
+                            </div>
+                            <p class="text-slate-300 text-sm leading-relaxed"><%= reply.content %></p>
+                        </div>
+                    <% }) %>
+                <% } else { %>
+                    <div class="glass-card rounded-[2rem] p-12 text-center border-dashed border-white/10">
+                        <i class="fas fa-feather text-slate-700 text-3xl mb-4"></i>
+                        <p class="italic text-slate-500 text-sm">The scroll is empty. Be the first to leave a mark.</p>
+                    </div>
+                <% } %>
             </div>
         </div>
     </main>
+
+    <script>
+        async function toggleSupport(postId) {
+            const btn = document.getElementById('support-btn');
+            const countSpan = document.getElementById('support-count');
+            
+            try {
+                // Adjust this URL to match your server's like route
+                const response = await fetch(`/forum/post/${postId}/like`, { 
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    countSpan.innerText = `${data.likesCount} Support`;
+                    
+                    // Toggle blue color
+                    if (btn.classList.contains('text-blue-500')) {
+                        btn.classList.remove('text-blue-500');
+                        btn.classList.add('text-slate-400');
+                    } else {
+                        btn.classList.remove('text-slate-400');
+                        btn.classList.add('text-blue-500');
+                    }
+                }
+            } catch (err) {
+                console.error("The Great Hall could not record your support:", err);
+            }
+        }
+    </script>
 </body>
 </html>
