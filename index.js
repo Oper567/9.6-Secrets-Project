@@ -1195,18 +1195,18 @@ function formatTimeAgo(date) {
 
 app.post("/forum/thread/:id/reply", async (req, res) => {
     try {
-        const { content } = req.body; // This must match the 'name' attribute in your textarea
+        const { reply_text } = req.body;
         const postId = req.params.id;
         const userId = req.user.id;
 
         await db.query(`
-            INSERT INTO forum_replies (content, post_id, author_id) 
+            INSERT INTO forum_replies (reply_text, post_id, author_id) 
             VALUES ($1, $2, $3)
-        `, [content, postId, userId]);
+        `, [reply_text, postId, userId]);
 
         res.redirect(`/forum/thread/${postId}`);
     } catch (err) {
-        console.error(err);
+        console.error("REPLY ERROR:", err);
         res.status(500).send("The Great Hall rejected your reply: " + err.message);
     }
 });
