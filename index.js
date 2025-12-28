@@ -616,63 +616,61 @@ app.get("/discover", isAuth, async (req, res) => {
 // Ensure this is in your main file or the router linked to '/event'
 // POST: Toggle Like (Vibe)
 app.post("/event/:id/like", isAuth, async (req, res) => {
-    const postId = req.params.id;
-    const userId = req.user.id;
+  const postId = req.params.id;
+  const userId = req.user.id;
 
-    try {
-        // 1. Fetch ONLY the author_id. Do NOT use SELECT * // This prevents the image buffer from being fetched.
-        const postOwnerQuery = await db.query(
-            "SELECT author_id FROM forum_posts WHERE id = $1", 
-            [postId]
-        );
-        
-        if (postOwnerQuery.rows.length === 0) {
-            return res.json({ success: false, message: "Post not found" });
-        }
-        
-        const postAuthorId = postOwnerQuery.rows[0].author_id;
-
-        // 2. Toggle the kinship (Like)
-        const existingLike = await db.query(
-            "SELECT id FROM likes WHERE post_id = $1 AND user_id = $2",
-            [postId, userId]
-        );
-
-        let isLiked;
-        if (existingLike.rows.length > 0) {
-            await db.query("DELETE FROM likes WHERE id = $1", [existingLike.rows[0].id]);
-            isLiked = false;
-        } else {
-            await db.query("INSERT INTO likes (post_id, user_id) VALUES ($1, $2)", [postId, userId]);
-            isLiked = true;
-
-            // 3. Create Notification (Inside the 'else' so it only notifies on new likes)
-            // Prevent users from notifying themselves
-            if (postAuthorId !== userId) {
-                await db.query(
-                    "INSERT INTO notifications (user_id, sender_id, type, message) VALUES ($1, $2, $3, $4)",
-                    [postAuthorId, userId, 'like', 'admired your echo']
-                );
-            }
-        }
-
-        // 4. Get the fresh count
-        const countRes = await db.query("SELECT COUNT(*) FROM likes WHERE post_id = $1", [postId]);
-        
-        // 5. Send JSON response
-        res.json({ 
-            success: true, 
-            isLiked: isLiked, 
-            newCount: parseInt(countRes.rows[0].count) 
-        });
-
-    } catch (err) {
-        console.error("LIKE ERROR:", err);
-        // Important: check if response was already sent
-        if (!res.headersSent) {
-            res.json({ success: false });
-        }
+  try {
+    // 1. Look up the author of the post
+    const postData = await db.query("SELECT author_id FROM forum_posts WHERE id = $1", [postId]);
+    
+    if (postData.rows.length === 0) {
+      return res.json({ success: false, message: "Post vanished" });
     }
+
+    const postAuthorId = postData.rows[0].author_id;
+
+    // 2. Check for existing like
+    const existingLike = await db.query(
+      "SELECT id FROM likes WHERE post_id = $1 AND user_id = $2",
+      [postId, userId]
+    );
+
+    let isLiked;
+    if (existingLike.rows.length > 0) {
+      // Unlike logic
+      await db.query("DELETE FROM likes WHERE id = $1", [existingLike.rows[0].id]);
+      isLiked = false;
+    } else {
+      // Like logic
+      await db.query("INSERT INTO likes (post_id, user_id) VALUES ($1, $2)", [postId, userId]);
+      isLiked = true;
+
+      // 3. SEND NOTIFICATION HERE (Inside the Like logic)
+      if (postAuthorId !== userId) {
+        await db.query(
+          "INSERT INTO notifications (user_id, sender_id, type, message) VALUES ($1, $2, $3, $4)",
+          [postAuthorId, userId, 'like', 'admired your echo']
+        );
+      }
+    }
+
+    // 4. Get updated count
+    const countRes = await db.query("SELECT COUNT(*) FROM likes WHERE post_id = $1", [postId]);
+    
+    // 5. Finally, send the JSON response
+    res.json({ 
+      success: true, 
+      isLiked: isLiked, 
+      newCount: parseInt(countRes.rows[0].count) 
+    });
+
+  } catch (err) {
+    console.error("LIKE ERROR:", err);
+    if (!res.headersSent) {
+      res.json({ success: false });
+    }
+  }
+  // DO NOT PUT ANY CODE HERE
 });
 
 app.post("/event/:id/view", isAuth, async (req, res) => {
