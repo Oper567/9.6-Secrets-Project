@@ -155,11 +155,13 @@
                                 <div class="relative group">
                                     <button class="text-slate-700 hover:text-white p-2 transition-colors"><i class="fas fa-ellipsis-h"></i></button>
                                     <div class="hidden group-hover:block absolute right-0 top-8 bg-slate-900 border border-white/10 rounded-xl w-36 overflow-hidden z-20 shadow-2xl">
-                                        <% if (p.created_by === user.id) { %>
-                                            <form action="/event/<%= p.id %>/delete" method="POST" onsubmit="return confirm('Erase this whisper?')">
-                                                <button class="w-full text-left px-4 py-3 text-[9px] font-black uppercase text-red-500 hover:bg-red-500/10 border-b border-white/5">Delete Whisper</button>
-                                            </form>
-                                        <% } %>
+                                       <% if (p.author_id === user.id || user.role === 'admin') { %>
+                                     <form action="/event/<%= p.id %>/delete" method="POST" onsubmit="return confirm('Erase this whisper from the square?')">
+                        <button type="submit" class="w-full text-left px-4 py-3 text-[9px] font-black uppercase text-red-500 hover:bg-red-500/10">
+                        <%= user.role === 'admin' && p.author_id !== user.id ? 'Admin Delete' : 'Delete Whisper' %>
+                                 </button>
+                                </form>
+                                    <% } %>
                                         <button class="w-full text-left px-4 py-3 text-[9px] font-black uppercase text-slate-400 hover:bg-white/5">Report Content</button>
                                     </div>
                                 </div>

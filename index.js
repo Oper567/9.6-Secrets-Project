@@ -601,22 +601,28 @@ app.post("/event/:id/like", async (req, res) => {
   }
 });
 // POST: Create a new Whisper (Forum Post)
-app.post("/event/create", upload.single("localMedia"), async (req, res) => {
-  const { description } = req.body;
-  const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
-  const authorId = req.user.id;
+app.post("/event/create", checkVerified, upload.single("localMedia"), async (req, res) => {
+    // 1. Destructure correctly (matching your EJS textarea name="description")
+    const { description } = req.body; 
+    const authorId = req.user.id;
+    
+    // 2. Handle the file upload path
+    const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
 
-  try {
-    await db.query(
-      `INSERT INTO forum_posts (author_id, content, image_url, created_at) 
-       VALUES ($1, $2, $3, NOW())`,
-      [authorId, description, imageUrl]
-    );
-    res.redirect("/feed");
-  } catch (err) {
-    console.error("CREATE POST ERROR:", err);
-    res.status(500).send("Error creating whisper.");
-  }
+    try {
+        // 3. Ensure column names match your database (content, author_id, image_url)
+        await db.query(
+            `INSERT INTO forum_posts (author_id, content, image_url, created_at, is_deleted) 
+             VALUES ($1, $2, $3, NOW(), false)`,
+            [authorId, description, imageUrl]
+        );
+
+        res.redirect("/feed");
+    } catch (err) {
+        console.error("DATABASE INSERT ERROR:", err);
+        // This provides more detail in your terminal while you're debugging
+        res.status(500).send("Village Feed Error: " + err.message);
+    }
 });
 app.post("/event/:id/report", checkVerified, async (req, res) => {
   const postId = req.params.id;
@@ -663,25 +669,36 @@ app.post("/event/:id/comment", async (req, res) => {
   }
 });
 app.post("/event/:id/delete", checkVerified, async (req, res) => {
-  const postId = req.params.id;
-  const userId = req.user.id;
+    const postId = req.params.id;
+    const userId = req.user.id;
+    const userRole = req.user.role; // Assumes you have a 'role' column in your users table
 
-  try {
-    // Ensure the person deleting is the owner of the post
-    const result = await db.query(
-      "UPDATE forum_posts SET is_deleted = true WHERE id = $1 AND author_id = $2",
-      [postId, userId]
-    );
+    try {
+        let result;
+        
+        if (userRole === 'admin') {
+            // Admin can delete anything
+            result = await db.query(
+                "UPDATE forum_posts SET is_deleted = true WHERE id = $1",
+                [postId]
+            );
+        } else {
+            // Regular users can only delete their own
+            result = await db.query(
+                "UPDATE forum_posts SET is_deleted = true WHERE id = $1 AND author_id = $2",
+                [postId, userId]
+            );
+        }
 
-    if (result.rowCount === 0) {
-      return res.status(403).send("You are not authorized to delete this whisper.");
+        if (result.rowCount === 0) {
+            return res.status(403).send("Unauthorized: You cannot delete this whisper.");
+        }
+
+        res.redirect("/feed");
+    } catch (err) {
+        console.error("DELETE ERROR:", err);
+        res.status(500).send("Failed to delete whisper.");
     }
-
-    res.redirect("/feed");
-  } catch (err) {
-    console.error("DELETE ERROR:", err);
-    res.status(500).send("Error erasing whisper.");
-  }
 });
 app.post("/comment/:id/delete", isAuth, async (req, res) => {
   try {
