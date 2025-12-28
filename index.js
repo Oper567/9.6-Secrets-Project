@@ -1115,37 +1115,7 @@ app.get("/forum", async (req, res) => {
 // 2. upload.single('media'): handles the image file
 /* ---------------- FORUM POST CREATION ---------------- */
 
-// 'media' here MUST match name="media" in your HTML
-app.post("/forum/create", upload.single('media'), async (req, res) => {
-    try {
-        // 1. Check for logged in user (Prevents userId crash)
-        if (!req.user) {
-            return res.redirect('/login');
-        }
-
-        // 2. Extract form data
-        const { title, content, category } = req.body;
-        const userId = req.user.id;
-        
-        // 3. Handle the file path
-        const mediaUrl = req.file ? `/uploads/${req.file.filename}` : null;
-
-        // 4. Run the query
-        await db.query(`
-            INSERT INTO forum_posts (title, content, category, author_id, media_url)
-            VALUES ($1, $2, $3, $4, $5)
-        `, [title, content, category, userId, mediaUrl]);
-
-        // 5. IMPORTANT: You must send a response to stop the "loading" spinner
-        console.log("Post created successfully!");
-        res.redirect("/forum");
-
-    } catch (err) {
-        console.error("Village Forum Error:", err);
-        // If it fails, we still need to send a response so it stops loading
-        res.status(500).send("The Great Hall could not record your message.");
-    }
-});
+// 'media' here MUST match name="media" in your HTM1
 
 app.get("/forum/thread/:id", async (req, res) => {
     try {
