@@ -180,7 +180,7 @@ app.use((err, req, res, next) => {
   }
   res.status(500).send("An unknown error occurred.");
 });
-const path = require('path');
+
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 /* ---------------- AUTHENTICATION HELPERS ---------------- */
 // Example of a safe isAuth middleware
