@@ -25,27 +25,23 @@ dotenv.config();
 
 
 /* ---------------- INITIAL SETUP ---------------- */
-const PostgresStore = pgSession(session);
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const { PrismaClient } = pkg;
 const app = express();
 const port = process.env.PORT || 3000;
 const saltRounds = 10;
 const router = express.Router();
-// 3. Create it if it's missing (Requires the 'fs' import above)
-if (!fs.existsSync(uploadDir)){
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-
-/* ---------------- FILE STORAGE SETUP ---------------- */
-// Ensure upload directory exists so the server doesn't crash
+const PostgresStore = pgSession(session);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+/* 2. Second, define the specific folder path */
 const uploadDir = path.join(__dirname, 'public/uploads');
+
+/* 3. Now it is safe to check if it exists */
 if (!fs.existsSync(uploadDir)){
     fs.mkdirSync(uploadDir, { recursive: true });
 }
+
 
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -55,7 +51,6 @@ const storage = multer.diskStorage({
         cb(null, Date.now() + path.extname(file.originalname).toLowerCase());
     }
 });
-
 const upload = multer({
     storage: storage,
     limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
@@ -67,7 +62,7 @@ const upload = multer({
         cb(new Error("Only images and videos are allowed!"));
     }
 });
-
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 /* ---------------- SERVICES (DB, SUPABASE, MAIL) ---------------- */
 const db = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
