@@ -58,21 +58,7 @@ const supabase = createClient(
 );
 // ... after supabase.storage.from('apugo_village').upload(...)
 // 1. Upload the file
-const { data: uploadResult, error: uploadError } = await supabase.storage
-    .from('apugo_village')
-    .upload(fileName, file.buffer, {
-        contentType: file.mimetype,
-        upsert: false
-    });
 
-if (uploadError) throw uploadError;
-
-// 2. Get the Public URL using the correct variable name (uploadResult)
-const { data: publicUrlData } = supabase.storage
-    .from('apugo_village')
-    .getPublicUrl(uploadResult.path); // Use uploadResult.path, not uploadData.path
-
-const mediaUrl = publicUrlData.publicUrl;
 
 // This finalImageUrl should be: 
 // https://[YOUR_PROJECT].supabase.co/storage/v1/object/public/apugo_village/[FILENAME]
@@ -766,50 +752,41 @@ app.post("/comment/:id/delete", isAuth, async (req, res) => {
 // This is the "Container". Code inside here only runs when a user submits the form.
 app.post("/forum/create", upload.single('media'), async (req, res) => {
     try {
-        if (!req.user) return res.status(401).send("Please log in.");
-
+        const { title, content } = req.body;
+        const file = req.file;
         let mediaUrl = null;
 
-        // 3. Upload to Supabase if a file exists
-        if (req.file) {
-            const file = req.file;
-            const fileExt = file.originalname.split('.').pop();
-            const fileName = `${Date.now()}.${fileExt}`;
-            const filePath = `forum-posts/${fileName}`;
-
-            const { data, error } = await supabase.storage
-                .from('forum-media') // Make sure this bucket is PUBLIC in Supabase
-                .upload(filePath, file.buffer, {
+        if (file) {
+            const fileName = `${Date.now()}_${file.originalname}`;
+            
+            // 1. Upload to Supabase
+            const { data: uploadResult, error: uploadError } = await supabase.storage
+                .from('apugo_village')
+                .upload(fileName, file.buffer, {
                     contentType: file.mimetype,
-                    upsert: true
+                    upsert: false
                 });
 
-            if (error) {
-                console.error("Supabase Storage Error:", error.message);
-                throw error;
-            }
+            if (uploadError) throw uploadError;
 
-            // 4. Generate the Public URL
+            // 2. Get the Public URL
             const { data: publicUrlData } = supabase.storage
-                .from('forum-media')
-                .getPublicUrl(filePath);
-            
+                .from('apugo_village')
+                .getPublicUrl(uploadResult.path);
+
             mediaUrl = publicUrlData.publicUrl;
-            console.log("Successfully uploaded. Public URL:", mediaUrl);
         }
 
-        // 5. Insert into Database
-        const { title, content, category } = req.body;
-        await db.query(`
-            INSERT INTO forum_posts (title, content, category, author_id, media_url)
-            VALUES ($1, $2, $3, $4, $5)
-        `, [title, content, category, req.user.id, mediaUrl]);
+        // 3. Save to Postgres
+        await db.query(
+            "INSERT INTO forum_posts (title, content, author_id, media_url) VALUES ($1, $2, $3, $4)",
+            [title, content, req.user.id, mediaUrl]
+        );
 
         res.redirect("/forum");
-
     } catch (err) {
-        console.error("FORUM CREATE ERROR:", err.message);
-        res.status(500).send("Failed to post: " + err.message);
+        console.error("FORUM CREATE ERROR:", err);
+        res.status(500).send("The Village Scroll could not be sealed.");
     }
 });
 /* ---------------- CHAT SYSTEM ---------------- */
@@ -1169,12 +1146,12 @@ app.get("/forum", async (req, res) => {
 
 // 'media' here MUST match name="media" in your HTM1
 
+// VIEW SINGLE THREAD
 app.get("/forum/thread/:id", async (req, res) => {
     try {
         const postId = req.params.id;
-        const userId = req.user ? req.user.id : 0; // Use 0 if not logged in
+        const userId = req.user ? req.user.id : 0;
 
-        // 1. Fetch Thread + Likes + Author Info
         const threadResult = await db.query(`
             SELECT f.*, u.email AS author_email, u.profile_pic AS author_pic,
             (SELECT COUNT(*) FROM likes WHERE post_id = f.id) AS likes_count,
@@ -1183,13 +1160,6 @@ app.get("/forum/thread/:id", async (req, res) => {
             JOIN users u ON f.author_id = u.id 
             WHERE f.id = $1`, [postId, userId]);
 
-        const thread = threadResult.rows[0];
-
-        if (!thread) {
-            return res.status(404).send("Scroll not found.");
-        }
-
-        // 2. Fetch Replies + Reply Author Info
         const repliesResult = await db.query(`
             SELECT r.*, u.email AS author_email 
             FROM forum_replies r 
@@ -1198,14 +1168,12 @@ app.get("/forum/thread/:id", async (req, res) => {
             ORDER BY r.created_at ASC`, [postId]);
 
         res.render("thread", {
-            thread: thread,
+            thread: threadResult.rows[0],
             replies: repliesResult.rows,
             user: req.user
         });
-
     } catch (err) {
-        console.error("DATABASE ERROR:", err);
-        res.status(500).send("Error reading the scroll.");
+        res.status(500).send("Error reading scroll.");
     }
 });
 
@@ -1239,28 +1207,13 @@ app.post("/forum/thread/:id/reply", async (req, res) => {
     }
 });
 
+// DELETE THREAD
 app.post("/forum/thread/:id/delete", async (req, res) => {
     try {
-        const postId = req.params.id;
-        const userId = req.user.id;
-
-        // Verify ownership before deleting
-        const result = await db.query(
-            "DELETE FROM forum_posts WHERE id = $1 AND author_id = $2 RETURNING media_url",
-            [postId, userId]
-        );
-
-        if (result.rowCount > 0) {
-            console.log("Thread deleted successfully.");
-            // Optional: If you want to delete the image from Supabase Storage too:
-            // const mediaUrl = result.rows[0].media_url;
-            // if (mediaUrl) { /* Add supabase storage delete logic here */ }
-        }
-
+        await db.query("DELETE FROM forum_posts WHERE id = $1 AND author_id = $2", [req.params.id, req.user.id]);
         res.redirect("/forum");
     } catch (err) {
-        console.error("DELETE ERROR:", err);
-        res.status(500).send("Could not delete the scroll.");
+        res.status(500).send("Delete failed.");
     }
 });
 app.post("/forum/post/:id/like", async (req, res) => {
