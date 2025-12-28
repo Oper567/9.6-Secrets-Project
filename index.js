@@ -1195,39 +1195,62 @@ function formatTimeAgo(date) {
 
 app.post("/forum/thread/:id/reply", async (req, res) => {
     try {
+        // 1. Safety check: Is the user logged in?
+        if (!req.user) {
+            return res.status(401).send("You must be logged in to reply to the scroll.");
+        }
+
         const { content } = req.body;
         const postId = req.params.id;
         const userId = req.user.id;
 
-        await db.query(`
+        // 2. Insert into the database
+        const result = await db.query(`
             INSERT INTO forum_replies (content, post_id, author_id)
             VALUES ($1, $2, $3)
+            RETURNING *
         `, [content, postId, userId]);
 
+        console.log("Reply recorded successfully:", result.rows[0].id);
+
+        // 3. Redirect back to the thread
         res.redirect(`/forum/thread/${postId}`);
+
     } catch (err) {
-        res.status(500).send("Reply failed.");
+        console.error("REPLY DATABASE ERROR:", err);
+        // This will tell you EXACTLY why it failed in your browser
+        res.status(500).send(`The Great Hall rejected your reply: ${err.message}`);
     }
 });
-
 app.post("/forum/post/:id/like", async (req, res) => {
     try {
         const postId = req.params.id;
-        const userId = req.user.id;
+        const userId = req.user?.id; // Check if user exists
 
-        // Check if already liked
-        const existing = await db.query("SELECT * FROM likes WHERE post_id = $1 AND user_id = $2", [postId, userId]);
+        if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
-        if (existing.rows.length > 0) {
+        // 1. Check if the like already exists
+        const checkLike = await db.query(
+            "SELECT * FROM likes WHERE post_id = $1 AND user_id = $2",
+            [postId, userId]
+        );
+
+        if (checkLike.rows.length > 0) {
+            // 2. If it exists, remove it (Unlike)
             await db.query("DELETE FROM likes WHERE post_id = $1 AND user_id = $2", [postId, userId]);
         } else {
+            // 3. If not, add it (Like)
             await db.query("INSERT INTO likes (post_id, user_id) VALUES ($1, $2)", [postId, userId]);
         }
 
-        const count = await db.query("SELECT COUNT(*) FROM likes WHERE post_id = $1", [postId]);
-        res.json({ likesCount: count.rows[0].count });
+        // 4. Get the updated count to send back to the frontend
+        const countResult = await db.query("SELECT COUNT(*) FROM likes WHERE post_id = $1", [postId]);
+        
+        res.json({ likesCount: countResult.rows[0].count });
+
     } catch (err) {
-        res.status(500).json({ error: "Like failed" });
+        console.error("LIKE ERROR:", err);
+        res.status(500).json({ error: "Internal server error" });
     }
 });
 

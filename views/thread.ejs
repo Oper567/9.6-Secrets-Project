@@ -18,8 +18,18 @@
             border: 1px solid rgba(255, 255, 255, 0.05); 
             backdrop-filter: blur(12px); 
         }
-        .reply-border {
-            border-left: 3px solid #3b82f6;
+        .reply-line {
+            position: relative;
+        }
+        .reply-line::before {
+            content: '';
+            position: absolute;
+            left: -1rem;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #3b82f6;
+            border-radius: 2px;
         }
     </style>
 </head>
@@ -30,15 +40,15 @@
                 <i class="fas fa-arrow-left mr-2"></i> Return to Hall
             </a>
             <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                Scroll #<%= thread.id %>
+                Discussion ID: #<%= thread.id %>
             </div>
         </div>
     </nav>
 
     <main class="max-w-4xl mx-auto px-4 mt-8">
-        <div class="glass-card rounded-[2.5rem] p-8 md:p-12 mb-10">
+        <div class="glass-card rounded-[2.5rem] p-8 md:p-12 mb-10 shadow-2xl">
             <div class="flex items-center gap-4 mb-8">
-                <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center font-bold text-white overflow-hidden shadow-lg shadow-blue-900/20">
+                <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center font-bold text-white overflow-hidden">
                     <% if (thread.author_pic) { %>
                         <img src="<%= thread.author_pic %>" class="w-full h-full object-cover">
                     <% } else { %>
@@ -47,10 +57,10 @@
                 </div>
                 <div>
                     <p class="text-[10px] font-black text-blue-500 uppercase tracking-widest">
-                        Written by <%= thread.author_email.split('@')[0] %>
+                        Initiated by <%= thread.author_email.split('@')[0] %>
                     </p>
-                    <p class="text-slate-500 text-[10px] uppercase tracking-tighter">
-                        <%= new Date(thread.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) %>
+                    <p class="text-slate-500 text-[10px] uppercase">
+                        <%= new Date(thread.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' }) %>
                     </p>
                 </div>
             </div>
@@ -59,20 +69,20 @@
                 <%= thread.title %>
             </h1>
             
-            <p class="text-slate-300 text-lg md:text-xl leading-relaxed mb-10 whitespace-pre-wrap font-medium">
+            <p class="text-slate-300 text-lg leading-relaxed mb-10 whitespace-pre-wrap font-medium">
                 <%= thread.content %>
             </p>
 
             <% if (thread.media_url) { %>
-                <div class="rounded-[2rem] overflow-hidden border border-white/5 mb-10 shadow-2xl">
-                    <img src="<%= thread.media_url %>" class="w-full object-cover max-h-[600px]" alt="Scroll Media">
+                <div class="rounded-[2rem] overflow-hidden border border-white/5 mb-10">
+                    <img src="<%= thread.media_url %>" class="w-full object-cover max-h-[600px]" alt="Shared Media">
                 </div>
             <% } %>
 
             <div class="flex items-center gap-8 pt-8 border-t border-white/5">
                 <button onclick="toggleSupport('<%= thread.id %>')" id="support-btn" 
                         class="group flex items-center gap-3 transition-all <%= thread.liked_by_me ? 'text-blue-500' : 'text-slate-400' %>">
-                    <div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-blue-500/10 transition-all">
+                    <div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-blue-500/20 transition-all">
                         <i class="fas fa-heart"></i>
                     </div>
                     <span id="support-count" class="text-[10px] font-black uppercase tracking-widest">
@@ -80,36 +90,38 @@
                     </span>
                 </button>
 
-                <button onclick="document.getElementById('reply-area').scrollIntoView({behavior:'smooth'})" 
+                <button onclick="document.getElementById('reply-form-box').scrollIntoView({behavior:'smooth'})" 
                         class="group flex items-center gap-3 text-slate-400 hover:text-white transition-all">
                     <div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-white/10">
                         <i class="fas fa-comment"></i>
                     </div>
-                    <span class="text-[10px] font-black uppercase tracking-widest">Add Reply</span>
+                    <span class="text-[10px] font-black uppercase tracking-widest">Join Discussion</span>
                 </button>
             </div>
         </div>
 
-        <div id="reply-area" class="space-y-8">
+        <div class="space-y-8">
             <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] ml-4">Village Responses</h3>
             
-            <form action="/forum/thread/<%= thread.id %>/reply" method="POST" class="glass-card rounded-[2rem] p-2 flex flex-col md:flex-row gap-2">
-                <textarea name="content" placeholder="Share your wisdom..." required 
-                          class="flex-grow bg-transparent border-none rounded-2xl p-6 text-white outline-none placeholder:text-slate-600 text-sm h-24 md:h-auto resize-none"></textarea>
-                <button type="submit" class="bg-blue-600 text-white px-8 py-4 md:py-0 rounded-[1.5rem] font-black text-[10px] uppercase tracking-[0.2em] hover:bg-blue-500 transition-all active:scale-95">
-                    Post
-                </button>
-            </form>
+            <div id="reply-form-box" class="glass-card rounded-[2rem] p-4">
+                <form action="/forum/thread/<%= thread.id %>/reply" method="POST" class="flex flex-col md:flex-row gap-4">
+                    <textarea name="content" placeholder="Share your perspective..." required 
+                              class="flex-grow bg-white/5 border border-white/10 rounded-2xl p-6 text-white outline-none focus:border-blue-500/50 text-sm h-24 md:h-auto resize-none"></textarea>
+                    <button type="submit" class="bg-blue-600 text-white px-8 py-4 rounded-[1.5rem] font-black text-[10px] uppercase tracking-[0.2em] hover:bg-blue-500 transition-all active:scale-95 shadow-xl shadow-blue-600/20">
+                        Post Reply
+                    </button>
+                </form>
+            </div>
 
-            <div class="space-y-4">
+            <div class="space-y-6">
                 <% if (typeof replies !== 'undefined' && replies.length > 0) { %>
                     <% replies.forEach(reply => { %>
-                        <div class="glass-card rounded-3xl p-6 reply-border animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div class="glass-card rounded-3xl p-6 ml-4 reply-line">
                             <div class="flex justify-between items-start mb-3">
-                                <p class="text-[10px] font-black text-blue-400 uppercase tracking-widest">
+                                <span class="text-[10px] font-black text-blue-400 uppercase tracking-widest">
                                     <%= reply.author_email.split('@')[0] %>
-                                </p>
-                                <span class="text-[9px] text-slate-600 uppercase">
+                                </span>
+                                <span class="text-[9px] text-slate-600 font-bold uppercase">
                                     <%= new Date(reply.created_at).toLocaleDateString() %>
                                 </span>
                             </div>
@@ -117,9 +129,8 @@
                         </div>
                     <% }) %>
                 <% } else { %>
-                    <div class="glass-card rounded-[2rem] p-12 text-center border-dashed border-white/10">
-                        <i class="fas fa-feather text-slate-700 text-3xl mb-4"></i>
-                        <p class="italic text-slate-500 text-sm">The scroll is empty. Be the first to leave a mark.</p>
+                    <div class="glass-card rounded-[2rem] p-12 text-center">
+                        <p class="italic text-slate-500 text-sm">Silence fills the hall. Be the first to speak.</p>
                     </div>
                 <% } %>
             </div>
@@ -132,7 +143,7 @@
             const countSpan = document.getElementById('support-count');
             
             try {
-                // Adjust this URL to match your server's like route
+                // Route must match your app.post in index.js
                 const response = await fetch(`/forum/post/${postId}/like`, { 
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
@@ -142,17 +153,15 @@
                     const data = await response.json();
                     countSpan.innerText = `${data.likesCount} Support`;
                     
-                    // Toggle blue color
+                    // UI Toggle
                     if (btn.classList.contains('text-blue-500')) {
-                        btn.classList.remove('text-blue-500');
-                        btn.classList.add('text-slate-400');
+                        btn.classList.replace('text-blue-500', 'text-slate-400');
                     } else {
-                        btn.classList.remove('text-slate-400');
-                        btn.classList.add('text-blue-500');
+                        btn.classList.replace('text-slate-400', 'text-blue-500');
                     }
                 }
             } catch (err) {
-                console.error("The Great Hall could not record your support:", err);
+                console.error("Support failed:", err);
             }
         }
     </script>
