@@ -18,8 +18,12 @@ import { Resend } from "resend";
 import pkg from "@prisma/client";
 dotenv.config();
 
+// WRONG for Supabase: multer.diskStorage(...)
+// 2. Configure Multer for Memory (Required for Supabase)
+const storage = multer.memoryStorage();
 const upload = multer({ 
-  dest: 'uploads/' 
+    storage: storage,
+    limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
 });
 
 /* ---------------- INITIAL SETUP ---------------- */
@@ -742,22 +746,50 @@ app.post("/comment/:id/delete", isAuth, async (req, res) => {
 // This is the "Container". Code inside here only runs when a user submits the form.
 app.post("/forum/create", upload.single('media'), async (req, res) => {
     try {
-        // 1. These variables are born HERE, inside the function
-        const { title, content, category } = req.body;
-        const userId = req.user.id; 
-        const mediaUrl = req.file ? `/uploads/${req.file.filename}` : null;
+        if (!req.user) return res.status(401).send("Please log in.");
 
-        // 2. The query MUST be inside here to see those variables
+        let mediaUrl = null;
+
+        // 3. Upload to Supabase if a file exists
+        if (req.file) {
+            const file = req.file;
+            const fileExt = file.originalname.split('.').pop();
+            const fileName = `${Date.now()}.${fileExt}`;
+            const filePath = `forum-posts/${fileName}`;
+
+            const { data, error } = await supabase.storage
+                .from('forum-media') // Make sure this bucket is PUBLIC in Supabase
+                .upload(filePath, file.buffer, {
+                    contentType: file.mimetype,
+                    upsert: true
+                });
+
+            if (error) {
+                console.error("Supabase Storage Error:", error.message);
+                throw error;
+            }
+
+            // 4. Generate the Public URL
+            const { data: publicUrlData } = supabase.storage
+                .from('forum-media')
+                .getPublicUrl(filePath);
+            
+            mediaUrl = publicUrlData.publicUrl;
+            console.log("Successfully uploaded. Public URL:", mediaUrl);
+        }
+
+        // 5. Insert into Database
+        const { title, content, category } = req.body;
         await db.query(`
             INSERT INTO forum_posts (title, content, category, author_id, media_url)
             VALUES ($1, $2, $3, $4, $5)
-        `, [title, content, category, userId, mediaUrl]);
+        `, [title, content, category, req.user.id, mediaUrl]);
 
         res.redirect("/forum");
 
     } catch (err) {
-        console.error("Village Forum Error:", err);
-        res.status(500).send("The Great Hall could not record your message.");
+        console.error("FORUM CREATE ERROR:", err.message);
+        res.status(500).send("Failed to post: " + err.message);
     }
 });
 /* ---------------- CHAT SYSTEM ---------------- */
