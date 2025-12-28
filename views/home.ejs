@@ -9,8 +9,14 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
         
-        :root { font-family: 'Plus Jakarta Sans', sans-serif; }
-        body { background-color: #020617; -webkit-tap-highlight-color: transparent; }
+        :root {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        body { 
+            background-color: #020617; 
+            -webkit-tap-highlight-color: transparent;
+        }
 
         .glass-card {
             background: rgba(15, 23, 42, 0.4);
@@ -40,8 +46,16 @@
         .shimmer::after {
             content: '';
             position: absolute;
-            top: -50%; left: -50%; width: 200%; height: 200%;
-            background: linear-gradient(to bottom right, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.1) 50%, rgba(255, 255, 255, 0) 100%);
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(
+                to bottom right,
+                rgba(255, 255, 255, 0) 0%,
+                rgba(255, 255, 255, 0.1) 50%,
+                rgba(255, 255, 255, 0) 100%
+            );
             transform: rotate(45deg);
             animation: shimmer 3s infinite linear;
         }
@@ -50,6 +64,9 @@
             0% { transform: translate(-100%, -100%) rotate(45deg); }
             100% { transform: translate(100%, 100%) rotate(45deg); }
         }
+
+        /* Prevent content jump on mobile */
+        .min-h-screen { min-height: 100dvh; }
     </style>
 </head>
 <body class="text-slate-200 overflow-x-hidden selection:bg-blue-500/30">
@@ -65,12 +82,10 @@
                 <span class="text-xl font-extrabold italic tracking-tighter text-white">APUGO<span class="text-blue-500">.</span></span>
             </div>
             <div class="flex items-center gap-3">
-                <% if (locals.user) { %>
-                    <a href="/feed" class="bg-blue-600 text-white px-5 py-2 rounded-xl text-xs font-bold hover:bg-blue-500 active:scale-95 transition-all">Go to Square</a>
-                <% } else { %>
-                    <a href="/login" class="text-xs font-bold text-slate-400 hover:text-white px-3 py-2 transition">Login</a>
-                    <a href="/register" class="bg-blue-600 text-white px-5 py-2 rounded-xl text-xs font-bold hover:bg-blue-500 active:scale-95 transition-all shadow-lg shadow-blue-500/20">Join Village</a>
-                <% } %>
+                <a href="/login" class="text-xs font-bold text-slate-400 hover:text-white px-3 py-2 transition">Login</a>
+                <a href="/register" class="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-500 active:scale-95 transition-all shadow-lg shadow-blue-500/20">
+                    Join
+                </a>
             </div>
         </div>
     </nav>
@@ -83,70 +98,65 @@
                     <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
                     <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
                 </span>
-                Live from the Square
+                Village Pulse: Live Updates
             </div>
 
             <h1 class="text-5xl md:text-8xl font-extrabold tracking-tighter text-white mb-6 animate__animated animate__fadeInUp leading-[1.1]">
-                Every Echo <br>
-                <span class="text-gradient italic">Finds a Home.</span>
+                The heartbeat of <br>
+                <span class="text-gradient italic">Apugo Village.</span>
             </h1>
 
             <p class="text-slate-400 text-base md:text-xl max-w-2xl mx-auto mb-10 animate__animated animate__fadeInUp animate__delay-1s leading-relaxed font-medium">
-                Connect with the pulse of Apugo Village. A high-speed digital sanctuary to share whispers, admiration, and moments with your verified neighbors.
+                A private, high-speed digital sanctuary for our community. Share whispers, stay updated, and bridge the gap with your neighbors.
             </p>
 
             <div class="flex flex-col sm:flex-row items-center justify-center gap-6 animate__animated animate__fadeInUp animate__delay-1s">
-                <a href="/feed" class="shimmer w-full sm:w-auto bg-blue-600 px-10 py-4 rounded-2xl font-extrabold text-lg hover:bg-blue-500 active:scale-95 transition-all shadow-2xl shadow-blue-500/30">
+                <a href="/register" class="shimmer w-full sm:w-auto bg-blue-600 px-10 py-4 rounded-2xl font-extrabold text-lg hover:bg-blue-500 active:scale-95 transition-all shadow-2xl shadow-blue-500/30">
                     Enter the Square
                 </a>
                 
                 <div class="flex items-center gap-3 bg-white/5 border border-white/5 px-4 py-2 rounded-2xl">
                     <div class="flex -space-x-2">
-                        <div class="w-8 h-8 rounded-full border-2 border-slate-950 bg-blue-500 flex items-center justify-center text-[10px] font-bold italic">A</div>
-                        <div class="w-8 h-8 rounded-full border-2 border-slate-950 bg-indigo-600 flex items-center justify-center text-[10px] font-bold italic">P</div>
-                        <div class="w-8 h-8 rounded-full border-2 border-slate-950 bg-purple-600 flex items-center justify-center text-[10px] font-bold italic">V</div>
+                        <div class="w-8 h-8 rounded-full border-2 border-slate-950 bg-slate-800 flex items-center justify-center text-[10px] font-bold">JD</div>
+                        <div class="w-8 h-8 rounded-full border-2 border-slate-950 bg-blue-600 flex items-center justify-center text-[10px] font-bold">MK</div>
+                        <div class="w-8 h-8 rounded-full border-2 border-slate-950 bg-indigo-600 flex items-center justify-center text-[10px] font-bold">SA</div>
                     </div>
-                    <span class="text-[11px] text-slate-400 font-bold uppercase tracking-tight">Verified Villagers Only</span>
+                    <span class="text-[11px] text-slate-400 font-bold uppercase tracking-tight">200+ Active Neighbors</span>
                 </div>
             </div>
         </main>
 
-        <section class="w-full max-w-6xl grid grid-cols-1 md:grid-cols-3 gap-6 px-6 pb-24 animate__animated animate__fadeInUp animate__delay-1s">
+        <section class="w-full max-w-6xl grid grid-cols-1 md:grid-cols-3 gap-4 px-6 pb-24 animate__animated animate__fadeInUp animate__delay-1s">
             <div class="glass-card p-8 rounded-[2rem] flex flex-col items-start">
-                <div class="w-12 h-12 bg-blue-500/20 rounded-2xl flex items-center justify-center text-2xl mb-6">🌊</div>
-                <h3 class="text-lg font-bold text-white mb-2">Echoes</h3>
-                <p class="text-slate-400 text-sm leading-relaxed font-medium">Post your thoughts, photos, and videos. Let your voice ripple through the village square in real-time.</p>
+                <div class="w-12 h-12 bg-blue-500/20 rounded-2xl flex items-center justify-center text-2xl mb-6">📢</div>
+                <h3 class="text-lg font-bold text-white mb-2">Live News</h3>
+                <p class="text-slate-400 text-sm leading-relaxed font-medium">Instant announcements from village elders and event organizers, pinned to your feed.</p>
             </div>
             
             <div class="glass-card p-8 rounded-[2rem] flex flex-col items-start">
-                <div class="w-12 h-12 bg-indigo-500/20 rounded-2xl flex items-center justify-center text-2xl mb-6">❤️</div>
-                <h3 class="text-lg font-bold text-white mb-2">Admiration</h3>
-                <p class="text-slate-400 text-sm leading-relaxed font-medium">Show kinship by admiring echoes. Our custom notification system ensures every interaction is felt.</p>
+                <div class="w-12 h-12 bg-indigo-500/20 rounded-2xl flex items-center justify-center text-2xl mb-6">🤝</div>
+                <h3 class="text-lg font-bold text-white mb-2">Kinship</h3>
+                <p class="text-slate-400 text-sm leading-relaxed font-medium">Build a verified network of neighbors. Your square, your family, your rules.</p>
             </div>
 
             <div class="glass-card p-8 rounded-[2rem] flex flex-col items-start">
-                <div class="w-12 h-12 bg-purple-500/20 rounded-2xl flex items-center justify-center text-2xl mb-6">🎥</div>
-                <h3 class="text-lg font-bold text-white mb-2">Village Pulse</h3>
-                <p class="text-slate-400 text-sm leading-relaxed font-medium">Watch the most trending village videos. Our low-latency feed keeps you connected even on the move.</p>
+                <div class="w-12 h-12 bg-purple-500/20 rounded-2xl flex items-center justify-center text-2xl mb-6">⚡</div>
+                <h3 class="text-lg font-bold text-white mb-2">Whispers</h3>
+                <p class="text-slate-400 text-sm leading-relaxed font-medium">Real-time messaging with ultra-low latency. Stay connected even on weak signals.</p>
             </div>
         </section>
 
-        <footer class="w-full py-12 border-t border-white/5 flex flex-col items-center gap-6 text-center">
-            <div class="flex flex-col items-center gap-2">
-                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.4em]">Apugo Village Digital &copy; 2025</p>
-                <div class="flex gap-4 items-center">
-                    <div class="flex items-center gap-1.5">
-                        <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                        <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Square Online</span>
-                    </div>
-                    <div class="w-1 h-1 rounded-full bg-slate-700"></div>
-                    <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Encrypted Sanctuary</span>
-                </div>
+        <footer class="w-full py-12 border-t border-white/5 flex flex-col items-center gap-4 text-center">
+            <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.4em]">Apugo Village Digital &copy; 2025</p>
+            <div class="flex gap-4">
+                <div class="w-2 h-2 rounded-full bg-green-500/50"></div>
+                <span class="text-[9px] font-bold text-slate-600 uppercase tracking-widest">All Systems Operational</span>
             </div>
         </footer>
     </div>
 
     <script>
+        // Simple script to handle mobile view height issues
         const setVh = () => {
             let vh = window.innerHeight * 0.01;
             document.documentElement.style.setProperty('--vh', `${vh}px`);
