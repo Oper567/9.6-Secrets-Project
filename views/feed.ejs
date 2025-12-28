@@ -26,368 +26,341 @@
             border: 1px solid rgba(255, 255, 255, 0.05);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .post-card:hover {
-            border-color: rgba(59, 130, 246, 0.4);
-            background: rgba(15, 23, 42, 0.6);
-        }
         .letter-avatar {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 800;
-            text-transform: uppercase;
-            user-select: none;
-            flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+            color: white; font-weight: 800; text-transform: uppercase;
+            user-select: none; flex-shrink: 0;
         }
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        
-        .vibe-pop { animation: heartPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-        @keyframes heartPop {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.4); }
-            100% { transform: scale(1); }
-        }
-
         .comment-section {
-            max-height: 0;
-            overflow: hidden;
+            max-height: 0; overflow: hidden;
             transition: max-height 0.4s ease-out;
         }
-        .comment-section.open { max-height: 800px; }
+        .comment-section.open { max-height: 1000px; }
+
+        @keyframes shimmer {
+            0% { background-position: -468px 0; }
+            100% { background-position: 468px 0; }
+        }
+        .skeleton {
+            background: linear-gradient(to right, rgba(255,255,255,0.05) 8%, rgba(255,255,255,0.1) 18%, rgba(255,255,255,0.05) 33%);
+            background-size: 800px 104px;
+            animation: shimmer 1.5s linear infinite forwards;
+        }
     </style>
 </head>
-<body class="min-h-screen pb-32">
+<body class="min-h-screen pb-24">
 
     <nav class="glass-nav sticky top-0 z-50">
-        <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between gap-6">
-            <div class="flex items-center gap-6">
-                <h1 class="text-2xl font-black text-blue-500 italic tracking-tighter cursor-pointer hover:scale-105 transition-transform" onclick="window.location.href='/feed'">
-                    APUGO
-                </h1>
-                <div class="hidden lg:block w-80 relative group">
-                    <form action="/feed" method="GET">
-                        <input type="text" name="search" placeholder="Search whispers..." value="<%= search %>" 
-                            class="w-full bg-white/5 border border-white/5 rounded-2xl py-2 px-10 text-[11px] font-bold uppercase tracking-widest outline-none focus:border-blue-500/50 transition-all text-white">
-                        <i class="fas fa-search absolute left-4 top-2.5 text-slate-600 text-[10px]"></i>
-                    </form>
-                </div>
+        <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+            <h1 class="text-xl font-black text-blue-500 italic tracking-tighter cursor-pointer" onclick="window.location.reload()">APUGO</h1>
+            
+            <div class="hidden md:flex flex-1 max-w-sm mx-8 relative">
+                <form action="/feed" method="GET" class="w-full">
+                    <input type="text" name="search" placeholder="Search the square..." value="<%= search %>" 
+                        class="w-full bg-white/5 border border-white/10 rounded-xl py-2 px-10 text-xs text-white outline-none focus:border-blue-500/50">
+                    <i class="fas fa-search absolute left-4 top-2.5 text-slate-600 text-[10px]"></i>
+                </form>
             </div>
 
-            <div class="flex items-center gap-6">
-                <a href="/forum" class="hidden md:flex items-center gap-2 text-[10px] font-black uppercase text-blue-400 hover:text-white transition-all tracking-widest">
-                    <i class="fas fa-landmark"></i> Town Hall
+            <div class="flex items-center gap-4">
+                <a href="/notifications" class="relative p-2 text-slate-400">
+                    <i class="far fa-bell text-xl"></i>
+                    <% if (unreadCount > 0) { %><span class="absolute top-1 right-1 bg-blue-600 w-2 h-2 rounded-full"></span><% } %>
                 </a>
-                <a href="/notifications" class="relative group">
-                    <i class="far fa-bell text-xl text-slate-400 group-hover:text-blue-500 transition-colors"></i>
-                    <% if (locals.unreadCount && unreadCount > 0) { %>
-                        <span class="absolute -top-1 -right-1 bg-blue-600 text-[8px] w-4 h-4 flex items-center justify-center rounded-full font-black border-2 border-[#020617]"><%= unreadCount %></span>
-                    <% } %>
-                </a>
-                <a href="/profile" class="flex items-center gap-3">
-                    <div class="w-9 h-9 rounded-full letter-avatar border-2 border-white/10 text-sm" data-label="<%= user.email %>">
-                        <%= user.email.charAt(0) %>
-                    </div>
-                </a>
+                <div class="w-9 h-9 rounded-full letter-avatar border border-white/10" data-label="<%= user.email %>">
+                    <%= user.email.charAt(0) %>
+                </div>
             </div>
         </div>
     </nav>
 
-    <main class="max-w-6xl mx-auto px-4 mt-6 lg:mt-8 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10">
+    <main class="max-w-6xl mx-auto px-3 mt-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
         
-        <div class="lg:col-span-8 space-y-8">
-            <section class="bg-slate-900/50 border border-white/5 rounded-[2.5rem] p-6 lg:p-8 shadow-2xl">
-                <form action="/event/create" method="POST" enctype="multipart/form-data" id="postForm">
-                    <div class="flex gap-4 lg:gap-6">
-                        <div class="w-12 h-12 rounded-2xl letter-avatar text-xl shadow-lg" data-label="<%= user.email %>">
-                            <%= user.email.charAt(0) %>
+        <div class="lg:col-span-8">
+            
+            <section class="lg:hidden mb-8">
+                <h3 class="text-[9px] font-black text-blue-500 uppercase tracking-[0.3em] mb-4">Trending Whispers</h3>
+                <div class="flex gap-4 overflow-x-auto no-scrollbar pb-2">
+                    <% trending.forEach((t, i) => { %>
+                        <div class="flex-shrink-0 w-44 bg-white/5 rounded-2xl p-4 border border-white/5 post-card">
+                            <span class="text-[10px] font-black text-white/20">#<%= i+1 %></span>
+                            <p class="text-[11px] text-slate-300 font-bold line-clamp-1 my-1"><%= t.content %></p>
+                            <span class="text-[8px] font-black text-blue-500 uppercase"><%= t.views_count %> Views</span>
                         </div>
-                        <div class="w-full">
-                            <textarea name="description" id="postContent" placeholder="What's the word in the square?" required 
-                                class="w-full bg-transparent outline-none h-20 resize-none text-[16px] text-slate-200 placeholder-slate-600 mt-1 leading-relaxed font-medium"></textarea>
-                            
-                            <div id="mediaPreviewContainer" class="hidden mt-4 relative w-full max-w-sm rounded-2xl overflow-hidden border border-white/10 group">
-                                <div id="previewContent"></div>
-                                <button type="button" onclick="clearMedia()" class="absolute top-4 right-4 bg-black/60 text-white w-8 h-8 rounded-full text-[12px] hover:bg-red-500 transition-colors z-10">
-                                    <i class="fas fa-times"></i>
-                                </button>
-                            </div>
-                        </div>
+                    <% }) %>
+                </div>
+            </section>
+
+            <section class="post-card rounded-[2rem] p-5 mb-8">
+                <form id="uploadForm">
+                    <div class="flex gap-4">
+                        <div class="w-12 h-12 rounded-2xl letter-avatar" data-label="<%= user.email %>"><%= user.email.charAt(0) %></div>
+                        <textarea id="description" name="description" placeholder="Whisper something to the village..." 
+                            class="flex-1 bg-transparent outline-none h-20 resize-none text-slate-200 mt-2 placeholder-slate-600"></textarea>
                     </div>
-                    
-                    <div class="flex items-center justify-between border-t border-white/5 mt-6 pt-6">
-                        <div class="flex gap-2">
-                            <input type="file" name="localMedia" id="fileInput" class="hidden" accept="image/*,video/*">
-                            <label for="fileInput" class="cursor-pointer bg-white/5 hover:bg-blue-600/10 text-slate-300 px-5 py-3 rounded-2xl text-[10px] font-black uppercase flex items-center gap-3 tracking-widest transition-all">
-                                <i class="fas fa-photo-video text-blue-500"></i> Attach Media
-                            </label>
-                        </div>
-                        <button type="submit" id="publishBtn" class="bg-blue-600 hover:bg-blue-500 px-10 py-3.5 rounded-2xl font-black text-[10px] text-white uppercase tracking-[0.2em] transition-all shadow-lg shadow-blue-600/20">
+
+                    <div id="mediaPreviewContainer" class="hidden mt-4 relative rounded-2xl overflow-hidden border border-white/5 bg-black/40">
+                        <div id="previewContent"></div>
+                        <button type="button" onclick="clearMedia()" class="absolute top-2 right-2 bg-black/60 w-8 h-8 rounded-full flex items-center justify-center"><i class="fas fa-times"></i></button>
+                    </div>
+
+                    <div id="uploadProgressContainer" class="hidden w-full bg-white/5 rounded-full h-1.5 mt-4 overflow-hidden">
+                        <div id="uploadProgressBar" class="bg-blue-500 h-full w-0 transition-all duration-300"></div>
+                    </div>
+
+                    <div class="flex items-center justify-between mt-4 pt-4 border-t border-white/5">
+                        <input type="file" name="localMedia" id="fileInput" class="hidden" accept="image/*,video/*">
+                        <label for="fileInput" class="cursor-pointer text-slate-400 text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:text-blue-400">
+                            <i class="fas fa-photo-video text-lg"></i> Media
+                        </label>
+                        <button type="button" id="publishBtn" onclick="uploadPost()" class="bg-blue-600 px-8 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest text-white shadow-lg">
                             Publish
                         </button>
                     </div>
                 </form>
             </section>
 
-            <div class="space-y-6" id="feedContainer">
-                <% if (posts && posts.length > 0) { %>
+            <div id="skeleton-loader" class="space-y-6">
+                <div class="post-card rounded-[2rem] p-6 space-y-4"><div class="w-full h-48 skeleton rounded-2xl"></div></div>
+            </div>
+
+            <div id="feed-content" class="hidden space-y-6">
+                <% if (posts.length > 0) { %>
                     <% posts.forEach(p => { %>
-                        <article class="post-card rounded-[2.5rem] overflow-hidden" id="post-<%= p.id %>">
-                            <div class="p-6 flex justify-between items-center">
-                                <div class="flex items-center gap-4">
-                                    <div class="w-11 h-11 rounded-2xl letter-avatar text-lg ring-1 ring-white/10" data-label="<%= p.author_email %>">
-                                        <%= p.author_email.charAt(0) %>
-                                    </div>
-                                    <div>
-                                        <div class="flex items-center gap-2">
-                                            <p class="font-bold text-[14px] text-white">@<%= p.author_email.split('@')[0] %></p>
-                                            <% if (p.is_verified) { %> <i class="fas fa-certificate text-blue-500 text-[9px]"></i> <% } %>
-                                        </div>
-                                        <p class="text-[8px] text-slate-600 uppercase font-black tracking-widest"><%= new Date(p.created_at).toLocaleDateString() %></p>
-                                    </div>
-                                </div>
-                                
-                                <div class="relative group">
-                                    <button class="text-slate-700 hover:text-white p-2 transition-colors"><i class="fas fa-ellipsis-h"></i></button>
-                                    <div class="hidden group-hover:block absolute right-0 top-8 bg-slate-900 border border-white/10 rounded-xl w-40 overflow-hidden z-20 shadow-2xl">
-                                       <% if (p.author_id === user.id || user.role === 'admin') { %>
-                                            <form action="/event/<%= p.id %>/delete" method="POST" onsubmit="return confirm('Erase this whisper?')">
-                                                <button type="submit" class="w-full text-left px-4 py-3 text-[9px] font-black uppercase text-red-500 hover:bg-red-500/10">
-                                                    <%= (user.role === 'admin' && p.author_id !== user.id) ? 'Admin Force Delete' : 'Delete Whisper' %>
-                                                </button>
-                                            </form>
-                                        <% } %>
-                                        <button onclick="reportPost('<%= p.id %>')" class="w-full text-left px-4 py-3 text-[9px] font-black uppercase text-slate-400 hover:bg-white/5">Report Content</button>
-                                    </div>
+                        <article class="post-card rounded-[2.5rem] overflow-hidden">
+                            <div class="p-6 flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl letter-avatar" data-label="<%= p.author_email %>"><%= p.author_email.charAt(0) %></div>
+                                <div>
+                                    <p class="font-bold text-sm">@<%= p.author_email.split('@')[0] %></p>
+                                    <p class="text-[9px] text-slate-600 uppercase font-black tracking-tighter"><%= new Date(p.created_at).toDateString() %></p>
                                 </div>
                             </div>
 
-                            <div class="px-8 pb-5 text-slate-300 text-[15px] leading-relaxed">
-                                <%= p.content %>
-                            </div>
+                            <div class="px-8 pb-4 text-slate-300 text-[15px] leading-relaxed"><%= p.content %></div>
 
                             <% if (p.image_url) { %>
                                 <div class="px-4 pb-4">
-                                    <div class="rounded-[2rem] overflow-hidden bg-black/20 border border-white/5">
-                                        <% if (p.media_type === 'video') { %>
-                                            <video controls class="w-full max-h-[500px] bg-black">
-                                                <source src="<%= p.image_url %>" type="video/mp4">
+                                    <% if (p.media_type === 'video') { %>
+                                        <div class="px-2 mb-2 flex items-center gap-2">
+                                            <i class="fas fa-eye text-blue-500 text-[10px]"></i>
+                                            <span class="text-[9px] font-black text-slate-500 uppercase"><%= p.views_count || 0 %> Views</span>
+                                        </div>
+                                        <div class="relative rounded-[1.8rem] overflow-hidden group border border-white/5">
+                                            <video controls playsinline class="w-full village-video shadow-2xl" data-post-id="<%= p.id %>">
+                                                <source src="<%= p.image_url %>">
                                             </video>
-                                        <% } else { %>
-                                            <img src="<%= p.image_url %>" class="w-full h-auto max-h-[600px] object-contain" loading="lazy">
-                                        <% } %>
-                                    </div>
+                                            <a href="<%= p.image_url %>" download="Apugo_Video_<%= p.id %>.mp4" class="absolute top-4 right-4 bg-black/60 p-3 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity"><i class="fas fa-download"></i></a>
+                                        </div>
+                                    <% } else { %>
+                                        <div class="relative rounded-[1.8rem] overflow-hidden group border border-white/5">
+                                            <img src="<%= p.image_url %>" class="w-full h-auto" loading="lazy">
+                                            <a href="<%= p.image_url %>" download class="absolute top-4 right-4 bg-black/60 p-3 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity"><i class="fas fa-download"></i></a>
+                                        </div>
+                                    <% } %>
                                 </div>
                             <% } %>
 
-                            <div class="px-8 py-5 border-t border-white/5 bg-white/[0.01] flex gap-8">
-                                <button type="button" onclick="sendVibe(this, '<%= p.id %>')" 
-                                    class="vibe-btn flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all <%= p.liked_by_me ? 'text-red-500' : 'text-slate-500 hover:text-red-400' %>">
-                                    <i class="<%= p.liked_by_me ? 'fas' : 'far' %> fa-heart text-lg"></i> 
-                                    <span class="vibe-count"><%= p.likes_count || 0 %></span>
+                            <div class="px-8 py-5 border-t border-white/5 flex gap-8">
+                                <button onclick="sendVibe(this, '<%= p.id %>')" class="flex items-center gap-2 text-[10px] font-black <%= p.liked_by_me ? 'text-red-500' : 'text-slate-500' %>">
+                                    <i class="<%= p.liked_by_me ? 'fas' : 'far' %> fa-heart text-lg"></i>
+                                    <span><%= p.likes_count || 0 %></span>
                                 </button>
-                                
-                                <button onclick="toggleEchoes('<%= p.id %>')" class="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-blue-400">
-                                    <i class="far fa-comment-dots text-lg"></i> 
-                                    <span class="echo-count"><%= p.comments_list ? p.comments_list.length : 0 %> Echoes</span>
+                                <button onclick="toggleEchoes('<%= p.id %>')" class="text-slate-500 text-[10px] font-black uppercase flex items-center gap-2">
+                                    <i class="far fa-comment text-lg"></i> Echoes
+                                </button>
+                                <button onclick="sharePost('<%= p.id %>', '<%= p.content.substring(0,50) %>')" class="text-slate-500 text-[10px] font-black uppercase flex items-center gap-2">
+                                    <i class="fas fa-share-nodes text-lg"></i> Share
                                 </button>
                             </div>
 
-                            <div id="echoes-<%= p.id %>" class="comment-section bg-black/20 border-t border-white/5">
-                                <div class="p-6 space-y-4 max-h-64 overflow-y-auto no-scrollbar" id="comment-list-<%= p.id %>">
-                                    <% if (p.comments_list && p.comments_list.length > 0) { %>
+                            <div id="echoes-<%= p.id %>" class="comment-section bg-black/20">
+                                <div class="p-4 space-y-3 max-h-60 overflow-y-auto no-scrollbar">
+                                    <% if (p.comments_list) { %>
                                         <% p.comments_list.forEach(c => { %>
-                                            <div class="flex gap-3">
-                                                <div class="w-8 h-8 rounded-lg letter-avatar text-[10px]" data-label="<%= c.username %>">
-                                                    <%= c.username.charAt(0) %>
-                                                </div>
-                                                <div class="bg-white/5 rounded-2xl p-3 flex-1">
-                                                    <p class="text-[9px] font-black text-blue-500 uppercase">@<%= c.username %></p>
-                                                    <p class="text-xs text-slate-300 mt-1"><%= c.comment_text %></p>
-                                                </div>
+                                            <div class="flex gap-2 text-[12px]">
+                                                <span class="text-blue-500 font-bold">@<%= c.username %></span>
+                                                <span class="text-slate-400"><%= c.comment_text %></span>
                                             </div>
                                         <% }) %>
-                                    <% } else { %>
-                                        <p class="empty-msg text-center text-[10px] text-slate-600 font-bold italic py-4">The echoes are silent...</p>
                                     <% } %>
                                 </div>
-                                <form onsubmit="postEcho(event, '<%= p.id %>')" class="p-4 flex gap-3 border-t border-white/5">
-                                    <input type="text" name="comment" required placeholder="Add an echo..." class="flex-1 bg-slate-900 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-blue-500/40">
-                                    <button type="submit" class="bg-blue-600 w-10 h-10 rounded-xl text-white flex items-center justify-center hover:bg-blue-500">
-                                        <i class="fas fa-paper-plane"></i>
-                                    </button>
+                                <form onsubmit="postEcho(event, '<%= p.id %>')" class="p-4 flex gap-2 border-t border-white/5">
+                                    <input name="comment" required placeholder="Add an echo..." class="flex-1 bg-slate-900 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none">
+                                    <button type="submit" class="bg-blue-600 w-10 h-10 rounded-xl text-white"><i class="fas fa-paper-plane text-xs"></i></button>
                                 </form>
                             </div>
                         </article>
                     <% }) %>
+                <% } else { %>
+                    <div class="text-center py-20 opacity-20 font-black uppercase tracking-widest text-[10px]">The Square is quiet...</div>
                 <% } %>
             </div>
         </div>
 
-        <aside class="hidden lg:block lg:col-span-4 space-y-8">
-            <div class="bg-slate-900/40 border border-white/5 rounded-[2.5rem] p-8">
-                <h3 class="text-[10px] font-black text-blue-500 uppercase tracking-[0.4em] mb-6">Trending</h3>
-                <div class="space-y-4">
-                    <% trending.forEach(t => { %>
-                        <div class="group cursor-pointer">
-                            <p class="text-[11px] font-bold text-slate-300 group-hover:text-blue-400 transition-colors line-clamp-1"># <%= t.content %></p>
-                            <p class="text-[8px] text-slate-600 font-black uppercase mt-1"><%= t.likes_count %> Vibes</p>
-                        </div>
-                    <% }) %>
-                </div>
-            </div>
-
-            <div class="bg-slate-900/40 border border-white/5 rounded-[2.5rem] p-8">
-                <h3 class="text-[10px] font-black text-blue-500 uppercase tracking-[0.4em] mb-6">Your Kin</h3>
-                <div class="space-y-4">
-                    <% friends.forEach(f => { %>
-                        <div class="flex items-center justify-between group cursor-pointer" onclick="window.location.href='/profile/<%= f.id %>'">
-                            <div class="flex items-center gap-3">
-                                <div class="w-9 h-9 rounded-full letter-avatar text-[10px]" data-label="<%= f.email %>">
-                                    <%= f.email.charAt(0) %>
+        <aside class="hidden lg:block lg:col-span-4">
+            <div class="sticky top-24 space-y-6">
+                <div class="post-card rounded-[2rem] p-6 border-blue-500/10 border">
+                    <h3 class="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] mb-6">Trending Whispers</h3>
+                    <div class="space-y-6">
+                        <% trending.forEach((t, i) => { %>
+                            <div class="flex gap-4 items-start group cursor-pointer" onclick="window.location.href='/post/<%= t.id %>'">
+                                <span class="text-2xl font-black text-white/5 italic">0<%= i+1 %></span>
+                                <div>
+                                    <p class="text-xs font-bold text-slate-300 group-hover:text-blue-400 transition-colors line-clamp-2"><%= t.content %></p>
+                                    <div class="flex items-center gap-2 mt-1">
+                                        <i class="fas fa-play text-[8px] text-slate-600"></i>
+                                        <span class="text-[9px] font-black text-slate-600 uppercase tracking-tighter"><%= t.views_count %> Views</span>
+                                    </div>
                                 </div>
-                                <p class="text-[11px] font-bold text-slate-300 group-hover:text-blue-400">@<%= f.email.split('@')[0] %></p>
                             </div>
-                            <span class="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]"></span>
-                        </div>
-                    <% }) %>
+                        <% }) %>
+                    </div>
                 </div>
             </div>
         </aside>
     </main>
 
-    <div class="lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-2xl border border-white/10 px-8 py-4 rounded-full flex gap-10 shadow-2xl z-50">
-        <a href="/feed" class="text-blue-500"><i class="fas fa-home text-lg"></i></a>
-        <a href="/forum" class="text-slate-500"><i class="fas fa-landmark text-lg"></i></a>
-        <a href="/villagers" class="text-slate-500"><i class="fas fa-users text-lg"></i></a>
-        <a href="/profile" class="text-slate-500">
-            <div class="w-6 h-6 rounded-full letter-avatar text-[8px]" data-label="<%= user.email %>"><%= user.email.charAt(0) %></div>
-        </a>
-    </div>
-
     <script>
-        // --- AVATAR COLORING ---
-        function stringToHslColor(str, s, l) {
-            let hash = 0;
-            for (let i = 0; i < str.length; i++) {
-                hash = str.charCodeAt(i) + ((hash << 5) - hash);
-            }
-            return `hsl(${hash % 360}, ${s}%, ${l}%)`;
-        }
-
+        // --- AVATARS ---
         function applyAvatarColors() {
             document.querySelectorAll('.letter-avatar').forEach(avatar => {
-                const label = avatar.getAttribute('data-label') || 'default';
-                avatar.style.background = stringToHslColor(label, 60, 45);
+                let str = avatar.getAttribute('data-label') || 'user';
+                let hash = 0;
+                for (let i = 0; i < str.length; i++) { hash = str.charCodeAt(i) + ((hash << 5) - hash); }
+                avatar.style.background = `hsl(${hash % 360}, 60%, 45%)`;
             });
         }
-        applyAvatarColors();
 
-        // --- AJAX VIBES (LIKES) ---
-        async function sendVibe(btn, postId) {
-            btn.classList.add('vibe-pop');
-            setTimeout(() => btn.classList.remove('vibe-pop'), 300);
-            try {
-                const response = await fetch(`/event/${postId}/like`, { method: 'POST' });
-                const data = await response.json();
-                if (data.success) {
-                    btn.querySelector('.vibe-count').innerText = data.newCount;
-                    btn.classList.toggle('text-red-500', data.isLiked);
-                    btn.classList.toggle('text-slate-500', !data.isLiked);
-                    btn.querySelector('i').className = data.isLiked ? 'fas fa-heart text-lg' : 'far fa-heart text-lg';
-                }
-            } catch (err) { console.error(err); }
-        }
+        // --- SKELETON TIMEOUT ---
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                document.getElementById('skeleton-loader').style.display = 'none';
+                document.getElementById('feed-content').classList.remove('hidden');
+                applyAvatarColors();
+                initVideoTracking();
+            }, 500);
+        });
 
-        // --- AJAX ECHOES (COMMENTS) ---
-        async function postEcho(event, postId) {
-            event.preventDefault();
-            const form = event.target;
-            const input = form.querySelector('input[name="comment"]');
-            const commentText = input.value;
-
-            try {
-                const response = await fetch(`/event/${postId}/comment`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ comment: commentText })
-                });
-                const data = await response.json();
-
-                if (data.success) {
-                    const list = document.getElementById(`comment-list-${postId}`);
-                    const emptyMsg = list.querySelector('.empty-msg');
-                    if (emptyMsg) emptyMsg.remove();
-
-                    const newHtml = `
-                        <div class="flex gap-3">
-                            <div class="w-8 h-8 rounded-lg letter-avatar text-[10px]" data-label="${data.username}">
-                                ${data.username.charAt(0).toUpperCase()}
-                            </div>
-                            <div class="bg-white/5 rounded-2xl p-3 flex-1">
-                                <p class="text-[9px] font-black text-blue-500 uppercase">@${data.username}</p>
-                                <p class="text-xs text-slate-300 mt-1">${commentText}</p>
-                            </div>
-                        </div>`;
-                    list.insertAdjacentHTML('beforeend', newHtml);
-                    input.value = "";
-                    applyAvatarColors();
-                    // Scroll to bottom of comment list
-                    list.scrollTop = list.scrollHeight;
-                }
-            } catch (err) { console.error(err); }
-        }
-
-        function toggleEchoes(postId) { 
-            document.getElementById(`echoes-${postId}`).classList.toggle('open'); 
-        }
-
-        // --- MEDIA PREVIEW (IMAGE & VIDEO) ---
+        // --- MEDIA PREVIEW ---
         const fileInput = document.getElementById('fileInput');
         fileInput.addEventListener('change', function() {
             const file = this.files[0];
-            if (file) {
-                if (file.size > 50 * 1024 * 1024) { // 50MB limit check
-                    alert("File too large. Max 50MB.");
-                    this.value = "";
-                    return;
-                }
-
-                const reader = new FileReader();
-                const container = document.getElementById('mediaPreviewContainer');
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = e => {
                 const content = document.getElementById('previewContent');
-
-                reader.onload = e => {
-                    if (file.type.startsWith('video/')) {
-                        content.innerHTML = `<video src="${e.target.result}" class="w-full h-full object-cover" muted autoplay loop></video>`;
-                    } else {
-                        content.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover">`;
-                    }
-                    container.classList.remove('hidden');
-                }
-                reader.readAsDataURL(file);
-            }
+                content.innerHTML = file.type.startsWith('video/') 
+                    ? `<video src="${e.target.result}" class="w-full aspect-video object-cover rounded-2xl" muted autoplay loop></video>`
+                    : `<img src="${e.target.result}" class="w-full h-auto rounded-2xl">`;
+                document.getElementById('mediaPreviewContainer').classList.remove('hidden');
+            };
+            reader.readAsDataURL(file);
         });
 
         function clearMedia() {
             fileInput.value = "";
             document.getElementById('mediaPreviewContainer').classList.add('hidden');
-            document.getElementById('previewContent').innerHTML = "";
         }
 
-        async function reportPost(postId) {
-            const reason = prompt("Why are you reporting this whisper?");
-            if (!reason) return;
-            try {
-                const response = await fetch(`/event/${postId}/report`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ reason })
-                });
-                const data = await response.json();
-                if (data.success) alert(data.message);
-            } catch (err) { console.error(err); }
+        // --- VIDEO TRACKING ---
+        function initVideoTracking() {
+            document.querySelectorAll('.village-video').forEach(video => {
+                video.addEventListener('play', function() {
+                    fetch(`/event/${this.getAttribute('data-post-id')}/view`, { method: 'POST' });
+                }, { once: true });
+            });
         }
+
+        // --- NATIVE SHARING ---
+        async function sharePost(id, text) {
+            const data = { title: 'Apugo', text: text, url: window.location.origin + '/post/' + id };
+            try {
+                if (navigator.share) await navigator.share(data);
+                else {
+                    navigator.clipboard.writeText(data.url);
+                    alert("Link copied!");
+                }
+            } catch (err) {}
+        }
+
+        // --- AJAX POST ---
+        async function uploadPost() {
+            const form = document.getElementById('uploadForm');
+            const formData = new FormData(form);
+            const btn = document.getElementById('publishBtn');
+            const bar = document.getElementById('uploadProgressBar');
+            const container = document.getElementById('uploadProgressContainer');
+
+            if(!document.getElementById('description').value.trim() && !fileInput.files[0]) return;
+
+            btn.disabled = true;
+            btn.innerText = "SENDING...";
+            container.classList.remove('hidden');
+
+            const xhr = new XMLHttpRequest();
+            xhr.upload.addEventListener("progress", (e) => {
+                if(e.lengthComputable) bar.style.width = Math.round((e.loaded / e.total) * 100) + "%";
+            });
+
+            xhr.onload = () => {
+                if(xhr.status === 200) window.location.reload();
+                else { alert("Error!"); btn.disabled = false; btn.innerText="Publish"; }
+            };
+
+            xhr.open("POST", "/event/create");
+            xhr.send(formData);
+        }
+
+        function toggleEchoes(id) { document.getElementById(`echoes-${id}`).classList.toggle('open'); }
+
+        async function sendVibe(btn, id) {
+            const res = await fetch(`/event/${id}/like`, { method: 'POST' });
+            const data = await res.json();
+            if(data.success) {
+                btn.querySelector('span').innerText = data.newCount;
+                btn.classList.toggle('text-red-500', data.isLiked);
+                btn.classList.toggle('text-slate-500', !data.isLiked);
+                btn.querySelector('i').className = data.isLiked ? 'fas fa-heart text-lg' : 'far fa-heart text-lg';
+            }
+        }
+        async function postEcho(event, postId) {
+    event.preventDefault();
+    const form = event.target;
+    const input = form.querySelector('input[name="comment"]');
+    const commentText = input.value;
+    const container = document.querySelector(`#echoes-${postId} .p-4`);
+
+    try {
+        const response = await fetch(`/event/${postId}/echo`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ comment: commentText })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            // Create the new comment element
+            const echoDiv = document.createElement('div');
+            echoDiv.className = 'flex gap-2 text-[12px] animate-pulse';
+            echoDiv.innerHTML = `
+                <span class="text-blue-500 font-bold">@${data.username}</span>
+                <span class="text-slate-400">${data.text}</span>
+            `;
+            
+            // Add to list and clear input
+            container.appendChild(echoDiv);
+            input.value = "";
+            echoDiv.classList.remove('animate-pulse');
+            
+            // Scroll to bottom of comments
+            container.scrollTop = container.scrollHeight;
+        }
+    } catch (err) {
+        alert("The village echo didn't travel... try again.");
+    }
+}
     </script>
 </body>
 </html>
