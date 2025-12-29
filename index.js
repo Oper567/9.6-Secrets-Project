@@ -617,19 +617,21 @@ app.get("/discover", isAuth, async (req, res) => {
 // POST: Toggle Like (Vibe)
 app.post("/event/:id/like", isAuth, async (req, res) => {
   const postId = req.params.id;
-  const userId = req.user.id; // Using this consistently now
+  const userId = req.user.id;
+  
+  // 1. Declare the variable at the TOP of the scope
+  let postAuthorId = null; 
 
   try {
-    // 1. Look up the author
     const postData = await db.query("SELECT author_id FROM forum_posts WHERE id = $1", [postId]);
     
     if (postData.rows.length === 0) {
-      return res.status(404).json({ success: false, message: "Post vanished" });
+      return res.json({ success: false, message: "Post vanished" });
     }
 
-    const postAuthorId = postData.rows[0].author_id;
+    // 2. Assign the value here
+    postAuthorId = postData.rows[0].author_id;
 
-    // 2. Check for existing like
     const existingLike = await db.query(
       "SELECT id FROM likes WHERE post_id = $1 AND user_id = $2",
       [postId, userId]
@@ -637,16 +639,14 @@ app.post("/event/:id/like", isAuth, async (req, res) => {
 
     let isLiked;
     if (existingLike.rows.length > 0) {
-      // Unlike logic
       await db.query("DELETE FROM likes WHERE id = $1", [existingLike.rows[0].id]);
       isLiked = false;
     } else {
-      // Like logic
       await db.query("INSERT INTO likes (post_id, user_id) VALUES ($1, $2)", [postId, userId]);
       isLiked = true;
 
-      // 3. Notification (only if liking someone else's post)
-      if (postAuthorId !== userId) {
+      // 3. This block now definitely knows what postAuthorId is
+      if (postAuthorId && postAuthorId !== userId) {
         await db.query(
           "INSERT INTO notifications (user_id, sender_id, type, message) VALUES ($1, $2, $3, $4)",
           [postAuthorId, userId, 'like', 'admired your echo']
@@ -654,21 +654,12 @@ app.post("/event/:id/like", isAuth, async (req, res) => {
       }
     }
 
-    // 4. Get updated count
     const countRes = await db.query("SELECT COUNT(*) FROM likes WHERE post_id = $1", [postId]);
-    
-    res.json({ 
-      success: true, 
-      isLiked: isLiked, 
-      newCount: parseInt(countRes.rows[0].count) 
-    });
+    res.json({ success: true, isLiked, newCount: parseInt(countRes.rows[0].count) });
 
   } catch (err) {
     console.error("LIKE ERROR:", err);
-    // Ensure we only send one response
-    if (!res.headersSent) {
-      res.status(500).json({ success: false, error: "Server error" });
-    }
+    res.status(500).json({ success: false });
   }
 });
 
