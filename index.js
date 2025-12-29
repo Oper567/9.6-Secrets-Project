@@ -613,44 +613,61 @@ app.get("/discover", isAuth, async (req, res) => {
 // Ensure this is in your main file or the router linked to '/event'
 // POST: Toggle Like (Vibe)
 app.post("/event/:id/like", isAuth, async (req, res) => {
+    const postId = req.params.id;
+    const userId = req.user.id;
+
     try {
-        const postId = req.params.id;
-        const userId = req.user.id;
+        // 1. Fetch post info to get the Author's ID (to fix the ReferenceError)
+        const postInfo = await db.query(
+            "SELECT author_id FROM forum_posts WHERE id = $1", 
+            [postId]
+        );
 
-        // --- THE MISSING PIECE ---
-        // We must find out WHO owns the post before we can notify them
-        const postData = await db.query("SELECT author_id FROM forum_posts WHERE id = $1", [postId]);
-        if (postData.rows.length === 0) return res.status(404).send("Post not found");
-        
-        const postAuthorId = postData.rows[0].author_id; 
-        // -------------------------
+        if (postInfo.rows.length === 0) {
+            return res.status(404).json({ success: false, message: "Post not found" });
+        }
 
+        const postAuthorId = postInfo.rows[0].author_id;
+
+        // 2. Check if the user has already liked this post
+        // NOTE: Change 'user_id' to 'userid' if your DB doesn't have the underscore
         const existingLike = await db.query(
             "SELECT id FROM likes WHERE post_id = $1 AND user_id = $2", 
             [postId, userId]
         );
 
         if (existingLike.rows.length > 0) {
+            // --- UNLIKE LOGIC ---
             await db.query("DELETE FROM likes WHERE id = $1", [existingLike.rows[0].id]);
-            res.json({ success: true, isLiked: false });
+            
+            // Optionally remove the notification too
+            await db.query(
+                "DELETE FROM notifications WHERE user_id = $1 AND sender_id = $2 AND type = 'like' AND message LIKE '%admired%'",
+                [postAuthorId, userId]
+            );
+
+            return res.json({ success: true, isLiked: false });
         } else {
+            // --- LIKE LOGIC ---
             await db.query(
                 "INSERT INTO likes (post_id, user_id) VALUES ($1, $2)", 
                 [postId, userId]
             );
 
-            // Now postAuthorId is defined, so line 1408 won't crash anymore!
+            // 3. Send Notification (only if not liking own post)
             if (postAuthorId !== userId) {
                 await db.query(
                     "INSERT INTO notifications (user_id, sender_id, type, message) VALUES ($1, $2, $3, $4)",
                     [postAuthorId, userId, 'like', 'admired your echo']
                 );
             }
-            res.json({ success: true, isLiked: true });
+
+            return res.json({ success: true, isLiked: true });
         }
+
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false });
+        console.error("LIKE LOGIC ERROR:", err);
+        res.status(500).json({ success: false, message: "The spirits failed to record your admiration." });
     }
 });
 
