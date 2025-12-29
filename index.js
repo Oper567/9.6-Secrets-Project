@@ -9,6 +9,8 @@ import session from "express-session";
 import pgSession from "connect-pg-simple";
 import flash from "connect-flash";
 import dotenv from "dotenv";
+import { v2 as cloudinary } from 'cloudinary';
+import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
@@ -42,26 +44,24 @@ if (!fs.existsSync(uploadDir)){
     fs.mkdirSync(uploadDir, { recursive: true });
 }
 
+// Cloudinary Config
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
 
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, 'public/uploads/');
-    },
-    filename: (req, file, cb) => {
-        cb(null, Date.now() + path.extname(file.originalname).toLowerCase());
-    }
+// Multer Storage Module
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'village_square',
+    allowed_formats: ['jpg', 'png', 'jpeg', 'gif', 'mp4', 'webp'],
+    resource_type: 'auto' // Crucial for allowing both images and videos
+  },
 });
-const upload = multer({
-    storage: storage,
-    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
-    fileFilter: (req, file, cb) => {
-        const filetypes = /jpeg|jpg|png|gif|mp4|mov|webm/;
-        const mimetype = filetypes.test(file.mimetype);
-        const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
-        if (mimetype && extname) return cb(null, true);
-        cb(new Error("Only images and videos are allowed!"));
-    }
-});
+
+const upload = multer({ storage: storage });
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 /* ---------------- SERVICES (DB, SUPABASE, MAIL) ---------------- */
 const db = new pg.Pool({
@@ -744,6 +744,27 @@ app.post("/event/:id/comment", async (req, res) => {
     console.error("COMMENT ERROR:", err);
     res.json({ success: false });
   }
+});
+app.delete("/event/:postId/comment/:commentId", isAuth, async (req, res) => {
+    try {
+        const { commentId } = req.params;
+        const userId = req.user.id;
+
+        // Check if comment exists and belongs to the user (or admin)
+        const check = await db.query("SELECT user_id FROM comments WHERE id = $1", [commentId]);
+        
+        if (check.rows.length === 0) return res.json({ success: false, message: "Echo not found" });
+        
+        if (check.rows[0].user_id !== userId && req.user.role !== 'admin') {
+            return res.json({ success: false, message: "Unauthorized" });
+        }
+
+        await db.query("DELETE FROM comments WHERE id = $1", [commentId]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false });
+    }
 });
 app.post("/event/:id/delete", isAuth, async (req, res) => {
     const postId = req.params.id;
