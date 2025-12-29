@@ -14,22 +14,24 @@ import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
 import nodemailer from "nodemailer";
 import { Resend } from "resend";
-import pkg from 'multer-storage-cloudinary';
-import { v2 as cloudinary } from 'cloudinary';
-import multerStorageCloudinary from 'multer-storage-cloudinary'; // Default import
 import 'dotenv/config';
+import { v2 as cloudinary } from 'cloudinary';
+import multer from 'multer';
+// Import the package as a single object (pkg)
+import pkg from 'multer-storage-cloudinary';
 
+// Extract the storage class correctly
+// In many versions of this library, the class is tucked inside .CloudinaryStorage
+const { CloudinaryStorage } = pkg; 
 
-
-// Now you can continue with your config...
+// Cloudinary Account Config
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
-const CloudinaryStorage = pkg.CloudinaryStorage || pkg;
 
-// Now your existing code will work:
+// Create the storage instance
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
