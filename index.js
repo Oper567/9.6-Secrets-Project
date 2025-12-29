@@ -8,16 +8,16 @@ import path from "path";
 import { fileURLToPath } from "url";
 import 'dotenv/config';
 
-import { db } from "./utils/db.js";
-import { passportConfig } from "./utils/passport.js";
-import { errorHandler } from "./middleware/errorMiddleware.js";
+import { db } from "../utils/db.js";
+import { passportConfig } from "../utils/passport.js";
+import { errorHandler } from "../middleware/errorMiddleware.js";
 
 // Routes
-import authRoutes from "./routes/authRoutes.js";
-import feedRoutes from "./routes/feedRoutes.js";
-import chatRoutes from "./routes/chatRoutes.js";
-import postRoutes from "./routes/postRoutes.js";
-import userRoutes from "./routes/userRoutes.js";
+import authRoutes from "../routes/authRoutes.js";
+import feedRoutes from "../routes/feedRoutes.js";
+import chatRoutes from "../routes/chatRoutes.js";
+import postRoutes from "../routes/postRoutes.js";
+import userRoutes from "../routes/userRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 
 const __filename = fileURLToPath(import.meta.url);
