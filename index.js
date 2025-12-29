@@ -620,10 +620,10 @@ app.post("/event/create", isAuth, upload.single('localMedia'), async (req, res) 
         const { description } = req.body;
         const userId = req.user.id;
         
-        // Use the Cloudinary URL from multer-storage-cloudinary
+        // mediaUrl will be the Cloudinary link (string)
         const mediaUrl = req.file ? req.file.path : null;
         
-        // Auto-detect media type
+        // Detect if it's a video or image for the feed player
         let mediaType = 'image'; 
         if (req.file && req.file.mimetype.startsWith('video')) {
             mediaType = 'video';
@@ -635,10 +635,9 @@ app.post("/event/create", isAuth, upload.single('localMedia'), async (req, res) 
         );
 
         res.redirect("/feed");
-
     } catch (err) {
         console.error("UPLOAD ERROR:", err);
-        res.status(500).send("The square is silent. We couldn't publish your whisper.");
+        res.status(500).send("The path is blocked. We couldn't publish your whisper.");
     }
 });
 app.post("/event/:id/report", checkVerified, async (req, res) => {
@@ -666,30 +665,30 @@ app.post("/event/:id/like", isAuth, async (req, res) => {
     const userId = req.user.id;
 
     try {
-        // 1. Get Author ID (to fix ReferenceError)
+        // 1. Find the author so we know who to notify
         const postRes = await db.query("SELECT author_id FROM forum_posts WHERE id = $1", [postId]);
         if (postRes.rows.length === 0) return res.status(404).json({ success: false });
         
         const postAuthorId = postRes.rows[0].author_id;
 
-        // 2. Check if already liked
+        // 2. Check if user already liked this
         const likeRes = await db.query(
             "SELECT id FROM likes WHERE post_id = $1 AND user_id = $2", 
             [postId, userId]
         );
 
         if (likeRes.rows.length > 0) {
-            // UNLIKE
+            // Path: Unlike
             await db.query("DELETE FROM likes WHERE id = $1", [likeRes.rows[0].id]);
             res.json({ success: true, isLiked: false });
         } else {
-            // LIKE
+            // Path: Like
             await db.query(
                 "INSERT INTO likes (post_id, user_id) VALUES ($1, $2)", 
                 [postId, userId]
             );
 
-            // 3. NOTIFY (Works once you run the SQL below)
+            // 3. Send Notification (Only if columns were added via SQL above)
             if (postAuthorId !== userId) {
                 await db.query(
                     "INSERT INTO notifications (user_id, sender_id, type, message) VALUES ($1, $2, $3, $4)",
