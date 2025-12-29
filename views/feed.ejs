@@ -53,6 +53,7 @@
             max-height: 0;
             overflow: hidden;
             transition: max-height 0.4s ease-out;
+            background: rgba(0,0,0,0.2);
         }
         .comment-section.open { max-height: 800px; }
     </style>
@@ -180,58 +181,60 @@
                                 </div>
                             <% } %>
 
-                            <div class="px-8 py-5 border-t border-white/5 bg-white/[0.01] flex gap-8">
-                                <button type="button" onclick="sendVibe(this, '<%= p.id %>')" 
-                                    class="vibe-btn flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all <%= p.liked_by_me ? 'text-red-500' : 'text-slate-500 hover:text-red-400' %>">
-                                    <i class="<%= p.liked_by_me ? 'fas' : 'far' %> fa-heart text-lg"></i> 
-                                    <span class="vibe-count"><%= p.likes_count || 0 %></span>
-                                </button>
-                                
-                                <button onclick="toggleEchoes('<%= p.id %>')" class="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-blue-400">
-                                    <i class="far fa-comment-dots text-lg"></i> 
-                                    <span class="echo-count"><%= p.comments_list ? p.comments_list.length : 0 %> Echoes</span>
-                                </button>
+                            <div class="px-8 py-5 border-t border-white/5 bg-white/[0.01] flex items-center justify-between">
+                                <div class="flex gap-8">
+                                    <button type="button" onclick="sendVibe(this, '<%= p.id %>')" 
+                                        class="vibe-btn flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all <%= p.liked_by_me ? 'text-red-500' : 'text-slate-500 hover:text-red-400' %>">
+                                        <i class="<%= p.liked_by_me ? 'fas' : 'far' %> fa-heart text-lg"></i> 
+                                        <span class="vibe-count"><%= p.likes_count || 0 %></span>
+                                    </button>
+                                    
+                                    <button onclick="toggleEchoes('<%= p.id %>')" class="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-blue-400">
+                                        <i class="far fa-comment-dots text-lg"></i> 
+                                        <span class="echo-count"><%= p.comments_list ? p.comments_list.length : 0 %> Echoes</span>
+                                    </button>
+                                </div>
+
+                                <div class="flex gap-4">
+                                    <button onclick="(async()=>{try{await navigator.clipboard.writeText(window.location.origin + '/event/<%= p.id %>'); alert('Link copied');}catch(e){alert('Unable to copy link')}})()" 
+                                        class="text-slate-500 hover:text-white transition-colors">
+                                        <i class="fas fa-share"></i>
+                                    </button>
+                                    <form action="/event/<%= p.id %>/bookmark" method="POST" class="m-0">
+                                        <button type="submit" class="text-slate-500 hover:text-yellow-400 transition-colors">
+                                            <i class="far fa-bookmark"></i>
+                                        </button>
+                                    </form>
+                                </div>
                             </div>
-    <button onclick="(async()=>{try{await navigator.clipboard.writeText(window.location.origin + '/event/<%= p.id %>'); alert('Link copied');}catch(e){alert('Unable to copy link')}})()" 
-        class="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-white">
-        <i class="fas fa-share text-lg"></i> Share
-    </button>
 
-    <form action="/event/<%= p.id %>/bookmark" method="POST" class="m-0">
-        <button type="submit" class="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-yellow-400">
-            <i class="far fa-bookmark text-lg"></i> Save
-        </button>
-    </form>
-
-    <div id="echoes-<%= p.id %>" class="comment-section w-full">
-    <div class="p-6 space-y-4 max-h-64 overflow-y-auto no-scrollbar" id="comment-list-<%= p.id %>">
-    <% if (p.comments_list && p.comments_list.length > 0) { %>
-        <% p.comments_list.forEach(c => { %>
-            <div class="flex gap-3 group/comment" id="comment-container-<%= c.id %>">
-                <div class="w-8 h-8 rounded-lg letter-avatar text-[10px]" data-label="<%= c.username %>">
-                    <%= c.username.charAt(0) %>
-                </div>
-                <div class="bg-white/5 rounded-2xl p-3 flex-1 relative">
-                    <div class="flex justify-between items-start">
-                        <p class="text-[9px] font-black text-blue-500 uppercase">@<%= c.username %></p>
-                        
-                        <% if (c.user_id === user.id || user.role === 'admin') { %>
-                            <button onclick="deleteEcho('<%= p.id %>', '<%= c.id %>')" 
-                                    class="text-slate-600 hover:text-red-500 transition-colors text-[10px] ml-2">
-                                <i class="fas fa-trash-alt"></i>
-                            </button>
-                        <% } %>
-                    </div>
-                    <p class="text-xs text-slate-300 mt-1"><%= c.comment_text %></p>
-                </div>
-            </div>
-        <% }) %> <% } %> </div> <form onsubmit="postEcho(event, '<%= p.id %>')" class="p-4 flex gap-3 border-t border-white/5">
-    <input type="text" name="comment" required placeholder="Add an echo..." class="flex-1 bg-slate-900 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-blue-500/40">
-    <button type="submit" class="bg-blue-600 w-10 h-10 rounded-xl text-white flex items-center justify-center hover:bg-blue-500">
-        <i class="fas fa-paper-plane"></i>
-    </button>
-</form>
-                            
+                            <div id="echoes-<%= p.id %>" class="comment-section w-full border-t border-white/5">
+                                <div class="p-6 space-y-4 max-h-64 overflow-y-auto no-scrollbar" id="comment-list-<%= p.id %>">
+                                    <% if (p.comments_list && p.comments_list.length > 0) { %>
+                                        <% p.comments_list.forEach(c => { %>
+                                            <div class="flex gap-3 group/comment" id="comment-container-<%= c.id %>">
+                                                <div class="w-8 h-8 rounded-lg letter-avatar text-[10px]" data-label="<%= c.username %>">
+                                                    <%= c.username.charAt(0) %>
+                                                </div>
+                                                <div class="bg-white/5 rounded-2xl p-3 flex-1 relative">
+                                                    <div class="flex justify-between items-start">
+                                                        <p class="text-[9px] font-black text-blue-500 uppercase">@<%= c.username %></p>
+                                                        <% if (c.user_id === user.id || user.role === 'admin') { %>
+                                                            <button onclick="deleteEcho('<%= p.id %>', '<%= c.id %>')" 
+                                                                    class="text-slate-600 hover:text-red-500 transition-colors text-[10px] ml-2">
+                                                                <i class="fas fa-trash-alt"></i>
+                                                            </button>
+                                                        <% } %>
+                                                    </div>
+                                                    <p class="text-xs text-slate-300 mt-1"><%= c.comment_text %></p>
+                                                </div>
+                                            </div>
+                                        <% }) %>
+                                    <% } else { %>
+                                        <p class="empty-msg text-[10px] text-slate-600 uppercase font-black tracking-widest text-center py-4">No echoes yet</p>
+                                    <% } %>
+                                </div> 
+                                
                                 <form onsubmit="postEcho(event, '<%= p.id %>')" class="p-4 flex gap-3 border-t border-white/5">
                                     <input type="text" name="comment" required placeholder="Add an echo..." class="flex-1 bg-slate-900 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-blue-500/40">
                                     <button type="submit" class="bg-blue-600 w-10 h-10 rounded-xl text-white flex items-center justify-center hover:bg-blue-500">
@@ -340,21 +343,53 @@
                     const emptyMsg = list.querySelector('.empty-msg');
                     if (emptyMsg) emptyMsg.remove();
 
+                    // Note: In real app, data.commentId should be returned from server
                     const newHtml = `
-                        <div class="flex gap-3">
+                        <div class="flex gap-3 group/comment" id="comment-container-${data.commentId}">
                             <div class="w-8 h-8 rounded-lg letter-avatar text-[10px]" data-label="${data.username}">
                                 ${data.username.charAt(0).toUpperCase()}
                             </div>
-                            <div class="bg-white/5 rounded-2xl p-3 flex-1">
-                                <p class="text-[9px] font-black text-blue-500 uppercase">@${data.username}</p>
+                            <div class="bg-white/5 rounded-2xl p-3 flex-1 relative">
+                                <div class="flex justify-between items-start">
+                                    <p class="text-[9px] font-black text-blue-500 uppercase">@${data.username}</p>
+                                    <button onclick="deleteEcho('${postId}', '${data.commentId}')" 
+                                            class="text-slate-600 hover:text-red-500 transition-colors text-[10px] ml-2">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </div>
                                 <p class="text-xs text-slate-300 mt-1">${commentText}</p>
                             </div>
                         </div>`;
+                    
                     list.insertAdjacentHTML('beforeend', newHtml);
                     input.value = "";
                     applyAvatarColors();
-                    // Scroll to bottom of comment list
+
+                    // Update count
+                    const countSpan = document.querySelector(`#post-${postId} .echo-count`);
+                    const currentCount = parseInt(countSpan.innerText) || 0;
+                    countSpan.innerText = `${currentCount + 1} Echoes`;
+                    
                     list.scrollTop = list.scrollHeight;
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        async function deleteEcho(postId, commentId) {
+            if (!confirm("Erase this echo?")) return;
+            try {
+                const response = await fetch(`/event/${postId}/comment/${commentId}`, { method: 'DELETE' });
+                const data = await response.json();
+                if (data.success) {
+                    const commentElement = document.getElementById(`comment-container-${commentId}`);
+                    commentElement.style.opacity = '0';
+                    commentElement.style.transform = 'translateX(-20px)';
+                    setTimeout(() => {
+                        commentElement.remove();
+                        const countSpan = document.querySelector(`#post-${postId} .echo-count`);
+                        const currentCount = parseInt(countSpan.innerText);
+                        countSpan.innerText = `${currentCount - 1} Echoes`;
+                    }, 300);
                 }
             } catch (err) { console.error(err); }
         }
@@ -363,27 +398,19 @@
             document.getElementById(`echoes-${postId}`).classList.toggle('open'); 
         }
 
-        // --- MEDIA PREVIEW (IMAGE & VIDEO) ---
+        // --- MEDIA PREVIEW ---
         const fileInput = document.getElementById('fileInput');
         fileInput.addEventListener('change', function() {
             const file = this.files[0];
             if (file) {
-                if (file.size > 50 * 1024 * 1024) { // 50MB limit check
-                    alert("File too large. Max 50MB.");
-                    this.value = "";
-                    return;
-                }
-
+                if (file.size > 50 * 1024 * 1024) { alert("Max 50MB."); this.value = ""; return; }
                 const reader = new FileReader();
                 const container = document.getElementById('mediaPreviewContainer');
                 const content = document.getElementById('previewContent');
-
                 reader.onload = e => {
-                    if (file.type.startsWith('video/')) {
-                        content.innerHTML = `<video src="${e.target.result}" class="w-full h-full object-cover" muted autoplay loop></video>`;
-                    } else {
-                        content.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover">`;
-                    }
+                    content.innerHTML = file.type.startsWith('video/') 
+                        ? `<video src="${e.target.result}" class="w-full h-full object-cover" muted autoplay loop></video>`
+                        : `<img src="${e.target.result}" class="w-full h-full object-cover">`;
                     container.classList.remove('hidden');
                 }
                 reader.readAsDataURL(file);
@@ -409,35 +436,6 @@
                 if (data.success) alert(data.message);
             } catch (err) { console.error(err); }
         }
-
-        async function deleteEcho(postId, commentId) {
-    if (!confirm("Erase this echo?")) return;
-
-    try {
-        const response = await fetch(`/event/${postId}/comment/${commentId}`, {
-            method: 'DELETE'
-        });
-        const data = await response.json();
-
-        if (data.success) {
-            // Remove the comment from the UI
-            const commentElement = document.getElementById(`comment-container-${commentId}`);
-            commentElement.style.opacity = '0';
-            setTimeout(() => {
-                commentElement.remove();
-                
-                // Update the comment count text
-                const countSpan = document.querySelector(`#post-${postId} .echo-count`);
-                const currentCount = parseInt(countSpan.innerText);
-                countSpan.innerText = `${currentCount - 1} Echoes`;
-            }, 300);
-        } else {
-            alert(data.message || "Failed to delete echo");
-        }
-    } catch (err) {
-        console.error("Delete error:", err);
-    }
-}
     </script>
 </body>
 </html>
