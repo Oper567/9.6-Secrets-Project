@@ -1418,9 +1418,9 @@ app.post("/forum/post/:id/like", async (req, res) => {
 });
 
 app.get("/villagers", checkVerified, async (req, res) => {
-  const search = req.query.search || "";
-  try {
-    const query = `
+    const search = req.query.search || "";
+    try {
+        const query = `
             SELECT u.id, u.email, u.profile_pic, u.is_verified,
             (SELECT status FROM friendships 
              WHERE (sender_id = $1 AND receiver_id = u.id) 
@@ -1431,24 +1431,20 @@ app.get("/villagers", checkVerified, async (req, res) => {
             ${search ? "AND u.email ILIKE $2" : ""}
             ORDER BY u.is_verified DESC, u.email ASC`;
 
-    const params = search ? [req.user.id, `%${search}%`] : [req.user.id];
-    const result = await db.query(query, params);
+        const params = search ? [req.user.id, `%${search}%`] : [req.user.id];
+        const result = await db.query(query, params);
 
-    res.render("villagers", {
-      villagers: result.rows,
-      user: req.user,
-      search: search,
-    });
-  } catch (err) {
-    res.redirect("/feed");
-  }
-  // Inside your app.post("/like/:id")
-  await db.query(
-    "INSERT INTO notifications (user_id, sender_id, type, message) VALUES ($1, $2, $3, $4)",
-    [postAuthorId, req.user.id, 'like', 'admired your echo']
-);
-console.log("Current user:", req.user.id);
-
+        res.render("villagers", {
+            villagers: result.rows,
+            user: req.user,
+            search: search,
+            unreadCount: res.locals.unreadCount || 0 // Good to keep this for the badge
+        });
+    } catch (err) {
+        console.error("Villagers Load Error:", err);
+        res.redirect("/feed");
+    }
+    // DELETE THE NOTIFICATION STUFF FROM HERE!
 });
 
 app.get("/admin", isAdmin, async (req, res) => {
