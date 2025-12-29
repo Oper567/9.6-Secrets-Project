@@ -167,15 +167,22 @@
                                 <%= p.content %>
                             </div>
 
-                            <% if (p.image_url) { %>
+                            <% if (p.image_url && p.image_url !== 'null' && p.image_url !== '') { %>
                                 <div class="px-4 pb-4">
                                     <div class="rounded-[2rem] overflow-hidden bg-black/20 border border-white/5">
+                                        <% 
+                                            // Handle relative paths and ensure root access
+                                            let mediaSrc = p.image_url.startsWith('http') ? p.image_url : '/' + p.image_url.replace(/^\//, ''); 
+                                        %>
                                         <% if (p.media_type === 'video') { %>
                                             <video controls class="w-full max-h-[500px] bg-black">
-                                                <source src="<%= p.image_url %>" type="video/mp4">
+                                                <source src="<%= mediaSrc %>" type="video/mp4">
                                             </video>
                                         <% } else { %>
-                                            <img src="<%= p.image_url %>" class="w-full h-auto max-h-[600px] object-contain" loading="lazy">
+                                            <img src="<%= mediaSrc %>" 
+                                                 class="w-full h-auto max-h-[600px] object-contain" 
+                                                 loading="lazy"
+                                                 onerror="this.closest('.px-4').style.display='none'">
                                         <% } %>
                                     </div>
                                 </div>
@@ -343,7 +350,6 @@
                     const emptyMsg = list.querySelector('.empty-msg');
                     if (emptyMsg) emptyMsg.remove();
 
-                    // Note: In real app, data.commentId should be returned from server
                     const newHtml = `
                         <div class="flex gap-3 group/comment" id="comment-container-${data.commentId}">
                             <div class="w-8 h-8 rounded-lg letter-avatar text-[10px]" data-label="${data.username}">
@@ -365,7 +371,6 @@
                     input.value = "";
                     applyAvatarColors();
 
-                    // Update count
                     const countSpan = document.querySelector(`#post-${postId} .echo-count`);
                     const currentCount = parseInt(countSpan.innerText) || 0;
                     countSpan.innerText = `${currentCount + 1} Echoes`;
