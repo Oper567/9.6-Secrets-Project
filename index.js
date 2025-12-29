@@ -612,7 +612,47 @@ app.get("/discover", isAuth, async (req, res) => {
 
 // Ensure this is in your main file or the router linked to '/event'
 // POST: Toggle Like (Vibe)
+app.post("/event/:id/like", isAuth, async (req, res) => {
+    try {
+        const postId = req.params.id;
+        const userId = req.user.id;
 
+        // --- THE MISSING PIECE ---
+        // We must find out WHO owns the post before we can notify them
+        const postData = await db.query("SELECT author_id FROM forum_posts WHERE id = $1", [postId]);
+        if (postData.rows.length === 0) return res.status(404).send("Post not found");
+        
+        const postAuthorId = postData.rows[0].author_id; 
+        // -------------------------
+
+        const existingLike = await db.query(
+            "SELECT id FROM likes WHERE post_id = $1 AND user_id = $2", 
+            [postId, userId]
+        );
+
+        if (existingLike.rows.length > 0) {
+            await db.query("DELETE FROM likes WHERE id = $1", [existingLike.rows[0].id]);
+            res.json({ success: true, isLiked: false });
+        } else {
+            await db.query(
+                "INSERT INTO likes (post_id, user_id) VALUES ($1, $2)", 
+                [postId, userId]
+            );
+
+            // Now postAuthorId is defined, so line 1408 won't crash anymore!
+            if (postAuthorId !== userId) {
+                await db.query(
+                    "INSERT INTO notifications (user_id, sender_id, type, message) VALUES ($1, $2, $3, $4)",
+                    [postAuthorId, userId, 'like', 'admired your echo']
+                );
+            }
+            res.json({ success: true, isLiked: true });
+        }
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false });
+    }
+});
 
 app.post("/event/:id/view", isAuth, async (req, res) => {
     try {
