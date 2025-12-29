@@ -612,95 +612,23 @@ app.get("/discover", isAuth, async (req, res) => {
 
 // Ensure this is in your main file or the router linked to '/event'
 // POST: Toggle Like (Vibe)
-app.post("/event/:id/like", isAuth, async (req, res) => {
-    const postId = req.params.id;
-    const userId = req.user.id;
 
-    try {
-        // 1. Fetch post info to get the Author's ID (to fix the ReferenceError)
-        const postInfo = await db.query(
-            "SELECT author_id FROM forum_posts WHERE id = $1", 
-            [postId]
-        );
-
-        if (postInfo.rows.length === 0) {
-            return res.status(404).json({ success: false, message: "Post not found" });
-        }
-
-        const postAuthorId = postInfo.rows[0].author_id;
-
-        // 2. Check if the user has already liked this post
-        // NOTE: Change 'user_id' to 'userid' if your DB doesn't have the underscore
-        const existingLike = await db.query(
-            "SELECT id FROM likes WHERE post_id = $1 AND user_id = $2", 
-            [postId, userId]
-        );
-
-        if (existingLike.rows.length > 0) {
-            // --- UNLIKE LOGIC ---
-            await db.query("DELETE FROM likes WHERE id = $1", [existingLike.rows[0].id]);
-            
-            // Optionally remove the notification too
-            await db.query(
-                "DELETE FROM notifications WHERE user_id = $1 AND sender_id = $2 AND type = 'like' AND message LIKE '%admired%'",
-                [postAuthorId, userId]
-            );
-
-            return res.json({ success: true, isLiked: false });
-        } else {
-            // --- LIKE LOGIC ---
-            await db.query(
-                "INSERT INTO likes (post_id, user_id) VALUES ($1, $2)", 
-                [postId, userId]
-            );
-
-            // 3. Send Notification (only if not liking own post)
-            if (postAuthorId !== userId) {
-                await db.query(
-                    "INSERT INTO notifications (user_id, sender_id, type, message) VALUES ($1, $2, $3, $4)",
-                    [postAuthorId, userId, 'like', 'admired your echo']
-                );
-            }
-
-            return res.json({ success: true, isLiked: true });
-        }
-
-    } catch (err) {
-        console.error("LIKE LOGIC ERROR:", err);
-        res.status(500).json({ success: false, message: "The spirits failed to record your admiration." });
-    }
-});
-
-app.post("/event/:id/view", isAuth, async (req, res) => {
-    try {
-        await db.query("UPDATE forum_posts SET views_count = views_count + 1 WHERE id = $1", [req.params.id]);
-        res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ success: false });
-    }
-});
 // POST: Create a new Whisper (Forum Post)
 // POST: Create a new post (Whisper)
 app.post("/event/create", isAuth, upload.single('localMedia'), async (req, res) => {
     try {
-        // Safety check: Ensure user is logged in
-        if (!req.user || !req.user.id) {
-            return res.status(401).send("You must be logged in to whisper.");
-        }
-
         const { description } = req.body;
         const userId = req.user.id;
         
-        // Multer puts the Cloudinary URL in req.file.path
+        // Use the Cloudinary URL from multer-storage-cloudinary
         const mediaUrl = req.file ? req.file.path : null;
         
-        // Determine media type
+        // Auto-detect media type
         let mediaType = 'image'; 
         if (req.file && req.file.mimetype.startsWith('video')) {
             mediaType = 'video';
         }
 
-        // Insert into database
         await db.query(
             "INSERT INTO forum_posts (content, image_url, media_type, author_id) VALUES ($1, $2, $3, $4)",
             [description, mediaUrl, mediaType, userId]
@@ -710,7 +638,6 @@ app.post("/event/create", isAuth, upload.single('localMedia'), async (req, res) 
 
     } catch (err) {
         console.error("UPLOAD ERROR:", err);
-        // Better to redirect with an error message than just a raw string
         res.status(500).send("The square is silent. We couldn't publish your whisper.");
     }
 });
@@ -733,6 +660,57 @@ app.post("/event/:id/report", checkVerified, async (req, res) => {
     console.error("REPORT ERROR:", err);
     res.json({ success: false });
   }
+});
+app.post("/event/:id/like", isAuth, async (req, res) => {
+    const postId = req.params.id;
+    const userId = req.user.id;
+
+    try {
+        // 1. Get Author ID (to fix ReferenceError)
+        const postRes = await db.query("SELECT author_id FROM forum_posts WHERE id = $1", [postId]);
+        if (postRes.rows.length === 0) return res.status(404).json({ success: false });
+        
+        const postAuthorId = postRes.rows[0].author_id;
+
+        // 2. Check if already liked
+        const likeRes = await db.query(
+            "SELECT id FROM likes WHERE post_id = $1 AND user_id = $2", 
+            [postId, userId]
+        );
+
+        if (likeRes.rows.length > 0) {
+            // UNLIKE
+            await db.query("DELETE FROM likes WHERE id = $1", [likeRes.rows[0].id]);
+            res.json({ success: true, isLiked: false });
+        } else {
+            // LIKE
+            await db.query(
+                "INSERT INTO likes (post_id, user_id) VALUES ($1, $2)", 
+                [postId, userId]
+            );
+
+            // 3. NOTIFY (Works once you run the SQL below)
+            if (postAuthorId !== userId) {
+                await db.query(
+                    "INSERT INTO notifications (user_id, sender_id, type, message) VALUES ($1, $2, $3, $4)",
+                    [postAuthorId, userId, 'like', 'admired your echo']
+                );
+            }
+            res.json({ success: true, isLiked: true });
+        }
+    } catch (err) {
+        console.error("LIKE LOGIC ERROR:", err);
+        res.status(500).json({ success: false });
+    }
+});
+
+app.post("/event/:id/view", isAuth, async (req, res) => {
+    try {
+        await db.query("UPDATE forum_posts SET views_count = views_count + 1 WHERE id = $1", [req.params.id]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ success: false });
+    }
 });
 // POST: Add an Echo (Reply)
 app.post("/event/:id/comment", async (req, res) => {
