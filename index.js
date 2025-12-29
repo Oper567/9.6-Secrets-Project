@@ -19,8 +19,8 @@ import { v2 as cloudinary } from 'cloudinary';
 import multer from 'multer';
 import pkg from 'multer-storage-cloudinary';
 
-// Extract the constructor safely
-const { CloudinaryStorage } = pkg;
+// Handle the nested export in Node v22
+const CloudinaryStorage = pkg.CloudinaryStorage || pkg.default?.CloudinaryStorage || pkg;
 
 // Account Config
 cloudinary.config({
