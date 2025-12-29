@@ -18,7 +18,7 @@ import 'dotenv/config';
 import { v2 as cloudinary } from 'cloudinary';
 import multer from 'multer';
 import pkg from 'multer-storage-cloudinary';
-import { fileURLToPath } from 'url';
+
 const { PrismaClient } = pkg;
 const app = express();
 const port = process.env.PORT || 3000;
