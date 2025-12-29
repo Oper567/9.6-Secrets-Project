@@ -617,14 +617,14 @@ app.get("/discover", isAuth, async (req, res) => {
 // POST: Toggle Like (Vibe)
 app.post("/event/:id/like", isAuth, async (req, res) => {
   const postId = req.params.id;
-  const userId = req.user.id;
+  const userId = req.user.id; // Using this consistently now
 
   try {
-    // 1. Look up the author of the post
+    // 1. Look up the author
     const postData = await db.query("SELECT author_id FROM forum_posts WHERE id = $1", [postId]);
     
     if (postData.rows.length === 0) {
-      return res.json({ success: false, message: "Post vanished" });
+      return res.status(404).json({ success: false, message: "Post vanished" });
     }
 
     const postAuthorId = postData.rows[0].author_id;
@@ -645,7 +645,7 @@ app.post("/event/:id/like", isAuth, async (req, res) => {
       await db.query("INSERT INTO likes (post_id, user_id) VALUES ($1, $2)", [postId, userId]);
       isLiked = true;
 
-      // 3. SEND NOTIFICATION HERE (Inside the Like logic)
+      // 3. Notification (only if liking someone else's post)
       if (postAuthorId !== userId) {
         await db.query(
           "INSERT INTO notifications (user_id, sender_id, type, message) VALUES ($1, $2, $3, $4)",
@@ -657,7 +657,6 @@ app.post("/event/:id/like", isAuth, async (req, res) => {
     // 4. Get updated count
     const countRes = await db.query("SELECT COUNT(*) FROM likes WHERE post_id = $1", [postId]);
     
-    // 5. Finally, send the JSON response
     res.json({ 
       success: true, 
       isLiked: isLiked, 
@@ -666,11 +665,11 @@ app.post("/event/:id/like", isAuth, async (req, res) => {
 
   } catch (err) {
     console.error("LIKE ERROR:", err);
+    // Ensure we only send one response
     if (!res.headersSent) {
-      res.json({ success: false });
+      res.status(500).json({ success: false, error: "Server error" });
     }
   }
-  // DO NOT PUT ANY CODE HERE
 });
 
 app.post("/event/:id/view", isAuth, async (req, res) => {
@@ -1427,7 +1426,10 @@ app.get("/villagers", checkVerified, async (req, res) => {
     "INSERT INTO notifications (user_id, sender_id, type, message) VALUES ($1, $2, $3, $4)",
     [postAuthorId, req.user.id, 'like', 'admired your echo']
 );
+console.log("Current user:", req.user.id);
+
 });
+
 app.get("/admin", isAdmin, async (req, res) => {
   const users = await db.query(
     "SELECT id, email, role, is_verified FROM users ORDER BY id DESC"
