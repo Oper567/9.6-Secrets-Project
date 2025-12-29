@@ -8,18 +8,37 @@ import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import session from "express-session";
 import pgSession from "connect-pg-simple";
 import flash from "connect-flash";
-import dotenv from "dotenv";
-import { v2 as cloudinary } from 'cloudinary';
-import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import multer from "multer";
 import { createClient } from "@supabase/supabase-js";
 import nodemailer from "nodemailer";
 import { Resend } from "resend";
 import pkg from "@prisma/client";
-dotenv.config();
+import { v2 as cloudinary } from 'cloudinary';
+import multerStorageCloudinary from 'multer-storage-cloudinary'; // Default import
+import 'dotenv/config';
+
+const { CloudinaryStorage } = multerStorageCloudinary; // Extract the class here
+
+// Now you can continue with your config...
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'village_square',
+    allowed_formats: ['jpg', 'png', 'jpeg', 'gif', 'mp4', 'webp'],
+    resource_type: 'auto'
+  },
+});
+
+const upload = multer({ storage: storage });
+
 
 // WRONG for Supabase: multer.diskStorage(...)
 // 2. Configure Multer for Memory (Required for Supabase)
@@ -45,32 +64,7 @@ if (!fs.existsSync(uploadDir)){
 }
 
 // Cloudinary Config
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
 
-// Multer Storage Module
-const storage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: 'village_square',
-    allowed_formats: ['jpg', 'png', 'jpeg', 'gif', 'mp4', 'webp'],
-    resource_type: 'auto' // Crucial for allowing both images and videos
-  },
-});
-
-const upload = multer({ storage: storage });
-app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
-/* ---------------- SERVICES (DB, SUPABASE, MAIL) ---------------- */
-const db = new pg.Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-  connectionTimeoutMillis: 10000,
-  idleTimeoutMillis: 30000,
-  max: 10,
-});
 
 db.on("error", (err) => console.error("Unexpected error on idle client", err));
 
@@ -771,41 +765,57 @@ app.post("/event/:id/delete", isAuth, async (req, res) => {
     const userId = req.user.id;
 
     try {
-        // We check author_id = $2 to ensure users can't delete other people's posts
-        const result = await db.query(
-            "UPDATE forum_posts SET is_deleted = true WHERE id = $1 AND author_id = $2",
-            [postId, userId]
-        );
-
-        if (result.rowCount === 0) {
-            req.flash("error", "You cannot burn what isn't yours.");
-        } else {
-            req.flash("success", "The echo has faded into ash.");
-        }
+        // 1. Get the post data to find the image URL
+        const postData = await db.query("SELECT image_url, author_id FROM forum_posts WHERE id = $1", [postId]);
         
-        res.redirect("/profile");
+        if (postData.rows.length === 0) return res.status(404).send("Post not found");
+        
+        const post = postData.rows[0];
+
+        // 2. Security Check: Only the owner or an admin can delete
+        if (post.author_id !== userId && req.user.role !== 'admin') {
+            return res.status(403).send("Unauthorized");
+        }
+
+        // 3. IF there is an image, delete it from Cloudinary
+        if (post.image_url) {
+            // Extract public_id from the URL
+            // Example URL: .../village_square/abc12345.jpg -> ID is 'village_square/abc12345'
+            const parts = post.image_url.split('/');
+            const fileName = parts[parts.length - 1].split('.')[0];
+            const folderName = parts[parts.length - 2];
+            const publicId = `${folderName}/${fileName}`;
+
+            await cloudinary.uploader.destroy(publicId);
+            console.log("Cloudinary asset deleted:", publicId);
+        }
+
+        // 4. Delete the post from the database
+        await db.query("DELETE FROM forum_posts WHERE id = $1", [postId]);
+
+        res.redirect("/feed");
     } catch (err) {
-        console.error("Delete Error:", err);
-        res.status(500).send("The flame flickered out.");
+        console.error("DELETE ERROR:", err);
+        res.status(500).send("Failed to delete post");
     }
 });
 
-app.post("/comment/:id/delete", isAuth, async (req, res) => {
-  try {
-    const comment = await db.query(
-      "SELECT user_id FROM comments WHERE id = $1",
-      [req.params.id]
-    );
-    if (
-      comment.rows.length > 0 &&
-      (comment.rows[0].user_id === req.user.id || req.user.role === "admin")
-    ) {
-      await db.query("DELETE FROM comments WHERE id = $1", [req.params.id]);
+app.delete("/event/:postId/comment/:commentId", isAuth, async (req, res) => {
+    const { commentId } = req.params;
+    
+    try {
+        // Check if comment belongs to user
+        const comment = await db.query("SELECT user_id FROM comments WHERE id = $1", [commentId]);
+        
+        if (comment.rows.length > 0 && (comment.rows[0].user_id === req.user.id || req.user.role === 'admin')) {
+            await db.query("DELETE FROM comments WHERE id = $1", [commentId]);
+            return res.json({ success: true });
+        }
+        
+        res.status(403).json({ success: false, message: "Unauthorized" });
+    } catch (err) {
+        res.status(500).json({ success: false });
     }
-    goBack(req, res); // FIX
-  } catch (err) {
-    goBack(req, res); // FIX
-  }
 });
 // This crashes because 'req' doesn't exist here!
 // 2. The route itself
