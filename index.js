@@ -49,8 +49,10 @@ const storage = new CloudinaryStorage({
   },
 });
 
-const upload = multer({ storage: storage });
-
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
+});
 
 // WRONG for Supabase: multer.diskStorage(...)
 // 2. Configure Multer for Memory (Required for Supabase)
@@ -678,33 +680,35 @@ app.post("/event/:id/view", isAuth, async (req, res) => {
     }
 });
 // POST: Create a new Whisper (Forum Post)
-app.post("/event/create", upload.single("localMedia"), async (req, res) => {
-    const { description } = req.body;
-    const authorId = req.user.id;
-    
-    let mediaUrl = null;
-    let mediaType = 'image'; // Default
-
-    if (req.file) {
-        // This creates the URL /uploads/123456.mp4
-        mediaUrl = `/uploads/${req.file.filename}`;
+// POST: Create a new post (Whisper)
+app.post("/event/create", isAuth, upload.single('localMedia'), async (req, res) => {
+    try {
+        const { description } = req.body;
+        const userId = req.user.id;
         
-        // Detect if it's a video
-        if (req.file.mimetype.startsWith('video/')) {
+        // 1. Check if a file was uploaded to Cloudinary via Multer
+        // req.file.path contains the permanent HTTPS URL from Cloudinary
+        const mediaUrl = req.file ? req.file.path : null;
+        
+        // 2. Determine if it's an image or video for the frontend player
+        let mediaType = 'image'; 
+        if (req.file && req.file.mimetype.startsWith('video')) {
             mediaType = 'video';
         }
-    }
 
-    try {
+        // 3. Insert into database
+        // Ensure your table 'forum_posts' has columns: content, image_url, media_type, author_id
         await db.query(
-            `INSERT INTO forum_posts (author_id, title, content, image_url, media_type, created_at) 
-             VALUES ($1, $2, $3, $4, $5, NOW())`,
-            [authorId, description.substring(0, 20), description, mediaUrl, mediaType]
+            "INSERT INTO forum_posts (content, image_url, media_type, author_id) VALUES ($1, $2, $3, $4)",
+            [description, mediaUrl, mediaType, userId]
         );
+
+        // 4. Redirect back to feed to see the new post
         res.redirect("/feed");
+
     } catch (err) {
-        console.error(err);
-        res.status(500).send("Error saving post.");
+        console.error("UPLOAD ERROR:", err);
+        res.status(500).send("The square is silent. We couldn't publish your whisper.");
     }
 });
 app.post("/event/:id/report", checkVerified, async (req, res) => {
@@ -751,81 +755,78 @@ app.post("/event/:id/comment", async (req, res) => {
     res.json({ success: false });
   }
 });
-app.delete("/event/:postId/comment/:commentId", isAuth, async (req, res) => {
-    try {
-        const { commentId } = req.params;
-        const userId = req.user.id;
 
-        // Check if comment exists and belongs to the user (or admin)
-        const check = await db.query("SELECT user_id FROM comments WHERE id = $1", [commentId]);
-        
-        if (check.rows.length === 0) return res.json({ success: false, message: "Echo not found" });
-        
-        if (check.rows[0].user_id !== userId && req.user.role !== 'admin') {
-            return res.json({ success: false, message: "Unauthorized" });
-        }
-
-        await db.query("DELETE FROM comments WHERE id = $1", [commentId]);
-        res.json({ success: true });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false });
-    }
-});
 app.post("/event/:id/delete", isAuth, async (req, res) => {
     const postId = req.params.id;
     const userId = req.user.id;
 
     try {
-        // 1. Get the post data to find the image URL
-        const postData = await db.query("SELECT image_url, author_id FROM forum_posts WHERE id = $1", [postId]);
-        
-        if (postData.rows.length === 0) return res.status(404).send("Post not found");
-        
-        const post = postData.rows[0];
+        // 1. Fetch the post to get the image URL and verify ownership
+        const postResult = await db.query(
+            "SELECT image_url, author_id FROM forum_posts WHERE id = $1", 
+            [postId]
+        );
 
-        // 2. Security Check: Only the owner or an admin can delete
+        if (postResult.rows.length === 0) return res.status(404).send("Whisper not found.");
+        const post = postResult.rows[0];
+
+        // 2. Security: Only the author or an admin can delete
         if (post.author_id !== userId && req.user.role !== 'admin') {
-            return res.status(403).send("Unauthorized");
+            return res.status(403).send("You cannot silence someone else's whisper.");
         }
 
-        // 3. IF there is an image, delete it from Cloudinary
+        // 3. If there's an image/video, delete it from Cloudinary
         if (post.image_url) {
-            // Extract public_id from the URL
-            // Example URL: .../village_square/abc12345.jpg -> ID is 'village_square/abc12345'
-            const parts = post.image_url.split('/');
-            const fileName = parts[parts.length - 1].split('.')[0];
-            const folderName = parts[parts.length - 2];
-            const publicId = `${folderName}/${fileName}`;
+            try {
+                // Extracts 'folder/filename' from the URL
+                const urlParts = post.image_url.split('/');
+                const fileNameWithExtension = urlParts[urlParts.length - 1];
+                const fileName = fileNameWithExtension.split('.')[0];
+                const folderName = urlParts[urlParts.length - 2];
+                const publicId = `${folderName}/${fileName}`;
 
-            await cloudinary.uploader.destroy(publicId);
-            console.log("Cloudinary asset deleted:", publicId);
+                // Cloudinary destroy (supports image/video via resource_type: 'auto')
+                await cloudinary.uploader.destroy(publicId);
+            } catch (cloudErr) {
+                console.error("Cloudinary Delete Error (Skipping):", cloudErr);
+                // We continue even if Cloudinary fails so the DB stays clean
+            }
         }
 
-        // 4. Delete the post from the database
+        // 4. Delete the post from DB (Foreign keys should handle comments/likes if set to CASCADE)
         await db.query("DELETE FROM forum_posts WHERE id = $1", [postId]);
 
         res.redirect("/feed");
     } catch (err) {
-        console.error("DELETE ERROR:", err);
-        res.status(500).send("Failed to delete post");
+        console.error("DELETE ROUTE ERROR:", err);
+        res.status(500).send("Failed to erase the whisper.");
     }
 });
 
 app.delete("/event/:postId/comment/:commentId", isAuth, async (req, res) => {
     const { commentId } = req.params;
-    
+    const userId = req.user.id;
+
     try {
-        // Check if comment belongs to user
-        const comment = await db.query("SELECT user_id FROM comments WHERE id = $1", [commentId]);
-        
-        if (comment.rows.length > 0 && (comment.rows[0].user_id === req.user.id || req.user.role === 'admin')) {
-            await db.query("DELETE FROM comments WHERE id = $1", [commentId]);
-            return res.json({ success: true });
+        // Verify ownership
+        const commentCheck = await db.query(
+            "SELECT user_id FROM comments WHERE id = $1", 
+            [commentId]
+        );
+
+        if (commentCheck.rows.length === 0) {
+            return res.json({ success: false, message: "Echo already gone." });
         }
+
+        if (commentCheck.rows[0].user_id !== userId && req.user.role !== 'admin') {
+            return res.status(403).json({ success: false, message: "Unauthorized." });
+        }
+
+        await db.query("DELETE FROM comments WHERE id = $1", [commentId]);
         
-        res.status(403).json({ success: false, message: "Unauthorized" });
+        res.json({ success: true });
     } catch (err) {
+        console.error("DELETE COMMENT ERROR:", err);
         res.status(500).json({ success: false });
     }
 });
