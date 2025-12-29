@@ -18,49 +18,7 @@ import 'dotenv/config';
 import { v2 as cloudinary } from 'cloudinary';
 import multer from 'multer';
 import pkg from 'multer-storage-cloudinary';
-/* ---------------- DATABASE SETUP ---------------- */
-const db = new pg.Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
-});
-
-// 2. NOW you can attach the error listener
-db.on("error", (err) => console.error("Unexpected error on idle client", err));
-
-
-// Handle the nested export in Node v22
-const CloudinaryStorage = pkg.CloudinaryStorage || pkg.default?.CloudinaryStorage || pkg;
-
-// Account Config
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-  secure: true
-});
-
-// Setup Storage
-const storage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: 'village_square_media',
-    resource_type: 'auto',
-    allowed_formats: ['jpg', 'png', 'jpeg', 'gif', 'mp4', 'webp'],
-  },
-});
-
-const upload = multer({
-  storage: storage,
-  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
-});
-
-// WRONG for Supabase: multer.diskStorage(...)
-// 2. Configure Multer for Memory (Required for Supabase)
-
-
-
-/* ---------------- INITIAL SETUP ---------------- */
-
+import { fileURLToPath } from 'url';
 const { PrismaClient } = pkg;
 const app = express();
 const port = process.env.PORT || 3000;
@@ -69,6 +27,37 @@ const router = express.Router();
 const PostgresStore = pgSession(session);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+// 1. Initialize DB first
+const db = new pg.Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
+db.on("error", (err) => console.error("DB Error:", err));
+
+// 2. Extract Cloudinary Constructor safely
+const CloudinaryStorage = pkg.CloudinaryStorage || pkg.default?.CloudinaryStorage || pkg;
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+  secure: true
+});
+
+// 3. Setup Storage (THE FIX IS HERE)
+const storage = new CloudinaryStorage({
+  cloudinary: { v2: cloudinary }, // Must be wrapped in an object for this library version
+  params: {
+    folder: 'village_square_media',
+    resource_type: 'auto',
+    allowed_formats: ['jpg', 'png', 'jpeg', 'gif', 'mp4', 'webp'],
+  },
+});
+
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 50 * 1024 * 1024 } 
+});
 /* 2. Second, define the specific folder path */
 const uploadDir = path.join(__dirname, 'public/uploads');
 
@@ -683,31 +672,34 @@ app.post("/event/:id/view", isAuth, async (req, res) => {
 // POST: Create a new post (Whisper)
 app.post("/event/create", isAuth, upload.single('localMedia'), async (req, res) => {
     try {
+        // Safety check: Ensure user is logged in
+        if (!req.user || !req.user.id) {
+            return res.status(401).send("You must be logged in to whisper.");
+        }
+
         const { description } = req.body;
         const userId = req.user.id;
         
-        // 1. Check if a file was uploaded to Cloudinary via Multer
-        // req.file.path contains the permanent HTTPS URL from Cloudinary
+        // Multer puts the Cloudinary URL in req.file.path
         const mediaUrl = req.file ? req.file.path : null;
         
-        // 2. Determine if it's an image or video for the frontend player
+        // Determine media type
         let mediaType = 'image'; 
         if (req.file && req.file.mimetype.startsWith('video')) {
             mediaType = 'video';
         }
 
-        // 3. Insert into database
-        // Ensure your table 'forum_posts' has columns: content, image_url, media_type, author_id
+        // Insert into database
         await db.query(
             "INSERT INTO forum_posts (content, image_url, media_type, author_id) VALUES ($1, $2, $3, $4)",
             [description, mediaUrl, mediaType, userId]
         );
 
-        // 4. Redirect back to feed to see the new post
         res.redirect("/feed");
 
     } catch (err) {
         console.error("UPLOAD ERROR:", err);
+        // Better to redirect with an error message than just a raw string
         res.status(500).send("The square is silent. We couldn't publish your whisper.");
     }
 });
