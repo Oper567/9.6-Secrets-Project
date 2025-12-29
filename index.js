@@ -18,6 +18,15 @@ import 'dotenv/config';
 import { v2 as cloudinary } from 'cloudinary';
 import multer from 'multer';
 import pkg from 'multer-storage-cloudinary';
+/* ---------------- DATABASE SETUP ---------------- */
+const db = new pg.Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
+
+// 2. NOW you can attach the error listener
+db.on("error", (err) => console.error("Unexpected error on idle client", err));
+
 
 // Handle the nested export in Node v22
 const CloudinaryStorage = pkg.CloudinaryStorage || pkg.default?.CloudinaryStorage || pkg;
