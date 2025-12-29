@@ -14,12 +14,12 @@ import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
 import nodemailer from "nodemailer";
 import { Resend } from "resend";
-import pkg from "@prisma/client";
+import pkg from 'multer-storage-cloudinary';
 import { v2 as cloudinary } from 'cloudinary';
 import multerStorageCloudinary from 'multer-storage-cloudinary'; // Default import
 import 'dotenv/config';
 
-const { CloudinaryStorage } = multerStorageCloudinary; // Extract the class here
+
 
 // Now you can continue with your config...
 cloudinary.config({
@@ -27,13 +27,15 @@ cloudinary.config({
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
+const CloudinaryStorage = pkg.CloudinaryStorage || pkg;
 
+// Now your existing code will work:
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
-    folder: 'village_square',
+    folder: 'village_square_media',
+    resource_type: 'auto',
     allowed_formats: ['jpg', 'png', 'jpeg', 'gif', 'mp4', 'webp'],
-    resource_type: 'auto'
   },
 });
 
