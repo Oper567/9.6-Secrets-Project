@@ -17,21 +17,20 @@ import { Resend } from "resend";
 import 'dotenv/config';
 import { v2 as cloudinary } from 'cloudinary';
 import multer from 'multer';
-// Import the package as a single object (pkg)
 import pkg from 'multer-storage-cloudinary';
 
-// Extract the storage class correctly
-// In many versions of this library, the class is tucked inside .CloudinaryStorage
-const { CloudinaryStorage } = pkg; 
+// Extract the constructor safely
+const { CloudinaryStorage } = pkg;
 
-// Cloudinary Account Config
+// Account Config
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+  secure: true
 });
 
-// Create the storage instance
+// Setup Storage
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
