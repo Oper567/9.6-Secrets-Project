@@ -709,9 +709,9 @@ app.post("/event/:id/view", isAuth, async (req, res) => {
     }
 });
 // POST: Add an Echo (Reply)
-app.post("/event/:postId/comment", isAuth, async (req, res) => {
-    const { postId } = req.params;
-    const { comment } = req.body;
+app.post("/event/:id/comment", isAuth, async (req, res) => {
+    const postId = req.params.id;
+    const { comment } = req.body; // Matches 'name="comment"' in your EJS input
     const userId = req.user.id;
 
     try {
@@ -720,17 +720,18 @@ app.post("/event/:postId/comment", isAuth, async (req, res) => {
             [postId, userId, comment]
         );
 
-        // Fetch username for the frontend to display immediately
+        // Fetch user email to send back the 'username' (prefix before @)
         const userRes = await db.query("SELECT email FROM users WHERE id = $1", [userId]);
-        const username = userRes.rows[0].email.split('@')[0];
+        const fullEmail = userRes.rows[0].email;
+        const username = fullEmail.split('@')[0];
 
         res.json({
             success: true,
             commentId: result.rows[0].id,
-            username: username
+            username: username // Used by your JS to update the UI instantly
         });
     } catch (err) {
-        console.error(err);
+        console.error("Comment Error:", err);
         res.status(500).json({ success: false });
     }
 });
