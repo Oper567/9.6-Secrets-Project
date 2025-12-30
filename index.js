@@ -1464,10 +1464,9 @@ app.post("/forum/post/:id/like", async (req, res) => {
 
 app.get("/villagers", isAuth, async (req, res) => {
     const userId = req.user.id;
-    const search = req.query.search || ""; // This captures the ?search= value from your EJS form
+    const search = req.query.search || "";
 
     try {
-        // This query fetches users and checks if they are already your friend
         const query = `
             SELECT u.id, u.email, u.is_verified, u.profile_pic,
             (SELECT status FROM friendships 
@@ -1477,7 +1476,7 @@ app.get("/villagers", isAuth, async (req, res) => {
             FROM users u
             WHERE u.id != $1
             AND (u.email ILIKE $2)
-            ORDER BY u.created_at DESC
+            ORDER BY u.id DESC
         `;
         
         const result = await db.query(query, [userId, `%${search}%`]);
@@ -1485,11 +1484,11 @@ app.get("/villagers", isAuth, async (req, res) => {
         res.render("villagers", {
             villagers: result.rows,
             search: search,
-            user: req.user // Required for your navbar
+            user: req.user
         });
     } catch (err) {
-        console.error("VILLAGERS ERROR:", err);
-        res.status(500).send("The Village Directory is currently closed.");
+        console.error("VILLAGERS ROUTE ERROR:", err);
+        res.status(500).send("The Village Directory is currently unavailable.");
     }
 });
 
