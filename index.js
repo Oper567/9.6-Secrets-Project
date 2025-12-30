@@ -504,7 +504,7 @@ app.get("/feed", checkVerified, async (req, res) => {
           'id', c.id,
           'user_id', c.user_id,
           'username', split_part(cu.email, '@', 1), 
-          'comment_text', c.reply_text  -- Renaming DB column to match EJS variable
+          'comment_text', c.comment_text  -- <--- FIXED: Changed from reply_text to comment_text
       )) FROM comments c 
          JOIN users cu ON c.user_id = cu.id 
          WHERE c.post_id = p.id) as comments_list
@@ -660,67 +660,54 @@ app.post("/event/:id/report", checkVerified, async (req, res) => {
     res.json({ success: false });
   }
 });
-app.get("/feed", checkVerified, async (req, res) => {
-  const search = req.query.search || "";
+
+app.post("/event/:id/like", checkVerified, async (req, res) => {
+  const postId = req.params.id;
   const userId = req.user.id;
 
   try {
-    const trending = await db.query(`
-      SELECT p.id, p.content, 
-      (SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count
-      FROM forum_posts p 
-      WHERE p.is_deleted = false 
-      ORDER BY likes_count DESC LIMIT 5
-    `);
+    // 1. Check if the user has already liked this post
+    const likeCheck = await db.query(
+      "SELECT id FROM likes WHERE post_id = $1 AND user_id = $2",
+      [postId, userId]
+    );
 
-    let villagerParams = [userId];
-    let villagerSearchQuery = `SELECT id, email FROM users WHERE id != $1`;
-    if (search) {
-      villagerSearchQuery += ` AND email ILIKE $2`;
-      villagerParams.push(`%${search}%`);
-    }
-    const suggestedUsers = await db.query(villagerSearchQuery + ` LIMIT 10`, villagerParams);
+    let isLiked = false;
 
-    let params = [userId];
-    let postsQuery = `
-      SELECT p.*, u.email AS author_email, u.is_verified,
-      (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes_count,
-      EXISTS (SELECT 1 FROM likes WHERE post_id = p.id AND user_id = $1) AS liked_by_me,
-      (SELECT JSON_AGG(json_build_object(
-          'id', c.id,
-          'user_id', c.user_id,
-          'username', split_part(cu.email, '@', 1), 
-          'comment_text', c.comment_text  -- <--- FIXED: Changed from reply_text to comment_text
-      )) FROM comments c 
-         JOIN users cu ON c.user_id = cu.id 
-         WHERE c.post_id = p.id) as comments_list
-      FROM forum_posts p 
-      JOIN users u ON p.author_id = u.id 
-      WHERE p.is_deleted = false
-    `;
-
-    if (search) {
-      postsQuery += ` AND (p.content ILIKE $2 OR u.email ILIKE $2)`;
-      params.push(`%${search}%`);
+    if (likeCheck.rows.length > 0) {
+      // 2. If it exists, UNLIKE (Delete the row)
+      await db.query("DELETE FROM likes WHERE id = $1", [likeCheck.rows[0].id]);
+      isLiked = false;
+    } else {
+      // 3. If it doesn't exist, LIKE (Insert the row)
+      await db.query("INSERT INTO likes (post_id, user_id) VALUES ($1, $2)", [
+        postId,
+        userId,
+      ]);
+      isLiked = true;
     }
 
-    postsQuery += ` ORDER BY p.created_at DESC`;
-    const posts = await db.query(postsQuery, params);
+    // 4. Get the updated count to send back to the frontend
+    const countRes = await db.query(
+      "SELECT COUNT(*) FROM likes WHERE post_id = $1",
+      [postId]
+    );
+    
+    const likesCount = parseInt(countRes.rows[0].count);
 
-    res.render("feed", {
-      posts: posts.rows,
-      trending: trending.rows,
-      friends: suggestedUsers.rows,
-      search: search,
-      user: req.user,
-      unreadCount: res.locals.unreadCount || 0
+    // 5. Send JSON back so the frontend can update the heart color and number
+    res.json({
+      success: true,
+      isLiked: isLiked,
+      likesCount: likesCount
     });
 
   } catch (err) {
-    console.error("FEED ERROR:", err);
-    res.status(500).send("Village Square Error");
+    console.error("LIKE ERROR:", err);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 
 app.post("/event/:id/view", isAuth, async (req, res) => {
