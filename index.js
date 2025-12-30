@@ -723,53 +723,38 @@ app.post("/event/:id/like", checkVerified, async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
-app.post("/event/:id/comment", checkVerified, async (req, res) => {
-    const postId = req.params.id;
-    const { comment } = req.body; // This comes from JSON.stringify
+app.post("/event/:postId/comment", isAuth, async (req, res) => {
+    const { postId } = req.params;
+    const { comment } = req.body; // The EJS sends { "comment": "..." }
     const userId = req.user.id;
 
-    if (!comment) return res.status(400).json({ success: false });
+    if (!comment || comment.trim() === "") {
+        return res.status(400).json({ success: false, message: "Empty comment" });
+    }
 
     try {
-        // We use 'comment_text' because that is the column name in your DB
+        // Insert into database using 'reply_text'
         const result = await db.query(
-            "INSERT INTO comments (post_id, user_id, comment_text) VALUES ($1, $2, $3) RETURNING id",
+            `INSERT INTO comments (post_id, user_id, reply_text) 
+             VALUES ($1, $2, $3) 
+             RETURNING id`,
             [postId, userId, comment]
         );
 
-        res.json({ 
-            success: true, 
-            commentId: result.rows[0].id 
+        // Send back JSON so the EJS can update the page without refreshing
+        res.json({
+            success: true,
+            commentId: result.rows[0].id,
+            username: req.user.email.split('@')[0], // Extract username from email
+            message: "Echo sent!"
         });
+
     } catch (err) {
-        console.error("Database Error:", err);
-        res.status(500).json({ success: false });
+        console.error("AJAX COMMENT ERROR:", err);
+        res.status(500).json({ success: false, error: "Database error" });
     }
 });
-app.post("/comment/create/:postId", isAuth, async (req, res) => {
-    const { commentContent } = req.body;
-    const { postId } = req.params;
-    const userId = req.user.id;
 
-    // Check if content is empty
-    if (!commentContent || commentContent.trim() === "") {
-        return res.redirect("/feed");
-    }
-
-    try {
-        console.log(`User ${userId} is commenting on post ${postId}`);
-        
-        await db.query(
-            "INSERT INTO comments (post_id, user_id, reply_text) VALUES ($1, $2, $3)",
-            [postId, userId, commentContent]
-        );
-
-        res.redirect("/feed"); // Refresh the feed to show the new comment
-    } catch (err) {
-        console.error("COMMENT SUBMIT ERROR:", err);
-        res.status(500).send("Database error: Check if 'reply_text' column exists.");
-    }
-});
 
 
 
