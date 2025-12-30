@@ -707,26 +707,34 @@ app.post("/event/:id/like", checkVerified, async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+// Add this route to handle the Echo (Comment) button
 app.post("/event/:id/comment", checkVerified, async (req, res) => {
     const postId = req.params.id;
-    const { comment } = req.body; // This comes from JSON.stringify
+    const { comment } = req.body; // The script sends { comment: commentText }
     const userId = req.user.id;
 
-    if (!comment) return res.status(400).json({ success: false });
+    if (!comment || comment.trim() === "") {
+        return res.status(400).json({ success: false, message: "Empty comment" });
+    }
 
     try {
-        // We use 'comment_text' because that is the column name in your DB
+        // We use 'comment_text' because that is what we named the DB column
         const result = await db.query(
             "INSERT INTO comments (post_id, user_id, comment_text) VALUES ($1, $2, $3) RETURNING id",
             [postId, userId, comment]
         );
 
+        // We get the username to send back to the frontend for the live update
+        const userResult = await db.query("SELECT email FROM users WHERE id = $1", [userId]);
+        const username = userResult.rows[0].email.split('@')[0];
+
         res.json({ 
             success: true, 
-            commentId: result.rows[0].id 
+            commentId: result.rows[0].id,
+            username: username 
         });
     } catch (err) {
-        console.error("Database Error:", err);
+        console.error("COMMENT ROUTE ERROR:", err);
         res.status(500).json({ success: false });
     }
 });
