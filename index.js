@@ -660,7 +660,70 @@ app.post("/event/:id/report", checkVerified, async (req, res) => {
     res.json({ success: false });
   }
 });
+app.get("/feed", checkVerified, async (req, res) => {
+  const search = req.query.search || "";
+  const userId = req.user.id;
 
+  try {
+    // 1. Trending Sidebar
+    const trending = await db.query(`
+      SELECT p.id, p.content, 
+      (SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count
+      FROM forum_posts p 
+      WHERE p.is_deleted = false 
+      ORDER BY likes_count DESC LIMIT 5
+    `);
+
+    // 2. Suggested Users
+    let villagerParams = [userId];
+    let villagerSearchQuery = `SELECT id, email FROM users WHERE id != $1`;
+    if (search) {
+      villagerSearchQuery += ` AND email ILIKE $2`;
+      villagerParams.push(`%${search}%`);
+    }
+    const suggestedUsers = await db.query(villagerSearchQuery + ` LIMIT 10`, villagerParams);
+
+    // 3. Main Posts Query - UPDATED TO MATCH NEW TABLE STRUCTURE
+    let params = [userId];
+    let postsQuery = `
+      SELECT p.*, u.email AS author_email, u.is_verified,
+      (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes_count,
+      EXISTS (SELECT 1 FROM likes WHERE post_id = p.id AND user_id = $1) AS liked_by_me,
+      (SELECT JSON_AGG(json_build_object(
+          'id', c.id,
+          'user_id', c.user_id,
+          'username', split_part(cu.email, '@', 1), 
+          'comment_text', c.comment_text  -- CHANGED FROM reply_text TO comment_text
+      )) FROM comments c 
+         JOIN users cu ON c.user_id = cu.id 
+         WHERE c.post_id = p.id) as comments_list
+      FROM forum_posts p 
+      JOIN users u ON p.author_id = u.id 
+      WHERE p.is_deleted = false
+    `;
+
+    if (search) {
+      postsQuery += ` AND (p.content ILIKE $2 OR u.email ILIKE $2)`;
+      params.push(`%${search}%`);
+    }
+
+    postsQuery += ` ORDER BY p.created_at DESC`;
+    const posts = await db.query(postsQuery, params);
+
+    res.render("feed", {
+      posts: posts.rows,
+      trending: trending.rows,
+      friends: suggestedUsers.rows,
+      search: search,
+      user: req.user,
+      unreadCount: res.locals.unreadCount || 0
+    });
+
+  } catch (err) {
+    console.error("FEED ERROR:", err); // This will now show you if any other columns are missing
+    res.status(500).send("Village Square Error");
+  }
+});
 
 
 app.post("/event/:id/view", isAuth, async (req, res) => {
