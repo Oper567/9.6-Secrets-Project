@@ -45,36 +45,22 @@ cloudinary.config({
 });
 
 // 3. Setup Storage (THE FIX IS HERE)
+// Ensure this matches your imports/requires
 const storage = new CloudinaryStorage({
-  cloudinary: { v2: cloudinary }, // Must be wrapped in an object for this library version
+  cloudinary: cloudinary, 
   params: {
     folder: 'village_square_media',
-    resource_type: 'auto',
-    allowed_formats: ['jpg', 'png', 'jpeg', 'gif', 'mp4', 'webp'],
+    resource_type: 'auto', // AUTO is critical for video support
+    allowed_formats: ['jpg', 'png', 'jpeg', 'gif', 'mp4', 'webp', 'mov'],
   },
 });
 
 const upload = multer({ 
   storage: storage,
-  limits: { fileSize: 50 * 1024 * 1024 } 
+  limits: { fileSize: 50 * 1024 * 1024 } // Allow up to 50MB for videos
 });
-/* 2. Second, define the specific folder path */
-const uploadDir = path.join(__dirname, 'public/uploads');
-
-/* 3. Now it is safe to check if it exists */
-if (!fs.existsSync(uploadDir)){
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// Cloudinary Config
 
 
-db.on("error", (err) => console.error("Unexpected error on idle client", err));
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
-);
 // ... after supabase.storage.from('apugo_village').upload(...)
 // 1. Upload the file
 
@@ -572,74 +558,67 @@ function appendPostToFeed(p) {
 
 // ADD THIS: Discover Route (Random media gallery)
 app.get("/discover", isAuth, async (req, res) => {
-    const searchQuery = req.query.search || "";
-    const userId = req.user.id;
-
     try {
-        let params = [];
-        let sql = `
-            SELECT p.*, u.email AS author, u.id AS created_by,
-            (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes,
-            (SELECT COUNT(*) FROM forum_replies WHERE post_id = p.id) AS comments_count
-            FROM forum_posts p
-            JOIN users u ON p.author_id = u.id
-            WHERE p.is_deleted = false
-        `;
+        const userId = req.user.id;
+        
+        // This query finds users who are NOT you and NOT already your "Kin"
+        const villagersRes = await db.query(`
+            SELECT id, email FROM users 
+            WHERE id != $1 
+            AND id NOT IN (
+                SELECT friend_id FROM friendships WHERE user_id = $1
+                UNION
+                SELECT user_id FROM friendships WHERE friend_id = $1
+            )
+        `, [userId]);
 
-        if (searchQuery) {
-            sql += ` AND (p.content ILIKE $1 OR u.email ILIKE $1)`;
-            params.push(`%${searchQuery}%`);
-        }
-
-        // Randomize for "Discover" feel, or order by most likes/views
-        sql += ` ORDER BY RANDOM() LIMIT 20`;
-
-        const result = await db.query(sql, params);
-
-        res.render("discover", {
-            posts: result.rows,
-            user: req.user,
-            search: searchQuery
-        });
+        res.render("discover.ejs", { villagers: villagersRes.rows });
     } catch (err) {
-        console.error("Discover Error:", err);
-        res.status(500).send("The wilds are too misty to explore right now.");
+        console.error("Villagers Load Error:", err);
+        res.status(500).send("The village map is torn.");
     }
 });
 
 // ADD THIS: Single Post Detail Route
 
 
-// Ensure this is in your main file or the router linked to '/event'
-// POST: Toggle Like (Vibe)
-
-// POST: Create a new Whisper (Forum Post)
-// POST: Create a new post (Whisper)
 app.post("/event/create", upload.single("localMedia"), async (req, res) => {
-  const { description } = req.body;
-  const userId = req.user.id;
-
-  try {
-    // 1. Get the URL from Cloudinary
-    const imageUrl = req.file ? req.file.path : null; 
+    console.log("--- New Post Attempt ---");
     
-    // 2. Determine if it's a video or image
-    let mediaType = 'image';
-    if (req.file && req.file.mimetype.startsWith('video')) {
-      mediaType = 'video';
+    try {
+        const { description } = req.body;
+        const userId = req.user.id;
+
+        // 1. Check if a file was actually uploaded to Cloudinary
+        let imageUrl = null;
+        let mediaType = 'text';
+
+        if (req.file) {
+            console.log("File uploaded to Cloudinary:", req.file.path);
+            imageUrl = req.file.path; // The full HTTPS URL
+            mediaType = req.file.mimetype.startsWith('video') ? 'video' : 'image';
+        } else {
+            console.log("No media attached, posting text only.");
+        }
+
+        // 2. Insert into Database
+        // Ensure your table has: content, author_id, image_url, media_type
+        await db.query(
+            "INSERT INTO forum_posts (content, author_id, image_url, media_type) VALUES ($1, $2, $3, $4)",
+            [description || "", userId, imageUrl, mediaType]
+        );
+
+        console.log("Post saved successfully to DB.");
+        res.redirect("/feed");
+
+    } catch (err) {
+        console.error("CRITICAL ERROR IN CREATE POST:", err.message);
+        
+        // This prevents the infinite loading if an error occurs
+        if (!res.headersSent) {
+            res.status(500).send("The village square is closed for repairs. (Upload Error)");
+        }
     }
-
-    // 3. Save to Database
-    await db.query(
-      "INSERT INTO forum_posts (content, author_id, image_url, media_type) VALUES ($1, $2, $3, $4)",
-      [description, userId, imageUrl, mediaType]
-    );
-
-    res.redirect("/feed");
-  } catch (err) {
-    console.error("UPLOAD ERROR:", err);
-    res.status(500).send("The square is currently full. Try again later.");
-  }
 });
 
 app.post("/event/:id/report", checkVerified, async (req, res) => {
