@@ -479,7 +479,6 @@ app.get("/feed", checkVerified, async (req, res) => {
   const userId = req.user.id;
 
   try {
-    // 1. Trending Sidebar
     const trending = await db.query(`
       SELECT p.id, p.content, 
       (SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count
@@ -488,7 +487,6 @@ app.get("/feed", checkVerified, async (req, res) => {
       ORDER BY likes_count DESC LIMIT 5
     `);
 
-    // 2. Suggested Users
     let villagerParams = [userId];
     let villagerSearchQuery = `SELECT id, email FROM users WHERE id != $1`;
     if (search) {
@@ -497,7 +495,6 @@ app.get("/feed", checkVerified, async (req, res) => {
     }
     const suggestedUsers = await db.query(villagerSearchQuery + ` LIMIT 10`, villagerParams);
 
-    // 3. Main Posts Query - Matches EJS variable names exactly
     let params = [userId];
     let postsQuery = `
       SELECT p.*, u.email AS author_email, u.is_verified,
@@ -507,7 +504,7 @@ app.get("/feed", checkVerified, async (req, res) => {
           'id', c.id,
           'user_id', c.user_id,
           'username', split_part(cu.email, '@', 1), 
-          'comment_text', c.comment_text
+          'comment_text', c.reply_text  -- Renaming DB column to match EJS variable
       )) FROM comments c 
          JOIN users cu ON c.user_id = cu.id 
          WHERE c.post_id = p.id) as comments_list
@@ -663,37 +660,66 @@ app.post("/event/:id/report", checkVerified, async (req, res) => {
     res.json({ success: false });
   }
 });
-app.post("/event/:id/like", isAuth, async (req, res) => {
-    const postId = req.params.id;
-    const userId = req.user.id;
+app.get("/feed", checkVerified, async (req, res) => {
+  const search = req.query.search || "";
+  const userId = req.user.id;
 
-    try {
-        // Check if vibe already exists
-        const likeCheck = await db.query(
-            "SELECT id FROM likes WHERE post_id = $1 AND user_id = $2",
-            [postId, userId]
-        );
+  try {
+    const trending = await db.query(`
+      SELECT p.id, p.content, 
+      (SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count
+      FROM forum_posts p 
+      WHERE p.is_deleted = false 
+      ORDER BY likes_count DESC LIMIT 5
+    `);
 
-        let isLiked = false;
-        if (likeCheck.rows.length > 0) {
-            await db.query("DELETE FROM likes WHERE id = $1", [likeCheck.rows[0].id]);
-        } else {
-            await db.query("INSERT INTO likes (post_id, user_id) VALUES ($1, $2)", [postId, userId]);
-            isLiked = true;
-        }
-
-        // Get updated total
-        const countRes = await db.query("SELECT COUNT(*) FROM likes WHERE post_id = $1", [postId]);
-        
-        res.json({ 
-            success: true, 
-            isLiked: isLiked, 
-            likesCount: parseInt(countRes.rows[0].count) 
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false });
+    let villagerParams = [userId];
+    let villagerSearchQuery = `SELECT id, email FROM users WHERE id != $1`;
+    if (search) {
+      villagerSearchQuery += ` AND email ILIKE $2`;
+      villagerParams.push(`%${search}%`);
     }
+    const suggestedUsers = await db.query(villagerSearchQuery + ` LIMIT 10`, villagerParams);
+
+    let params = [userId];
+    let postsQuery = `
+      SELECT p.*, u.email AS author_email, u.is_verified,
+      (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes_count,
+      EXISTS (SELECT 1 FROM likes WHERE post_id = p.id AND user_id = $1) AS liked_by_me,
+      (SELECT JSON_AGG(json_build_object(
+          'id', c.id,
+          'user_id', c.user_id,
+          'username', split_part(cu.email, '@', 1), 
+          'comment_text', c.reply_text  -- Renaming DB column to match EJS variable
+      )) FROM comments c 
+         JOIN users cu ON c.user_id = cu.id 
+         WHERE c.post_id = p.id) as comments_list
+      FROM forum_posts p 
+      JOIN users u ON p.author_id = u.id 
+      WHERE p.is_deleted = false
+    `;
+
+    if (search) {
+      postsQuery += ` AND (p.content ILIKE $2 OR u.email ILIKE $2)`;
+      params.push(`%${search}%`);
+    }
+
+    postsQuery += ` ORDER BY p.created_at DESC`;
+    const posts = await db.query(postsQuery, params);
+
+    res.render("feed", {
+      posts: posts.rows,
+      trending: trending.rows,
+      friends: suggestedUsers.rows,
+      search: search,
+      user: req.user,
+      unreadCount: res.locals.unreadCount || 0
+    });
+
+  } catch (err) {
+    console.error("FEED ERROR:", err);
+    res.status(500).send("Village Square Error");
+  }
 });
 
 
@@ -706,31 +732,7 @@ app.post("/event/:id/view", isAuth, async (req, res) => {
     }
 });
 // POST: Add an Echo (Reply)
-app.post("/event/:id/comment", isAuth, async (req, res) => {
-    const postId = req.params.id;
-    const { comment } = req.body;
-    const userId = req.user.id;
 
-    try {
-        const result = await db.query(
-            "INSERT INTO comments (post_id, user_id, comment_text) VALUES ($1, $2, $3) RETURNING id",
-            [postId, userId, comment]
-        );
-
-        // Get the handle for the UI (email prefix)
-        const userRes = await db.query("SELECT email FROM users WHERE id = $1", [userId]);
-        const username = userRes.rows[0].email.split('@')[0];
-
-        res.json({
-            success: true,
-            commentId: result.rows[0].id,
-            username: username
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false });
-    }
-});
 app.post("/event/:id/bookmark", isAuth, async (req, res) => {
     const postId = req.params.id;
     const userId = req.user.id;
