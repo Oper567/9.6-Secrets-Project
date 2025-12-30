@@ -476,37 +476,38 @@ app.post("/reset-password/:token", async (req, res) => {
 /* ---------------- FEED & EVENTS ---------------- */
 app.get("/feed", checkVerified, async (req, res) => {
   const search = req.query.search || "";
-  const userId = req.user.id; // Using current logged-in user ID
+  const userId = req.user.id;
 
   try {
-    // 1. Fetch Trending VIDEOS (Leaderboard)
     const trending = await db.query(`
-      SELECT p.id, p.content, p.views_count, p.image_url
+      SELECT p.id, p.content, 
+      (SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count
       FROM forum_posts p 
-      WHERE p.is_deleted = false AND p.media_type = 'video'
-      ORDER BY p.views_count DESC LIMIT 5
+      WHERE p.is_deleted = false 
+      ORDER BY likes_count DESC LIMIT 5
     `);
 
-    // 2. Fetch Villagers (friends/suggested)
     let villagerParams = [userId];
-    let villagerSearchQuery = `SELECT id, email, profile_pic FROM users WHERE id != $1`;
+    let villagerSearchQuery = `SELECT id, email FROM users WHERE id != $1`;
     if (search) {
       villagerSearchQuery += ` AND email ILIKE $2`;
       villagerParams.push(`%${search}%`);
     }
     const suggestedUsers = await db.query(villagerSearchQuery + ` LIMIT 10`, villagerParams);
 
-    // 3. Main Posts Query
     let params = [userId];
     let postsQuery = `
-      SELECT p.*, u.email AS author_email, u.profile_pic, u.is_verified,
+      SELECT p.*, u.email AS author_email, u.is_verified,
       (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes_count,
-      (SELECT EXISTS (SELECT 1 FROM likes WHERE post_id = p.id AND user_id = $1)) AS liked_by_me,
+      EXISTS (SELECT 1 FROM likes WHERE post_id = p.id AND user_id = $1) AS liked_by_me,
       (SELECT JSON_AGG(json_build_object(
+          'id', c.id,
+          'user_id', c.user_id,
           'username', split_part(cu.email, '@', 1), 
-          'comment_text', r.reply_text, 
-          'user_pic', cu.profile_pic
-      )) FROM forum_replies r JOIN users cu ON r.author_id = cu.id WHERE r.post_id = p.id) as comments_list
+          'comment_text', c.reply_text  -- Renaming DB column to match EJS variable
+      )) FROM comments c 
+         JOIN users cu ON c.user_id = cu.id 
+         WHERE c.post_id = p.id) as comments_list
       FROM forum_posts p 
       JOIN users u ON p.author_id = u.id 
       WHERE p.is_deleted = false
@@ -520,11 +521,10 @@ app.get("/feed", checkVerified, async (req, res) => {
     postsQuery += ` ORDER BY p.created_at DESC`;
     const posts = await db.query(postsQuery, params);
 
-    // 4. Final Render
     res.render("feed", {
       posts: posts.rows,
       trending: trending.rows,
-      friends: suggestedUsers.rows, // Matches the 'friends' variable in your EJS
+      friends: suggestedUsers.rows,
       search: search,
       user: req.user,
       unreadCount: res.locals.unreadCount || 0
@@ -532,7 +532,7 @@ app.get("/feed", checkVerified, async (req, res) => {
 
   } catch (err) {
     console.error("FEED ERROR:", err);
-    res.status(500).render("error", { message: "The village square is temporarily closed." });
+    res.status(500).send("Village Square Error");
   }
 });
 
@@ -660,43 +660,66 @@ app.post("/event/:id/report", checkVerified, async (req, res) => {
     res.json({ success: false });
   }
 });
-app.post("/event/:id/like", isAuth, async (req, res) => {
-    const postId = req.params.id;
-    const userId = req.user.id;
+app.get("/feed", checkVerified, async (req, res) => {
+  const search = req.query.search || "";
+  const userId = req.user.id;
 
-    try {
-        // 1. Check if the vibe (like) already exists
-        const likeCheck = await db.query(
-            "SELECT id FROM likes WHERE post_id = $1 AND user_id = $2",
-            [postId, userId]
-        );
+  try {
+    const trending = await db.query(`
+      SELECT p.id, p.content, 
+      (SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count
+      FROM forum_posts p 
+      WHERE p.is_deleted = false 
+      ORDER BY likes_count DESC LIMIT 5
+    `);
 
-        let isLiked = false;
-
-        if (likeCheck.rows.length > 0) {
-            // 2. If it exists, remove it
-            await db.query("DELETE FROM likes WHERE id = $1", [likeCheck.rows[0].id]);
-        } else {
-            // 3. If it doesn't, add it
-            await db.query("INSERT INTO likes (post_id, user_id) VALUES ($1, $2)", [postId, userId]);
-            isLiked = true;
-        }
-
-        // 4. Get the updated count
-        const countRes = await db.query("SELECT COUNT(*) FROM likes WHERE post_id = $1", [postId]);
-        const totalLikes = parseInt(countRes.rows[0].count);
-
-        // 5. Send back exactly what your frontend script expects
-        res.json({ 
-            success: true, 
-            isLiked: isLiked, 
-            likesCount: totalLikes 
-        });
-
-    } catch (err) {
-        console.error("Vibe Error:", err);
-        res.status(500).json({ success: false });
+    let villagerParams = [userId];
+    let villagerSearchQuery = `SELECT id, email FROM users WHERE id != $1`;
+    if (search) {
+      villagerSearchQuery += ` AND email ILIKE $2`;
+      villagerParams.push(`%${search}%`);
     }
+    const suggestedUsers = await db.query(villagerSearchQuery + ` LIMIT 10`, villagerParams);
+
+    let params = [userId];
+    let postsQuery = `
+      SELECT p.*, u.email AS author_email, u.is_verified,
+      (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes_count,
+      EXISTS (SELECT 1 FROM likes WHERE post_id = p.id AND user_id = $1) AS liked_by_me,
+      (SELECT JSON_AGG(json_build_object(
+          'id', c.id,
+          'user_id', c.user_id,
+          'username', split_part(cu.email, '@', 1), 
+          'comment_text', c.reply_text  -- Renaming DB column to match EJS variable
+      )) FROM comments c 
+         JOIN users cu ON c.user_id = cu.id 
+         WHERE c.post_id = p.id) as comments_list
+      FROM forum_posts p 
+      JOIN users u ON p.author_id = u.id 
+      WHERE p.is_deleted = false
+    `;
+
+    if (search) {
+      postsQuery += ` AND (p.content ILIKE $2 OR u.email ILIKE $2)`;
+      params.push(`%${search}%`);
+    }
+
+    postsQuery += ` ORDER BY p.created_at DESC`;
+    const posts = await db.query(postsQuery, params);
+
+    res.render("feed", {
+      posts: posts.rows,
+      trending: trending.rows,
+      friends: suggestedUsers.rows,
+      search: search,
+      user: req.user,
+      unreadCount: res.locals.unreadCount || 0
+    });
+
+  } catch (err) {
+    console.error("FEED ERROR:", err);
+    res.status(500).send("Village Square Error");
+  }
 });
 
 
@@ -711,7 +734,7 @@ app.post("/event/:id/view", isAuth, async (req, res) => {
 // POST: Add an Echo (Reply)
 app.post("/event/:id/comment", isAuth, async (req, res) => {
     const postId = req.params.id;
-    const { comment } = req.body; // Matches 'name="comment"' in your EJS input
+    const { comment } = req.body;
     const userId = req.user.id;
 
     try {
@@ -720,18 +743,17 @@ app.post("/event/:id/comment", isAuth, async (req, res) => {
             [postId, userId, comment]
         );
 
-        // Fetch user email to send back the 'username' (prefix before @)
+        // Get the handle for the UI (email prefix)
         const userRes = await db.query("SELECT email FROM users WHERE id = $1", [userId]);
-        const fullEmail = userRes.rows[0].email;
-        const username = fullEmail.split('@')[0];
+        const username = userRes.rows[0].email.split('@')[0];
 
         res.json({
             success: true,
             commentId: result.rows[0].id,
-            username: username // Used by your JS to update the UI instantly
+            username: username
         });
     } catch (err) {
-        console.error("Comment Error:", err);
+        console.error(err);
         res.status(500).json({ success: false });
     }
 });
@@ -817,22 +839,19 @@ app.delete("/event/:postId/comment/:commentId", isAuth, async (req, res) => {
     const userId = req.user.id;
 
     try {
-        // Only delete if the user owns the comment OR is an admin
+        // Delete only if owner or admin
         const result = await db.query(
-            `DELETE FROM comments 
-             WHERE id = $1 
-             AND (user_id = $2 OR (SELECT role FROM users WHERE id = $2) = 'admin')
-             RETURNING id`,
+            "DELETE FROM comments WHERE id = $1 AND (user_id = $2 OR (SELECT role FROM users WHERE id = $2) = 'admin') RETURNING id",
             [commentId, userId]
         );
 
         if (result.rows.length > 0) {
             res.json({ success: true });
         } else {
-            res.status(403).json({ success: false, message: "Not authorized to erase this echo." });
+            res.status(403).json({ success: false, message: "Unauthorized" });
         }
     } catch (err) {
-        console.error("Echo Deletion Error:", err);
+        console.error(err);
         res.status(500).json({ success: false });
     }
 });
