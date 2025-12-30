@@ -746,6 +746,30 @@ app.post("/event/:id/comment", checkVerified, async (req, res) => {
         res.status(500).json({ success: false });
     }
 });
+app.post("/comment/create/:postId", isAuth, async (req, res) => {
+    const { commentContent } = req.body;
+    const { postId } = req.params;
+    const userId = req.user.id;
+
+    // Check if content is empty
+    if (!commentContent || commentContent.trim() === "") {
+        return res.redirect("/feed");
+    }
+
+    try {
+        console.log(`User ${userId} is commenting on post ${postId}`);
+        
+        await db.query(
+            "INSERT INTO comments (post_id, user_id, reply_text) VALUES ($1, $2, $3)",
+            [postId, userId, commentContent]
+        );
+
+        res.redirect("/feed"); // Refresh the feed to show the new comment
+    } catch (err) {
+        console.error("COMMENT SUBMIT ERROR:", err);
+        res.status(500).send("Database error: Check if 'reply_text' column exists.");
+    }
+});
 
 
 
