@@ -908,17 +908,17 @@ app.post("/forum/create", isAuth, upload.single('media'), async (req, res) => {
 /* ---------------- CHAT SYSTEM ---------------- */
 app.get("/messages", isAuth, async (req, res) => {
   try {
-    // This query gets friends + their profile pic + if they were active in the last 5 mins + unread count
     const friends = await db.query(
       `
         SELECT 
         u.id, u.email, u.profile_pic,
-        (u.last_active > NOW() - INTERVAL '5 minutes') as is_online
+        (u.last_active > NOW() - INTERVAL '5 minutes') as is_online,
+        f.status -- Added this so you can see if it's pending in EJS
         FROM users u
         JOIN friendships f ON (f.sender_id = u.id OR f.receiver_id = u.id)
         WHERE (f.sender_id = $1 OR f.receiver_id = $1) 
         AND u.id != $1 
-         AND f.status = 'accepted'`,
+        AND f.status IN ('accepted', 'pending')`, // Changed this line
       [req.user.id]
     );
 
@@ -1461,30 +1461,36 @@ app.post("/forum/post/:id/like", async (req, res) => {
         res.status(500).json({ error: "Internal server error" });
     }
 });
-app.get("/messages", isAuth, async (req, res) => {
-  try {
-    const friends = await db.query(
-      `
-        SELECT 
-        u.id, u.email, u.profile_pic,
-        (u.last_active > NOW() - INTERVAL '5 minutes') as is_online,
-        f.status -- Added this so you can see if it's pending in EJS
-        FROM users u
-        JOIN friendships f ON (f.sender_id = u.id OR f.receiver_id = u.id)
-        WHERE (f.sender_id = $1 OR f.receiver_id = $1) 
-        AND u.id != $1 
-        AND f.status IN ('accepted', 'pending')`, // Changed this line
-      [req.user.id]
-    );
 
-    res.render("messages", {
-      friends: friends.rows,
-      user: req.user,
-    });
-  } catch (err) {
-    console.error(err);
-    res.redirect("/feed");
-  }
+app.get("/villagers", isAuth, async (req, res) => {
+    const userId = req.user.id;
+    const search = req.query.search || ""; // This captures the ?search= value from your EJS form
+
+    try {
+        // This query fetches users and checks if they are already your friend
+        const query = `
+            SELECT u.id, u.email, u.is_verified, u.profile_pic,
+            (SELECT status FROM friendships 
+             WHERE (sender_id = $1 AND receiver_id = u.id) 
+             OR (sender_id = u.id AND receiver_id = $1) 
+             LIMIT 1) as friend_status
+            FROM users u
+            WHERE u.id != $1
+            AND (u.email ILIKE $2)
+            ORDER BY u.created_at DESC
+        `;
+        
+        const result = await db.query(query, [userId, `%${search}%`]);
+
+        res.render("villagers", {
+            villagers: result.rows,
+            search: search,
+            user: req.user // Required for your navbar
+        });
+    } catch (err) {
+        console.error("VILLAGERS ERROR:", err);
+        res.status(500).send("The Village Directory is currently closed.");
+    }
 });
 
 
