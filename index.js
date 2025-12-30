@@ -665,43 +665,40 @@ app.post("/event/:id/like", isAuth, async (req, res) => {
     const userId = req.user.id;
 
     try {
-        // 1. Find the author so we know who to notify
-        const postRes = await db.query("SELECT author_id FROM forum_posts WHERE id = $1", [postId]);
-        if (postRes.rows.length === 0) return res.status(404).json({ success: false });
-        
-        const postAuthorId = postRes.rows[0].author_id;
-
-        // 2. Check if user already liked this
-        const likeRes = await db.query(
-            "SELECT id FROM likes WHERE post_id = $1 AND user_id = $2", 
+        // 1. Check if the vibe (like) already exists
+        const likeCheck = await db.query(
+            "SELECT id FROM likes WHERE post_id = $1 AND user_id = $2",
             [postId, userId]
         );
 
-        if (likeRes.rows.length > 0) {
-            // Path: Unlike
-            await db.query("DELETE FROM likes WHERE id = $1", [likeRes.rows[0].id]);
-            res.json({ success: true, isLiked: false });
-        } else {
-            // Path: Like
-            await db.query(
-                "INSERT INTO likes (post_id, user_id) VALUES ($1, $2)", 
-                [postId, userId]
-            );
+        let isLiked = false;
 
-            // 3. Send Notification (Only if columns were added via SQL above)
-            if (postAuthorId !== userId) {
-                await db.query(
-                    "INSERT INTO notifications (user_id, sender_id, type, message) VALUES ($1, $2, $3, $4)",
-                    [postAuthorId, userId, 'like', 'admired your echo']
-                );
-            }
-            res.json({ success: true, isLiked: true });
+        if (likeCheck.rows.length > 0) {
+            // 2. If it exists, remove it
+            await db.query("DELETE FROM likes WHERE id = $1", [likeCheck.rows[0].id]);
+        } else {
+            // 3. If it doesn't, add it
+            await db.query("INSERT INTO likes (post_id, user_id) VALUES ($1, $2)", [postId, userId]);
+            isLiked = true;
         }
+
+        // 4. Get the updated count
+        const countRes = await db.query("SELECT COUNT(*) FROM likes WHERE post_id = $1", [postId]);
+        const totalLikes = parseInt(countRes.rows[0].count);
+
+        // 5. Send back exactly what your frontend script expects
+        res.json({ 
+            success: true, 
+            isLiked: isLiked, 
+            likesCount: totalLikes 
+        });
+
     } catch (err) {
-        console.error("LIKE LOGIC ERROR:", err);
+        console.error("Vibe Error:", err);
         res.status(500).json({ success: false });
     }
 });
+
 
 app.post("/event/:id/view", isAuth, async (req, res) => {
     try {
@@ -712,28 +709,30 @@ app.post("/event/:id/view", isAuth, async (req, res) => {
     }
 });
 // POST: Add an Echo (Reply)
-app.post("/event/:id/comment", async (req, res) => {
-  const { comment } = req.body;
-  const postId = req.params.id;
-  const authorId = req.user.id;
+app.post("/event/:postId/comment", isAuth, async (req, res) => {
+    const { postId } = req.params;
+    const { comment } = req.body;
+    const userId = req.user.id;
 
-  if (!comment || comment.trim() === "") return res.json({ success: false });
+    try {
+        const result = await db.query(
+            "INSERT INTO comments (post_id, user_id, comment_text) VALUES ($1, $2, $3) RETURNING id",
+            [postId, userId, comment]
+        );
 
-  try {
-    await db.query(
-      `INSERT INTO forum_replies (post_id, author_id, reply_text, created_at) 
-       VALUES ($1, $2, $3, NOW())`,
-      [postId, authorId, comment]
-    );
+        // Fetch username for the frontend to display immediately
+        const userRes = await db.query("SELECT email FROM users WHERE id = $1", [userId]);
+        const username = userRes.rows[0].email.split('@')[0];
 
-    res.json({ 
-      success: true, 
-      username: req.user.email.split('@')[0] 
-    });
-  } catch (err) {
-    console.error("COMMENT ERROR:", err);
-    res.json({ success: false });
-  }
+        res.json({
+            success: true,
+            commentId: result.rows[0].id,
+            username: username
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false });
+    }
 });
 app.post("/event/:id/bookmark", isAuth, async (req, res) => {
     const postId = req.params.id;
@@ -813,23 +812,26 @@ app.post("/event/:id/delete", isAuth, async (req, res) => {
 });
 
 app.delete("/event/:postId/comment/:commentId", isAuth, async (req, res) => {
-    try {
-        const { commentId } = req.params;
-        const userId = req.user.id;
+    const { commentId } = req.params;
+    const userId = req.user.id;
 
-        // Delete only if the user owns the comment or is an admin
+    try {
+        // Only delete if the user owns the comment OR is an admin
         const result = await db.query(
-            "DELETE FROM comments WHERE id = $1 AND (user_id = $2 OR (SELECT role FROM users WHERE id = $2) = 'admin') RETURNING *",
+            `DELETE FROM comments 
+             WHERE id = $1 
+             AND (user_id = $2 OR (SELECT role FROM users WHERE id = $2) = 'admin')
+             RETURNING id`,
             [commentId, userId]
         );
 
         if (result.rows.length > 0) {
             res.json({ success: true });
         } else {
-            res.status(403).json({ success: false, message: "Unauthorized" });
+            res.status(403).json({ success: false, message: "Not authorized to erase this echo." });
         }
     } catch (err) {
-        console.error(err);
+        console.error("Echo Deletion Error:", err);
         res.status(500).json({ success: false });
     }
 });
