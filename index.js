@@ -735,6 +735,35 @@ app.post("/event/:id/comment", async (req, res) => {
     res.json({ success: false });
   }
 });
+app.post("/event/:id/bookmark", isAuth, async (req, res) => {
+    const postId = req.params.id;
+    const userId = req.user.id;
+
+    try {
+        // Check if already bookmarked
+        const existing = await db.query(
+            "SELECT id FROM bookmarks WHERE user_id = $1 AND post_id = $2",
+            [userId, postId]
+        );
+
+        if (existing.rows.length > 0) {
+            // Remove bookmark
+            await db.query("DELETE FROM bookmarks WHERE id = $1", [existing.rows[0].id]);
+            return res.json({ success: true, bookmarked: false });
+        } else {
+            // Add bookmark
+            await db.query(
+                "INSERT INTO bookmarks (user_id, post_id) VALUES ($1, $2)",
+                [userId, postId]
+            );
+            return res.json({ success: true, bookmarked: true });
+        }
+    } catch (err) {
+        console.error("BOOKMARK ERROR:", err);
+        res.status(500).json({ success: false });
+    }
+});
+
 
 app.post("/event/:id/delete", isAuth, async (req, res) => {
     const postId = req.params.id;
@@ -784,29 +813,23 @@ app.post("/event/:id/delete", isAuth, async (req, res) => {
 });
 
 app.delete("/event/:postId/comment/:commentId", isAuth, async (req, res) => {
-    const { commentId } = req.params;
-    const userId = req.user.id;
-
     try {
-        // Verify ownership
-        const commentCheck = await db.query(
-            "SELECT user_id FROM comments WHERE id = $1", 
-            [commentId]
+        const { commentId } = req.params;
+        const userId = req.user.id;
+
+        // Delete only if the user owns the comment or is an admin
+        const result = await db.query(
+            "DELETE FROM comments WHERE id = $1 AND (user_id = $2 OR (SELECT role FROM users WHERE id = $2) = 'admin') RETURNING *",
+            [commentId, userId]
         );
 
-        if (commentCheck.rows.length === 0) {
-            return res.json({ success: false, message: "Echo already gone." });
+        if (result.rows.length > 0) {
+            res.json({ success: true });
+        } else {
+            res.status(403).json({ success: false, message: "Unauthorized" });
         }
-
-        if (commentCheck.rows[0].user_id !== userId && req.user.role !== 'admin') {
-            return res.status(403).json({ success: false, message: "Unauthorized." });
-        }
-
-        await db.query("DELETE FROM comments WHERE id = $1", [commentId]);
-        
-        res.json({ success: true });
     } catch (err) {
-        console.error("DELETE COMMENT ERROR:", err);
+        console.error(err);
         res.status(500).json({ success: false });
     }
 });

@@ -193,7 +193,7 @@
                                     <button type="button" onclick="sendVibe(this, '<%= p.id %>')" 
                                         class="vibe-btn flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all <%= p.liked_by_me ? 'text-red-500' : 'text-slate-500 hover:text-red-400' %>">
                                         <i class="<%= p.liked_by_me ? 'fas' : 'far' %> fa-heart text-lg"></i> 
-                                        <span class="vibe-count"><%= p.likes_count || 0 %></span>
+                                        <span class="vibe-count"><%= p.slikes_count || 0 %></span>
                                     </button>
                                     
                                     <button onclick="toggleEchoes('<%= p.id %>')" class="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-blue-400">
@@ -322,7 +322,7 @@
                 const response = await fetch(`/event/${postId}/like`, { method: 'POST' });
                 const data = await response.json();
                 if (data.success) {
-                    btn.querySelector('.vibe-count').innerText = data.newCount;
+                    btn.querySelector('.vibe-count').innerText = data.likesCount;
                     btn.classList.toggle('text-red-500', data.isLiked);
                     btn.classList.toggle('text-slate-500', !data.isLiked);
                     btn.querySelector('i').className = data.isLiked ? 'fas fa-heart text-lg' : 'far fa-heart text-lg';
