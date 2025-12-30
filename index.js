@@ -479,6 +479,7 @@ app.get("/feed", checkVerified, async (req, res) => {
   const userId = req.user.id;
 
   try {
+    // 1. Fetch Trending Posts (Top 5 by Likes)
     const trending = await db.query(`
       SELECT p.id, p.content, 
       (SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count
@@ -487,14 +488,28 @@ app.get("/feed", checkVerified, async (req, res) => {
       ORDER BY likes_count DESC LIMIT 5
     `);
 
+    // 2. Fetch Suggested Villagers (Excluding current Kin/Friends)
+    // Uses sender_id and receiver_id logic
     let villagerParams = [userId];
-    let villagerSearchQuery = `SELECT id, email FROM users WHERE id != $1`;
+    let villagerQuery = `
+      SELECT id, email FROM users 
+      WHERE id != $1 
+      AND id NOT IN (
+          SELECT receiver_id FROM friendships WHERE sender_id = $1
+          UNION
+          SELECT sender_id FROM friendships WHERE receiver_id = $1
+      )
+    `;
+    
     if (search) {
-      villagerSearchQuery += ` AND email ILIKE $2`;
+      villagerQuery += ` AND email ILIKE $2`;
       villagerParams.push(`%${search}%`);
     }
-    const suggestedUsers = await db.query(villagerSearchQuery + ` LIMIT 10`, villagerParams);
+    
+    const suggestedUsers = await db.query(villagerQuery + ` LIMIT 10`, villagerParams);
 
+    // 3. Fetch Posts with Likes and Comments
+    // Note: c.reply_text is used to match your DB column
     let params = [userId];
     let postsQuery = `
       SELECT p.*, u.email AS author_email, u.is_verified,
@@ -504,10 +519,10 @@ app.get("/feed", checkVerified, async (req, res) => {
           'id', c.id,
           'user_id', c.user_id,
           'username', split_part(cu.email, '@', 1), 
-          'comment_text', c.comment_text  -- <--- FIXED: Changed from reply_text to comment_text
+          'comment_text', c.reply_text 
       )) FROM comments c 
-         JOIN users cu ON c.user_id = cu.id 
-         WHERE c.post_id = p.id) as comments_list
+          JOIN users cu ON c.user_id = cu.id 
+          WHERE c.post_id = p.id) as comments_list
       FROM forum_posts p 
       JOIN users u ON p.author_id = u.id 
       WHERE p.is_deleted = false
@@ -521,6 +536,7 @@ app.get("/feed", checkVerified, async (req, res) => {
     postsQuery += ` ORDER BY p.created_at DESC`;
     const posts = await db.query(postsQuery, params);
 
+    // 4. Render the Feed
     res.render("feed", {
       posts: posts.rows,
       trending: trending.rows,
@@ -532,7 +548,7 @@ app.get("/feed", checkVerified, async (req, res) => {
 
   } catch (err) {
     console.error("FEED ERROR:", err);
-    res.status(500).send("Village Square Error");
+    res.status(500).send("Village Square Error: Check Server Console");
   }
 });
 
@@ -1011,34 +1027,21 @@ app.delete("/api/chat/clear/:friendId", isAuth, async (req, res) => {
 // 1. CONNECT / REQUEST KINSHIP
 app.post("/friends/request/:id", isAuth, async (req, res) => {
     const targetUserId = req.params.id;
-    const senderId = req.user.id;
-
-    if (targetUserId == senderId) return res.redirect("/discover");
+    const myId = req.user.id;
 
     try {
-        // Check if request already exists
-        const existing = await db.query(
-            "SELECT * FROM friendships WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)",
-            [senderId, targetUserId]
+        // Change user_id -> sender_id and friend_id -> receiver_id
+        await db.query(
+            `INSERT INTO friendships (sender_id, receiver_id, status) 
+             VALUES ($1, $2, 'pending') 
+             ON CONFLICT DO NOTHING`, 
+            [myId, targetUserId]
         );
-
-        if (existing.rows.length === 0) {
-            await db.query(
-                "INSERT INTO friendships (user_id, friend_id, status) VALUES ($1, $2, 'pending')",
-                [senderId, targetUserId]
-            );
-            
-            // Optional: Create a notification for the receiver
-            await db.query(
-                "INSERT INTO notifications (user_id, sender_id, message) VALUES ($1, $2, $3)",
-                [targetUserId, senderId, "Someone wants to start a kinship with you!"]
-            );
-        }
 
         res.redirect("/discover");
     } catch (err) {
         console.error(err);
-        res.status(500).send("The messenger got lost.");
+        res.status(500).send("Error sending request");
     }
 });
 
