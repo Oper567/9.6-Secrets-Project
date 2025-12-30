@@ -15,7 +15,7 @@ import { createClient } from "@supabase/supabase-js";
 import nodemailer from "nodemailer";
 import { Resend } from "resend";
 import 'dotenv/config';
-import  cloudinary from 'cloudinary';
+import { v2 as cloudinary } from 'cloudinary';
 import multer from 'multer';
 import pkg from 'multer-storage-cloudinary';
 
@@ -45,22 +45,36 @@ cloudinary.config({
 });
 
 // 3. Setup Storage (THE FIX IS HERE)
-// Ensure this matches your imports/requires
 const storage = new CloudinaryStorage({
-  cloudinary: cloudinary, 
+  cloudinary: { v2: cloudinary }, // Must be wrapped in an object for this library version
   params: {
     folder: 'village_square_media',
-    resource_type: 'auto', // AUTO is critical for video support
-    allowed_formats: ['jpg', 'png', 'jpeg', 'gif', 'mp4', 'webp', 'mov'],
+    resource_type: 'auto',
+    allowed_formats: ['jpg', 'png', 'jpeg', 'gif', 'mp4', 'webp'],
   },
 });
 
 const upload = multer({ 
   storage: storage,
-  limits: { fileSize: 50 * 1024 * 1024 } // Allow up to 50MB for videos
+  limits: { fileSize: 50 * 1024 * 1024 } 
 });
+/* 2. Second, define the specific folder path */
+const uploadDir = path.join(__dirname, 'public/uploads');
+
+/* 3. Now it is safe to check if it exists */
+if (!fs.existsSync(uploadDir)){
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Cloudinary Config
 
 
+db.on("error", (err) => console.error("Unexpected error on idle client", err));
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY
+);
 // ... after supabase.storage.from('apugo_village').upload(...)
 // 1. Upload the file
 
@@ -490,7 +504,7 @@ app.get("/feed", checkVerified, async (req, res) => {
           'id', c.id,
           'user_id', c.user_id,
           'username', split_part(cu.email, '@', 1), 
-          'comment_text', c.comment_text  -- <--- FIXED: Changed from reply_text to comment_text
+          'comment_text', c.reply_text  -- Renaming DB column to match EJS variable
       )) FROM comments c 
          JOIN users cu ON c.user_id = cu.id 
          WHERE c.post_id = p.id) as comments_list
@@ -558,69 +572,74 @@ function appendPostToFeed(p) {
 
 // ADD THIS: Discover Route (Random media gallery)
 app.get("/discover", isAuth, async (req, res) => {
-    try {
-        const userId = req.user.id;
-        
-        // This query finds users who are NOT you and NOT already your "Kin"
-        const villagersRes = await db.query(`
-            SELECT id, email FROM users 
-            WHERE id != $1 
-            AND id NOT IN (
-                SELECT friend_id FROM friendships WHERE user_id = $1
-                UNION
-                SELECT user_id FROM friendships WHERE friend_id = $1
-            )
-        `, [userId]);
+    const searchQuery = req.query.search || "";
+    const userId = req.user.id;
 
-        res.render("discover.ejs", { villagers: villagersRes.rows });
+    try {
+        let params = [];
+        let sql = `
+            SELECT p.*, u.email AS author, u.id AS created_by,
+            (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes,
+            (SELECT COUNT(*) FROM forum_replies WHERE post_id = p.id) AS comments_count
+            FROM forum_posts p
+            JOIN users u ON p.author_id = u.id
+            WHERE p.is_deleted = false
+        `;
+
+        if (searchQuery) {
+            sql += ` AND (p.content ILIKE $1 OR u.email ILIKE $1)`;
+            params.push(`%${searchQuery}%`);
+        }
+
+        // Randomize for "Discover" feel, or order by most likes/views
+        sql += ` ORDER BY RANDOM() LIMIT 20`;
+
+        const result = await db.query(sql, params);
+
+        res.render("discover", {
+            posts: result.rows,
+            user: req.user,
+            search: searchQuery
+        });
     } catch (err) {
-        console.error("Villagers Load Error:", err);
-        res.status(500).send("The village map is torn.");
+        console.error("Discover Error:", err);
+        res.status(500).send("The wilds are too misty to explore right now.");
     }
 });
 
 // ADD THIS: Single Post Detail Route
 
 
-app.post("/event/create", upload.single("localMedia"), async (req, res) => {
-    console.log("--- New Post Attempt ---");
-    
+// Ensure this is in your main file or the router linked to '/event'
+// POST: Toggle Like (Vibe)
+
+// POST: Create a new Whisper (Forum Post)
+// POST: Create a new post (Whisper)
+app.post("/event/create", isAuth, upload.single('localMedia'), async (req, res) => {
     try {
         const { description } = req.body;
         const userId = req.user.id;
-
-        // 1. Check if a file was actually uploaded to Cloudinary
-        let imageUrl = null;
-        let mediaType = 'text';
-
-        if (req.file) {
-            console.log("File uploaded to Cloudinary:", req.file.path);
-            imageUrl = req.file.path; // The full HTTPS URL
-            mediaType = req.file.mimetype.startsWith('video') ? 'video' : 'image';
-        } else {
-            console.log("No media attached, posting text only.");
+        
+        // mediaUrl will be the Cloudinary link (string)
+        const mediaUrl = req.file ? req.file.path : null;
+        
+        // Detect if it's a video or image for the feed player
+        let mediaType = 'image'; 
+        if (req.file && req.file.mimetype.startsWith('video')) {
+            mediaType = 'video';
         }
 
-        // 2. Insert into Database
-        // Ensure your table has: content, author_id, image_url, media_type
         await db.query(
-            "INSERT INTO forum_posts (content, author_id, image_url, media_type) VALUES ($1, $2, $3, $4)",
-            [description || "", userId, imageUrl, mediaType]
+            "INSERT INTO forum_posts (content, image_url, media_type, author_id) VALUES ($1, $2, $3, $4)",
+            [description, mediaUrl, mediaType, userId]
         );
 
-        console.log("Post saved successfully to DB.");
         res.redirect("/feed");
-
     } catch (err) {
-        console.error("CRITICAL ERROR IN CREATE POST:", err.message);
-        
-        // This prevents the infinite loading if an error occurs
-        if (!res.headersSent) {
-            res.status(500).send("The village square is closed for repairs. (Upload Error)");
-        }
+        console.error("UPLOAD ERROR:", err);
+        res.status(500).send("The path is blocked. We couldn't publish your whisper.");
     }
 });
-
 app.post("/event/:id/report", checkVerified, async (req, res) => {
   const postId = req.params.id;
   const reporterId = req.user.id;
@@ -640,84 +659,6 @@ app.post("/event/:id/report", checkVerified, async (req, res) => {
     console.error("REPORT ERROR:", err);
     res.json({ success: false });
   }
-});
-
-app.post("/event/:id/like", checkVerified, async (req, res) => {
-  const postId = req.params.id;
-  const userId = req.user.id;
-
-  try {
-    // 1. Check if the user has already liked this post
-    const likeCheck = await db.query(
-      "SELECT id FROM likes WHERE post_id = $1 AND user_id = $2",
-      [postId, userId]
-    );
-
-    let isLiked = false;
-
-    if (likeCheck.rows.length > 0) {
-      // 2. If it exists, UNLIKE (Delete the row)
-      await db.query("DELETE FROM likes WHERE id = $1", [likeCheck.rows[0].id]);
-      isLiked = false;
-    } else {
-      // 3. If it doesn't exist, LIKE (Insert the row)
-      await db.query("INSERT INTO likes (post_id, user_id) VALUES ($1, $2)", [
-        postId,
-        userId,
-      ]);
-      isLiked = true;
-    }
-
-    // 4. Get the updated count to send back to the frontend
-    const countRes = await db.query(
-      "SELECT COUNT(*) FROM likes WHERE post_id = $1",
-      [postId]
-    );
-    
-    const likesCount = parseInt(countRes.rows[0].count);
-
-    // 5. Send JSON back so the frontend can update the heart color and number
-    res.json({
-      success: true,
-      isLiked: isLiked,
-      likesCount: likesCount
-    });
-
-  } catch (err) {
-    console.error("LIKE ERROR:", err);
-    res.status(500).json({ success: false, message: "Server error" });
-  }
-});
-// Add this route to handle the Echo (Comment) button
-app.post("/event/:id/comment", checkVerified, async (req, res) => {
-    const postId = req.params.id;
-    const { comment } = req.body; // The script sends { comment: commentText }
-    const userId = req.user.id;
-
-    if (!comment || comment.trim() === "") {
-        return res.status(400).json({ success: false, message: "Empty comment" });
-    }
-
-    try {
-        // We use 'comment_text' because that is what we named the DB column
-        const result = await db.query(
-            "INSERT INTO comments (post_id, user_id, comment_text) VALUES ($1, $2, $3) RETURNING id",
-            [postId, userId, comment]
-        );
-
-        // We get the username to send back to the frontend for the live update
-        const userResult = await db.query("SELECT email FROM users WHERE id = $1", [userId]);
-        const username = userResult.rows[0].email.split('@')[0];
-
-        res.json({ 
-            success: true, 
-            commentId: result.rows[0].id,
-            username: username 
-        });
-    } catch (err) {
-        console.error("COMMENT ROUTE ERROR:", err);
-        res.status(500).json({ success: false });
-    }
 });
 
 
