@@ -707,6 +707,29 @@ app.post("/event/:id/like", checkVerified, async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+app.post("/event/:id/comment", checkVerified, async (req, res) => {
+    const postId = req.params.id;
+    const { comment } = req.body; // This comes from JSON.stringify
+    const userId = req.user.id;
+
+    if (!comment) return res.status(400).json({ success: false });
+
+    try {
+        // We use 'comment_text' because that is the column name in your DB
+        const result = await db.query(
+            "INSERT INTO comments (post_id, user_id, comment_text) VALUES ($1, $2, $3) RETURNING id",
+            [postId, userId, comment]
+        );
+
+        res.json({ 
+            success: true, 
+            commentId: result.rows[0].id 
+        });
+    } catch (err) {
+        console.error("Database Error:", err);
+        res.status(500).json({ success: false });
+    }
+});
 
 
 
