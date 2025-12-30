@@ -1034,23 +1034,31 @@ app.delete("/api/chat/clear/:friendId", isAuth, async (req, res) => {
 
 /* ---------------- FRIENDSHIP SYSTEM ---------------- */
 // 1. CONNECT / REQUEST KINSHIP
-app.post("/friends/request/:id", isAuth, async (req, res) => {
-    const targetUserId = req.params.id;
-    const myId = req.user.id;
+app.post("/friends/request/:receiverId", isAuth, async (req, res) => {
+    const senderId = req.user.id;
+    const receiverId = req.params.receiverId;
 
     try {
-        // Change user_id -> sender_id and friend_id -> receiver_id
-        await db.query(
-            `INSERT INTO friendships (sender_id, receiver_id, status) 
-             VALUES ($1, $2, 'pending') 
-             ON CONFLICT DO NOTHING`, 
-            [myId, targetUserId]
+        // Prevent sending a request to yourself
+        if (senderId == receiverId) return res.redirect("/villagers");
+
+        // Check if a request already exists
+        const check = await db.query(
+            "SELECT * FROM friendships WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)",
+            [senderId, receiverId]
         );
 
-        res.redirect("/discover");
+        if (check.rows.length === 0) {
+            await db.query(
+                "INSERT INTO friendships (sender_id, receiver_id, status) VALUES ($1, $2, 'pending')",
+                [senderId, receiverId]
+            );
+        }
+        
+        res.redirect("/villagers"); // Stay on the page
     } catch (err) {
         console.error(err);
-        res.status(500).send("Error sending request");
+        res.status(500).send("Village Square Error");
     }
 });
 
@@ -1453,36 +1461,32 @@ app.post("/forum/post/:id/like", async (req, res) => {
         res.status(500).json({ error: "Internal server error" });
     }
 });
+app.get("/messages", isAuth, async (req, res) => {
+  try {
+    const friends = await db.query(
+      `
+        SELECT 
+        u.id, u.email, u.profile_pic,
+        (u.last_active > NOW() - INTERVAL '5 minutes') as is_online,
+        f.status -- Added this so you can see if it's pending in EJS
+        FROM users u
+        JOIN friendships f ON (f.sender_id = u.id OR f.receiver_id = u.id)
+        WHERE (f.sender_id = $1 OR f.receiver_id = $1) 
+        AND u.id != $1 
+        AND f.status IN ('accepted', 'pending')`, // Changed this line
+      [req.user.id]
+    );
 
-app.get("/villagers", checkVerified, async (req, res) => {
-    const search = req.query.search || "";
-    try {
-        const query = `
-            SELECT u.id, u.email, u.profile_pic, u.is_verified,
-            (SELECT status FROM friendships 
-             WHERE (sender_id = $1 AND receiver_id = u.id) 
-                OR (sender_id = u.id AND receiver_id = $1) 
-             LIMIT 1) as friend_status
-            FROM users u 
-            WHERE u.id != $1 
-            ${search ? "AND u.email ILIKE $2" : ""}
-            ORDER BY u.is_verified DESC, u.email ASC`;
-
-        const params = search ? [req.user.id, `%${search}%`] : [req.user.id];
-        const result = await db.query(query, params);
-
-        res.render("villagers", {
-            villagers: result.rows,
-            user: req.user,
-            search: search,
-            unreadCount: res.locals.unreadCount || 0 // Good to keep this for the badge
-        });
-    } catch (err) {
-        console.error("Villagers Load Error:", err);
-        res.redirect("/feed");
-    }
-    // DELETE THE NOTIFICATION STUFF FROM HERE!
+    res.render("messages", {
+      friends: friends.rows,
+      user: req.user,
+    });
+  } catch (err) {
+    console.error(err);
+    res.redirect("/feed");
+  }
 });
+
 
 app.get("/admin", isAdmin, async (req, res) => {
   const users = await db.query(
