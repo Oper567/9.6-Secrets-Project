@@ -665,6 +665,7 @@ app.get("/feed", checkVerified, async (req, res) => {
   const userId = req.user.id;
 
   try {
+    // 1. Trending Sidebar
     const trending = await db.query(`
       SELECT p.id, p.content, 
       (SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count
@@ -673,6 +674,7 @@ app.get("/feed", checkVerified, async (req, res) => {
       ORDER BY likes_count DESC LIMIT 5
     `);
 
+    // 2. Suggested Users
     let villagerParams = [userId];
     let villagerSearchQuery = `SELECT id, email FROM users WHERE id != $1`;
     if (search) {
@@ -681,6 +683,7 @@ app.get("/feed", checkVerified, async (req, res) => {
     }
     const suggestedUsers = await db.query(villagerSearchQuery + ` LIMIT 10`, villagerParams);
 
+    // 3. Main Posts Query - UPDATED TO MATCH NEW TABLE STRUCTURE
     let params = [userId];
     let postsQuery = `
       SELECT p.*, u.email AS author_email, u.is_verified,
@@ -690,7 +693,7 @@ app.get("/feed", checkVerified, async (req, res) => {
           'id', c.id,
           'user_id', c.user_id,
           'username', split_part(cu.email, '@', 1), 
-          'comment_text', c.reply_text  -- Renaming DB column to match EJS variable
+          'comment_text', c.comment_text  -- CHANGED FROM reply_text TO comment_text
       )) FROM comments c 
          JOIN users cu ON c.user_id = cu.id 
          WHERE c.post_id = p.id) as comments_list
@@ -717,7 +720,7 @@ app.get("/feed", checkVerified, async (req, res) => {
     });
 
   } catch (err) {
-    console.error("FEED ERROR:", err);
+    console.error("FEED ERROR:", err); // This will now show you if any other columns are missing
     res.status(500).send("Village Square Error");
   }
 });
