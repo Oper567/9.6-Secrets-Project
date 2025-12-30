@@ -15,7 +15,7 @@ import { createClient } from "@supabase/supabase-js";
 import nodemailer from "nodemailer";
 import { Resend } from "resend";
 import 'dotenv/config';
-import { v2 as cloudinary } from 'cloudinary';
+import  cloudinary from 'cloudinary';
 import multer from 'multer';
 import pkg from 'multer-storage-cloudinary';
 
@@ -615,31 +615,33 @@ app.get("/discover", isAuth, async (req, res) => {
 
 // POST: Create a new Whisper (Forum Post)
 // POST: Create a new post (Whisper)
-app.post("/event/create", isAuth, upload.single('localMedia'), async (req, res) => {
-    try {
-        const { description } = req.body;
-        const userId = req.user.id;
-        
-        // mediaUrl will be the Cloudinary link (string)
-        const mediaUrl = req.file ? req.file.path : null;
-        
-        // Detect if it's a video or image for the feed player
-        let mediaType = 'image'; 
-        if (req.file && req.file.mimetype.startsWith('video')) {
-            mediaType = 'video';
-        }
+app.post("/event/create", upload.single("localMedia"), async (req, res) => {
+  const { description } = req.body;
+  const userId = req.user.id;
 
-        await db.query(
-            "INSERT INTO forum_posts (content, image_url, media_type, author_id) VALUES ($1, $2, $3, $4)",
-            [description, mediaUrl, mediaType, userId]
-        );
-
-        res.redirect("/feed");
-    } catch (err) {
-        console.error("UPLOAD ERROR:", err);
-        res.status(500).send("The path is blocked. We couldn't publish your whisper.");
+  try {
+    // 1. Get the URL from Cloudinary
+    const imageUrl = req.file ? req.file.path : null; 
+    
+    // 2. Determine if it's a video or image
+    let mediaType = 'image';
+    if (req.file && req.file.mimetype.startsWith('video')) {
+      mediaType = 'video';
     }
+
+    // 3. Save to Database
+    await db.query(
+      "INSERT INTO forum_posts (content, author_id, image_url, media_type) VALUES ($1, $2, $3, $4)",
+      [description, userId, imageUrl, mediaType]
+    );
+
+    res.redirect("/feed");
+  } catch (err) {
+    console.error("UPLOAD ERROR:", err);
+    res.status(500).send("The square is currently full. Try again later.");
+  }
 });
+
 app.post("/event/:id/report", checkVerified, async (req, res) => {
   const postId = req.params.id;
   const reporterId = req.user.id;
