@@ -1017,14 +1017,13 @@ app.delete("/api/chat/clear/:friendId", isAuth, async (req, res) => {
 
 /* ---------------- FRIENDSHIP SYSTEM ---------------- */
 // 1. CONNECT / REQUEST KINSHIP
+// 1. SEND REQUEST (Fixed to match table)
 app.post("/friends/request/:id", isAuth, async (req, res) => {
     const targetUserId = req.params.id;
     const senderId = req.user.id;
-
     if (targetUserId == senderId) return res.redirect("/discover");
 
     try {
-        // Check if request already exists
         const existing = await db.query(
             "SELECT * FROM friendships WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)",
             [senderId, targetUserId]
@@ -1036,28 +1035,25 @@ app.post("/friends/request/:id", isAuth, async (req, res) => {
                 [senderId, targetUserId]
             );
             
-            // Optional: Create a notification for the receiver
             await db.query(
-                "INSERT INTO notifications (user_id, sender_id, message) VALUES ($1, $2, $3)",
-                [targetUserId, senderId, "Someone wants to start a kinship with you!"]
+                "INSERT INTO notifications (user_id, sender_id, message, type) VALUES ($1, $2, $3, $4)",
+                [targetUserId, senderId, "Someone wants to start a kinship!", "friend_request"]
             );
         }
-
-        res.redirect("/discover");
+        res.redirect("/feed");
     } catch (err) {
         console.error(err);
         res.status(500).send("The messenger got lost.");
     }
 });
 
-// 2. SEVER KINSHIP (UNFRIEND)
+// 2. SEVER KINSHIP (FIXED: Changed sender_id/receiver_id to user_id/friend_id)
 app.post("/friends/unfriend/:id", isAuth, async (req, res) => {
   const targetId = req.params.id;
   const userId = req.user.id;
   try {
-    // Matches the sender_id/receiver_id naming convention
     await db.query(
-      "DELETE FROM friendships WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)",
+      "DELETE FROM friendships WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)",
       [userId, targetId]
     );
     res.redirect(req.get("Referrer") || "/feed");
@@ -1066,23 +1062,20 @@ app.post("/friends/unfriend/:id", isAuth, async (req, res) => {
     res.status(500).send("Failed to sever kinship.");
   }
 });
+
+// 3. ACCEPT KINSHIP (Matches table)
 app.post("/friends/accept/:senderId", isAuth, async (req, res) => {
     const senderId = req.params.senderId;
     const userId = req.user.id;
-
     try {
-        // Update friendship status
         await db.query(
             "UPDATE friendships SET status = 'accepted' WHERE user_id = $1 AND friend_id = $2",
             [senderId, userId]
         );
-
-        // Mark notification as resolved so buttons disappear
         await db.query(
             "UPDATE notifications SET is_resolved = true WHERE user_id = $1 AND sender_id = $2 AND type = 'friend_request'",
             [userId, senderId]
         );
-
         res.redirect("/notifications");
     } catch (err) {
         res.status(500).send("Could not seal the kinship.");
