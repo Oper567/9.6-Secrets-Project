@@ -474,7 +474,7 @@ app.get("/feed", checkVerified, async (req, res) => {
   const userId = req.user.id;
 
   try {
-    // 1. Fetch Trending Posts (Top 5 by Likes)
+    // 1. Fetch Trending Posts
     const trending = await db.query(`
       SELECT p.id, p.content, 
       (SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count
@@ -483,7 +483,7 @@ app.get("/feed", checkVerified, async (req, res) => {
       ORDER BY likes_count DESC LIMIT 5
     `);
 
-    // 2. Fetch Suggested Villagers (Including profile_pic from Supabase)
+    // 2. Fetch Suggested Villagers
     let villagerParams = [userId];
     let villagerQuery = `
       SELECT id, email, profile_pic FROM users 
@@ -502,18 +502,18 @@ app.get("/feed", checkVerified, async (req, res) => {
     
     const suggestedUsers = await db.query(villagerQuery + ` LIMIT 10`, villagerParams);
 
-    // 3. Main Feed Query (Supporting Video & Persisted Likes)
+    // 3. Main Feed Query (Matched to EJS variable names)
     let params = [userId];
     let postsQuery = `
       SELECT p.*, 
              u.email AS author_email, 
              u.profile_pic AS author_pic, 
              u.is_verified,
-             -- Count total likes
-             (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes_count,
-             -- Check if logged in user liked it (Standardized naming)
-             EXISTS (SELECT 1 FROM likes WHERE post_id = p.id AND user_id = $1) AS is_liked,
-             -- Aggregate comments into a JSON list
+             -- Change alias to match EJS: slikes_count
+             (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS slikes_count,
+             -- Change alias to match EJS: liked_by_me
+             EXISTS (SELECT 1 FROM likes WHERE post_id = p.id AND user_id = $1) AS liked_by_me,
+             -- Aggregate comments
              (SELECT JSON_AGG(json_build_object(
                  'id', c.id,
                  'user_id', c.user_id,
@@ -535,7 +535,6 @@ app.get("/feed", checkVerified, async (req, res) => {
     postsQuery += ` ORDER BY p.created_at DESC`;
     const posts = await db.query(postsQuery, params);
 
-    // 4. Render the Feed
     res.render("feed", {
       posts: posts.rows,
       trending: trending.rows,
@@ -703,7 +702,8 @@ app.post("/event/:id/like", checkVerified, async (req, res) => {
   const userId = req.user.id;
 
   try {
-    // 1. Check if the user has already liked this post
+    // 1. Atomic Check & Toggle
+    // We look for the like; if it exists, we delete it, otherwise we add it.
     const likeCheck = await db.query(
       "SELECT id FROM likes WHERE post_id = $1 AND user_id = $2",
       [postId, userId]
@@ -712,11 +712,11 @@ app.post("/event/:id/like", checkVerified, async (req, res) => {
     let isLiked = false;
 
     if (likeCheck.rows.length > 0) {
-      // 2. If it exists, UNLIKE (Delete the row)
+      // UNLIKE
       await db.query("DELETE FROM likes WHERE id = $1", [likeCheck.rows[0].id]);
       isLiked = false;
     } else {
-      // 3. If it doesn't exist, LIKE (Insert the row)
+      // LIKE
       await db.query("INSERT INTO likes (post_id, user_id) VALUES ($1, $2)", [
         postId,
         userId,
@@ -724,15 +724,17 @@ app.post("/event/:id/like", checkVerified, async (req, res) => {
       isLiked = true;
     }
 
-    // 4. Get the updated count to send back to the frontend
+    // 2. Get the updated count
     const countRes = await db.query(
       "SELECT COUNT(*) FROM likes WHERE post_id = $1",
       [postId]
     );
     
+    // Ensure we send back a clean integer
     const likesCount = parseInt(countRes.rows[0].count);
 
-    // 5. Send JSON back so the frontend can update the heart color and number
+    // 3. Send standardized JSON back
+    // This matches the 'data.isLiked' and 'data.likesCount' your sendVibe() JS function uses
     res.json({
       success: true,
       isLiked: isLiked,
@@ -741,7 +743,8 @@ app.post("/event/:id/like", checkVerified, async (req, res) => {
 
   } catch (err) {
     console.error("LIKE ERROR:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    // Return success: false so the frontend can handle the error without breaking
+    res.status(500).json({ success: false, message: "The vibe could not be sent." });
   }
 });
 app.post("/event/:postId/comment", isAuth, async (req, res) => {
@@ -904,15 +907,21 @@ app.delete("/event/:postId/comment/:commentId", isAuth, async (req, res) => {
 // Ensure the route matches the form action (/forum/create)
 app.post("/forum/create", isAuth, upload.single('media'), async (req, res) => {
     try {
-        const { content } = req.body;
+        // 1. Extract the new fields (title, category, price) from the form
+        const { title, content, category, price } = req.body;
         const authorId = req.user.id;
         
         let mediaUrl = null;
-        let mediaType = 'text'; // Default type
+        let mediaType = 'text';
 
-        if (!content && !req.file) {
-            return res.status(400).send("The scroll cannot be empty.");
+        // Validation: Ensure we have a title and content
+        if (!title || !content) {
+            return res.status(400).send("The decree must have a title and a message.");
         }
+
+        // 2. Handle the Price logic for Marketplace
+        // If it's marketplace, convert price to number; otherwise, set to null
+        const finalPrice = category === 'marketplace' && price ? parseFloat(price) : null;
 
         if (req.file) {
             const file = req.file;
@@ -920,10 +929,9 @@ app.post("/forum/create", isAuth, upload.single('media'), async (req, res) => {
             const fileName = `${authorId}-${Date.now()}.${fileExt}`;
             const filePath = `forum/${fileName}`;
 
-            // Detect type: image/jpeg -> 'image', video/mp4 -> 'video'
             mediaType = file.mimetype.startsWith('video') ? 'video' : 'image';
 
-            // 1. Upload Buffer to Supabase
+            // Upload Buffer to Supabase
             const { data, error } = await supabase.storage
                 .from('apugo_village')
                 .upload(filePath, file.buffer, {
@@ -933,7 +941,7 @@ app.post("/forum/create", isAuth, upload.single('media'), async (req, res) => {
 
             if (error) throw error;
 
-            // 2. Get the Public URL
+            // Get the Public URL
             const { data: { publicUrl } } = supabase.storage
                 .from('apugo_village')
                 .getPublicUrl(filePath);
@@ -941,13 +949,16 @@ app.post("/forum/create", isAuth, upload.single('media'), async (req, res) => {
             mediaUrl = publicUrl;
         }
 
-        // 3. Insert into DB (Added media_type column)
+        // 3. Updated SQL Query to include title, category, and price
         await db.query(
-            "INSERT INTO forum_posts (author_id, content, media_url, media_type, is_deleted) VALUES ($1, $2, $3, $4, false)",
-            [authorId, content, mediaUrl, mediaType]
+            `INSERT INTO forum_posts 
+            (author_id, title, content, category, price, media_url, media_type, is_deleted) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, false)`,
+            [authorId, title, content, category, finalPrice, mediaUrl, mediaType]
         );
 
-        res.redirect("/feed");
+        // Redirect back to forum so they see their new thread
+        res.redirect("/forum");
     } catch (err) {
         console.error("POST ERROR:", err);
         res.status(500).send("The Village Scroll could not be sealed: " + err.message);
