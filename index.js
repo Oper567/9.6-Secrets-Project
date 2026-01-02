@@ -1600,4 +1600,4 @@ app.get("/admin", isAdmin, async (req, res) => {
 httpServer.listen(3000, () => {
     console.log('Server and Sockets active on port 3000');
 });
-app.listen(port, () => console.log(`🚀 Village Square live at port ${port}`));
+
