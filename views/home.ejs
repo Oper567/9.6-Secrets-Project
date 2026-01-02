@@ -2,21 +2,16 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Apugo | Village Square</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Apugo | The Village Square</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+    
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
-        
-        :root {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-        }
-
-        body { 
-            background-color: #020617; 
-            -webkit-tap-highlight-color: transparent;
-        }
+        :root { font-family: 'Plus Jakarta Sans', sans-serif; }
+        body { background-color: #020617; -webkit-tap-highlight-color: transparent; }
 
         .glass-card {
             background: rgba(15, 23, 42, 0.4);
@@ -25,11 +20,10 @@
             border: 1px solid rgba(255, 255, 255, 0.08);
             transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
-
         .glass-card:hover {
             border-color: rgba(96, 165, 250, 0.4);
-            background: rgba(15, 23, 42, 0.6);
             transform: translateY(-8px);
+            box-shadow: 0 20px 40px -20px rgba(59, 130, 246, 0.3);
         }
 
         .text-gradient {
@@ -38,26 +32,20 @@
             -webkit-text-fill-color: transparent;
         }
 
-        .shimmer {
+        .btn-shimmer {
             position: relative;
             overflow: hidden;
+            background: #2563eb;
+            transition: all 0.3s ease;
         }
-
-        .shimmer::after {
+        .btn-shimmer::after {
             content: '';
             position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: linear-gradient(
-                to bottom right,
-                rgba(255, 255, 255, 0) 0%,
-                rgba(255, 255, 255, 0.1) 50%,
-                rgba(255, 255, 255, 0) 100%
-            );
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(255,255,255,0.2), transparent);
             transform: rotate(45deg);
-            animation: shimmer 3s infinite linear;
+            animation: shimmer 3s infinite;
         }
 
         @keyframes shimmer {
@@ -65,25 +53,39 @@
             100% { transform: translate(100%, 100%) rotate(45deg); }
         }
 
-        /* Prevent content jump on mobile */
-        .min-h-screen { min-height: 100dvh; }
+        .blob {
+            position: absolute;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(37, 99, 235, 0.15) 0%, transparent 70%);
+            filter: blur(60px);
+            z-index: -1;
+            animation: move 20s infinite alternate;
+        }
+
+        @keyframes move {
+            from { transform: translate(-10%, -10%); }
+            to { transform: translate(20%, 20%); }
+        }
+
+        .law-card {
+            border-left: 2px solid rgba(59, 130, 246, 0.3);
+        }
     </style>
 </head>
 <body class="text-slate-200 overflow-x-hidden selection:bg-blue-500/30">
     
-    <div class="fixed inset-0 -z-10 overflow-hidden">
-        <div class="absolute top-[-15%] left-[-10%] w-[70%] h-[60%] bg-blue-600/15 rounded-full blur-[120px] animate-pulse"></div>
-        <div class="absolute bottom-[-15%] right-[-10%] w-[70%] h-[60%] bg-indigo-600/15 rounded-full blur-[120px] animate-pulse" style="animation-delay: 1.5s"></div>
-    </div>
+    <div class="blob top-0 left-0"></div>
+    <div class="blob bottom-0 right-0" style="animation-delay: -10s; background: radial-gradient(circle, rgba(168, 85, 247, 0.1) 0%, transparent 70%);"></div>
 
-    <nav class="sticky top-0 w-full z-[100] border-b border-white/5 bg-slate-950/50 backdrop-blur-md">
+    <nav class="sticky top-0 w-full z-[100] border-b border-white/5 bg-slate-950/60 backdrop-blur-xl">
         <div class="max-w-7xl mx-auto px-6 h-16 flex justify-between items-center">
             <div class="flex items-center gap-1">
                 <span class="text-xl font-extrabold italic tracking-tighter text-white">APUGO<span class="text-blue-500">.</span></span>
             </div>
             <div class="flex items-center gap-3">
                 <a href="/login" class="text-xs font-bold text-slate-400 hover:text-white px-3 py-2 transition">Login</a>
-                <a href="/register" class="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-500 active:scale-95 transition-all shadow-lg shadow-blue-500/20">
+                <a href="/register" class="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-500 active:scale-95 transition-all shadow-lg shadow-blue-500/25">
                     Join
                 </a>
             </div>
@@ -92,77 +94,122 @@
 
     <div class="relative min-h-screen flex flex-col items-center">
         
-        <main class="w-full max-w-5xl px-6 pt-12 md:pt-24 pb-16 text-center z-10">
-            <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-bold uppercase tracking-[0.15em] mb-8 animate__animated animate__fadeInDown">
+        <main class="w-full max-w-5xl px-6 pt-16 md:pt-32 pb-16 text-center z-10">
+            <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-black uppercase tracking-[0.2em] mb-10 animate__animated animate__fadeInDown">
                 <span class="relative flex h-2 w-2">
                     <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
                     <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
                 </span>
-                Village Pulse: Live Updates
+                Village Square is Open
             </div>
 
-            <h1 class="text-5xl md:text-8xl font-extrabold tracking-tighter text-white mb-6 animate__animated animate__fadeInUp leading-[1.1]">
+            <h1 class="text-5xl md:text-8xl font-extrabold tracking-tighter text-white mb-8 animate__animated animate__fadeInUp leading-[1.05]">
                 The heartbeat of <br>
                 <span class="text-gradient italic">Apugo Village.</span>
             </h1>
 
-            <p class="text-slate-400 text-base md:text-xl max-w-2xl mx-auto mb-10 animate__animated animate__fadeInUp animate__delay-1s leading-relaxed font-medium">
-                A private, high-speed digital sanctuary for our community. Share whispers, stay updated, and bridge the gap with your neighbors.
+            <p class="text-slate-400 text-base md:text-xl max-w-2xl mx-auto mb-12 animate__animated animate__fadeInUp animate__delay-1s leading-relaxed font-medium">
+                A private sanctuary for the modern neighbor. Post echoes, share whispers, and stay connected with the digital soul of our community.
             </p>
 
             <div class="flex flex-col sm:flex-row items-center justify-center gap-6 animate__animated animate__fadeInUp animate__delay-1s">
-                <a href="/register" class="shimmer w-full sm:w-auto bg-blue-600 px-10 py-4 rounded-2xl font-extrabold text-lg hover:bg-blue-500 active:scale-95 transition-all shadow-2xl shadow-blue-500/30">
+                <a href="/register" class="btn-shimmer w-full sm:w-auto px-12 py-5 rounded-2xl font-black text-lg uppercase tracking-widest shadow-2xl shadow-blue-500/40 hover:-translate-y-1 active:scale-95 text-center">
                     Enter the Square
                 </a>
                 
-                <div class="flex items-center gap-3 bg-white/5 border border-white/5 px-4 py-2 rounded-2xl">
-                    <div class="flex -space-x-2">
-                        <div class="w-8 h-8 rounded-full border-2 border-slate-950 bg-slate-800 flex items-center justify-center text-[10px] font-bold">JD</div>
-                        <div class="w-8 h-8 rounded-full border-2 border-slate-950 bg-blue-600 flex items-center justify-center text-[10px] font-bold">MK</div>
-                        <div class="w-8 h-8 rounded-full border-2 border-slate-950 bg-indigo-600 flex items-center justify-center text-[10px] font-bold">SA</div>
+                <div class="flex items-center gap-4 bg-white/5 border border-white/10 px-5 py-3 rounded-2xl backdrop-blur-md">
+                    <div class="flex -space-x-3">
+                        <div class="w-9 h-9 rounded-full border-2 border-slate-950 bg-slate-800 flex items-center justify-center text-[10px] font-bold">JD</div>
+                        <div class="w-9 h-9 rounded-full border-2 border-slate-950 bg-blue-600 flex items-center justify-center text-[10px] font-bold">MK</div>
+                        <div class="w-9 h-9 rounded-full border-2 border-slate-950 bg-indigo-600 flex items-center justify-center text-[10px] font-bold">SA</div>
+                        <div class="w-9 h-9 rounded-full border-2 border-slate-950 bg-slate-700 flex items-center justify-center text-[10px] font-bold">+</div>
                     </div>
-                    <span class="text-[11px] text-slate-400 font-bold uppercase tracking-tight">200+ Active Neighbors</span>
+                    <div class="text-left">
+                        <p class="text-[11px] text-white font-black uppercase tracking-tight leading-none">200+ Neighbors</p>
+                        <p class="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1">Live Online</p>
+                    </div>
                 </div>
             </div>
         </main>
 
-        <section class="w-full max-w-6xl grid grid-cols-1 md:grid-cols-3 gap-4 px-6 pb-24 animate__animated animate__fadeInUp animate__delay-1s">
-            <div class="glass-card p-8 rounded-[2rem] flex flex-col items-start">
-                <div class="w-12 h-12 bg-blue-500/20 rounded-2xl flex items-center justify-center text-2xl mb-6">📢</div>
-                <h3 class="text-lg font-bold text-white mb-2">Live News</h3>
-                <p class="text-slate-400 text-sm leading-relaxed font-medium">Instant announcements from village elders and event organizers, pinned to your feed.</p>
+        <section class="w-full max-w-6xl grid grid-cols-1 md:grid-cols-3 gap-6 px-6 pb-24">
+            <div class="glass-card p-10 rounded-[2.5rem] flex flex-col items-start group">
+                <div class="w-14 h-14 bg-blue-500/10 rounded-2xl flex items-center justify-center text-3xl mb-8 group-hover:scale-110 transition-transform">📢</div>
+                <h3 class="text-xl font-black text-white mb-3 uppercase tracking-tight">Live News</h3>
+                <p class="text-slate-400 text-sm leading-relaxed font-medium">Real-time announcements from village elders and event organizers, pinned to your feed.</p>
             </div>
-            
-            <div class="glass-card p-8 rounded-[2rem] flex flex-col items-start">
-                <div class="w-12 h-12 bg-indigo-500/20 rounded-2xl flex items-center justify-center text-2xl mb-6">🤝</div>
-                <h3 class="text-lg font-bold text-white mb-2">Kinship</h3>
-                <p class="text-slate-400 text-sm leading-relaxed font-medium">Build a verified network of neighbors. Your square, your family, your rules.</p>
+            <div class="glass-card p-10 rounded-[2.5rem] flex flex-col items-start group">
+                <div class="w-14 h-14 bg-indigo-500/10 rounded-2xl flex items-center justify-center text-3xl mb-8 group-hover:scale-110 transition-transform">🤝</div>
+                <h3 class="text-xl font-black text-white mb-3 uppercase tracking-tight">Kinship</h3>
+                <p class="text-slate-400 text-sm leading-relaxed font-medium">Build a verified network of neighbors. Strengthen ties and foster trust in the digital age.</p>
             </div>
-
-            <div class="glass-card p-8 rounded-[2rem] flex flex-col items-start">
-                <div class="w-12 h-12 bg-purple-500/20 rounded-2xl flex items-center justify-center text-2xl mb-6">⚡</div>
-                <h3 class="text-lg font-bold text-white mb-2">Whispers</h3>
-                <p class="text-slate-400 text-sm leading-relaxed font-medium">Real-time messaging with ultra-low latency. Stay connected even on weak signals.</p>
+            <div class="glass-card p-10 rounded-[2.5rem] flex flex-col items-start group">
+                <div class="w-14 h-14 bg-purple-500/10 rounded-2xl flex items-center justify-center text-3xl mb-8 group-hover:scale-110 transition-transform">⚡</div>
+                <h3 class="text-xl font-black text-white mb-3 uppercase tracking-tight">Whispers</h3>
+                <p class="text-slate-400 text-sm leading-relaxed font-medium">High-speed messaging designed for efficiency. Stay connected even on weak signals.</p>
             </div>
         </section>
 
-        <footer class="w-full py-12 border-t border-white/5 flex flex-col items-center gap-4 text-center">
-            <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.4em]">Apugo Village Digital &copy; 2025</p>
-            <div class="flex gap-4">
-                <div class="w-2 h-2 rounded-full bg-green-500/50"></div>
-                <span class="text-[9px] font-bold text-slate-600 uppercase tracking-widest">All Systems Operational</span>
+        <section class="w-full max-w-4xl px-6 pb-32">
+            <div class="text-center mb-16">
+                <h2 class="text-[10px] font-black uppercase tracking-[0.4em] text-blue-500 mb-4">The Village Laws</h2>
+                <h3 class="text-3xl md:text-4xl font-extrabold text-white tracking-tighter">Foundation of our Kinship</h3>
             </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div class="law-card p-6 bg-slate-900/20 rounded-2xl border border-white/5">
+                    <h4 class="text-white font-bold mb-2 flex items-center gap-2">
+                        <span class="text-blue-500 text-xs">01</span> No False Echoes
+                    </h4>
+                    <p class="text-slate-500 text-xs leading-relaxed">Misinformation disrupts the peace. Share only what is true or clearly marked as a whisper.</p>
+                </div>
+                <div class="law-card p-6 bg-slate-900/20 rounded-2xl border border-white/5">
+                    <h4 class="text-white font-bold mb-2 flex items-center gap-2">
+                        <span class="text-blue-500 text-xs">02</span> Honor Neighbors
+                    </h4>
+                    <p class="text-slate-500 text-xs leading-relaxed">Apugo is built on respect. Harassment or toxicity is grounds for immediate exile from the square.</p>
+                </div>
+                <div class="law-card p-6 bg-slate-900/20 rounded-2xl border border-white/5">
+                    <h4 class="text-white font-bold mb-2 flex items-center gap-2">
+                        <span class="text-blue-500 text-xs">03</span> Protect Secrets
+                    </h4>
+                    <p class="text-slate-500 text-xs leading-relaxed">What happens in the village stays in the village. Do not screenshot private whispers for outside eyes.</p>
+                </div>
+                <div class="law-card p-6 bg-slate-900/20 rounded-2xl border border-white/5">
+                    <h4 class="text-white font-bold mb-2 flex items-center gap-2">
+                        <span class="text-blue-500 text-xs">04</span> Verified Spirits Only
+                    </h4>
+                    <p class="text-slate-500 text-xs leading-relaxed">To maintain trust, only verified villagers can access high-priority news and kinship features.</p>
+                </div>
+            </div>
+        </section>
+
+        <footer class="w-full py-16 border-t border-white/5 bg-slate-950/30 flex flex-col items-center gap-6 text-center">
+            <div class="flex items-center gap-2">
+                <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Village Grid Online</span>
+            </div>
+            <p class="text-[10px] font-bold text-slate-600 uppercase tracking-[0.4em]">Apugo Digital &copy; 2026</p>
         </footer>
     </div>
 
     <script>
-        // Simple script to handle mobile view height issues
-        const setVh = () => {
-            let vh = window.innerHeight * 0.01;
-            document.documentElement.style.setProperty('--vh', `${vh}px`);
-        };
-        window.addEventListener('resize', setVh);
-        setVh();
+        // Smooth entrance for law cards
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach((entry, index) => {
+                if (entry.isIntersecting) {
+                    setTimeout(() => {
+                        entry.target.classList.add('animate__animated', 'animate__fadeInUp');
+                        entry.target.style.opacity = 1;
+                    }, index * 100);
+                }
+            });
+        }, { threshold: 0.1 });
+
+        document.querySelectorAll('.law-card').forEach(card => {
+            card.style.opacity = 0;
+            observer.observe(card);
+        });
     </script>
 </body>
 </html>
