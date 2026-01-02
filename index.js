@@ -1010,8 +1010,7 @@ app.get("/messages", isAuth, async (req, res) => {
     const friends = await db.query(
       `SELECT 
         u.id, 
-        u.username, 
-        u.email, 
+        u.email, -- Use email instead of username
         u.profile_pic,
         (u.last_active > NOW() - INTERVAL '5 minutes') as is_online,
         f.status
@@ -1021,7 +1020,7 @@ app.get("/messages", isAuth, async (req, res) => {
         (f.receiver_id = u.id AND f.sender_id = $1)
       )
       WHERE u.id != $1 
-      AND f.status = 'accepted' -- Only show confirmed kin in whispers`,
+      AND f.status = 'accepted'`,
       [req.user.id]
     );
 
