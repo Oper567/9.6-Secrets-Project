@@ -35,29 +35,29 @@ const db = new pg.Pool({
 db.on("error", (err) => console.error("DB Error:", err));
 
 // 2. Extract Cloudinary Constructor safely
-const CloudinaryStorage = pkg.CloudinaryStorage || pkg.default?.CloudinaryStorage || pkg;
 
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-  secure: true
-});
 
 // 3. Setup Storage (THE FIX IS HERE)
-const storage = new CloudinaryStorage({
-  cloudinary: { v2: cloudinary }, // Must be wrapped in an object for this library version
-  params: {
-    folder: 'village_square_media',
-    resource_type: 'auto',
-    allowed_formats: ['jpg', 'png', 'jpeg', 'gif', 'mp4', 'webp'],
-  },
+// 1. Switch to Memory Storage (Files will be in req.file.buffer)
+const storage = multer.memoryStorage();
+const upload = multer({ 
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit for videos
+    fileFilter: (req, file, cb) => {
+        // Accept images and videos
+        if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only images and videos are allowed!'), false);
+        }
+    }
 });
 
-const upload = multer({ 
-  storage: storage,
-  limits: { fileSize: 50 * 1024 * 1024 } 
-});
+// Initialize Supabase Client (Make sure these are in your .env)
+const supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_ANON_KEY
+);
 /* 2. Second, define the specific folder path */
 const uploadDir = path.join(__dirname, 'public/uploads');
 
@@ -66,15 +66,10 @@ if (!fs.existsSync(uploadDir)){
     fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Cloudinary Config
 
 
 db.on("error", (err) => console.error("Unexpected error on idle client", err));
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
-);
 // ... after supabase.storage.from('apugo_village').upload(...)
 // 1. Upload the file
 
@@ -636,15 +631,37 @@ app.post("/event/create", isAuth, upload.single('localMedia'), async (req, res) 
         const { description } = req.body;
         const userId = req.user.id;
         
-        // mediaUrl will be the Cloudinary link (string)
-        const mediaUrl = req.file ? req.file.path : null;
-        
-        // Detect if it's a video or image for the feed player
-        let mediaType = 'image'; 
-        if (req.file && req.file.mimetype.startsWith('video')) {
-            mediaType = 'video';
+        let mediaUrl = null;
+        let mediaType = 'text'; // Default to text if no file
+
+        if (req.file) {
+            const file = req.file;
+            const fileExt = file.originalname.split('.').pop();
+            const fileName = `${userId}-${Date.now()}.${fileExt}`;
+            const filePath = `events/${fileName}`;
+
+            // 1. Set mediaType for the frontend player
+            mediaType = file.mimetype.startsWith('video') ? 'video' : 'image';
+
+            // 2. Upload the buffer to your Supabase bucket
+            const { data, error } = await supabase.storage
+                .from('apugo_village')
+                .upload(filePath, file.buffer, {
+                    contentType: file.mimetype,
+                    upsert: true
+                });
+
+            if (error) throw error;
+
+            // 3. Generate the Public URL
+            const { data: { publicUrl } } = supabase.storage
+                .from('apugo_village')
+                .getPublicUrl(filePath);
+            
+            mediaUrl = publicUrl;
         }
 
+        // 4. Insert into PostgreSQL using your forum_posts table schema
         await db.query(
             "INSERT INTO forum_posts (content, image_url, media_type, author_id) VALUES ($1, $2, $3, $4)",
             [description, mediaUrl, mediaType, userId]
@@ -652,8 +669,8 @@ app.post("/event/create", isAuth, upload.single('localMedia'), async (req, res) 
 
         res.redirect("/feed");
     } catch (err) {
-        console.error("UPLOAD ERROR:", err);
-        res.status(500).send("The path is blocked. We couldn't publish your whisper.");
+        console.error("SUPABASE UPLOAD ERROR:", err);
+        res.status(500).send("The spirits are restless. We couldn't publish your event.");
     }
 });
 app.post("/event/:id/report", checkVerified, async (req, res) => {
@@ -883,25 +900,52 @@ app.delete("/event/:postId/comment/:commentId", isAuth, async (req, res) => {
 // Ensure the route matches the form action (/forum/create)
 app.post("/forum/create", isAuth, upload.single('media'), async (req, res) => {
     try {
-        const { content } = req.body; // Using 'content' from feed.ejs
+        const { content } = req.body;
         const authorId = req.user.id;
         
-        // Ensure the path matches how you serve static files
-        const mediaUrl = req.file ? `/uploads/${req.file.filename}` : null;
+        let mediaUrl = null;
+        let mediaType = 'text'; // Default type
 
-        if (!content) {
+        if (!content && !req.file) {
             return res.status(400).send("The scroll cannot be empty.");
         }
 
+        if (req.file) {
+            const file = req.file;
+            const fileExt = file.originalname.split('.').pop();
+            const fileName = `${authorId}-${Date.now()}.${fileExt}`;
+            const filePath = `forum/${fileName}`;
+
+            // Detect type: image/jpeg -> 'image', video/mp4 -> 'video'
+            mediaType = file.mimetype.startsWith('video') ? 'video' : 'image';
+
+            // 1. Upload Buffer to Supabase
+            const { data, error } = await supabase.storage
+                .from('apugo_village')
+                .upload(filePath, file.buffer, {
+                    contentType: file.mimetype,
+                    upsert: true
+                });
+
+            if (error) throw error;
+
+            // 2. Get the Public URL
+            const { data: { publicUrl } } = supabase.storage
+                .from('apugo_village')
+                .getPublicUrl(filePath);
+            
+            mediaUrl = publicUrl;
+        }
+
+        // 3. Insert into DB (Added media_type column)
         await db.query(
-            "INSERT INTO forum_posts (author_id, content, media_url, is_deleted) VALUES ($1, $2, $3, false)",
-            [authorId, content, mediaUrl]
+            "INSERT INTO forum_posts (author_id, content, media_url, media_type, is_deleted) VALUES ($1, $2, $3, $4, false)",
+            [authorId, content, mediaUrl, mediaType]
         );
 
         res.redirect("/feed");
     } catch (err) {
         console.error("POST ERROR:", err);
-        // This is where your error message is coming from
         res.status(500).send("The Village Scroll could not be sealed: " + err.message);
     }
 });
