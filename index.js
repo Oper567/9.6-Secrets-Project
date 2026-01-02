@@ -483,11 +483,10 @@ app.get("/feed", checkVerified, async (req, res) => {
       ORDER BY likes_count DESC LIMIT 5
     `);
 
-    // 2. Fetch Suggested Villagers (Excluding current Kin/Friends)
-    // Uses sender_id and receiver_id logic
+    // 2. Fetch Suggested Villagers (Including profile_pic from Supabase)
     let villagerParams = [userId];
     let villagerQuery = `
-      SELECT id, email FROM users 
+      SELECT id, email, profile_pic FROM users 
       WHERE id != $1 
       AND id NOT IN (
           SELECT receiver_id FROM friendships WHERE sender_id = $1
@@ -503,21 +502,26 @@ app.get("/feed", checkVerified, async (req, res) => {
     
     const suggestedUsers = await db.query(villagerQuery + ` LIMIT 10`, villagerParams);
 
-    // 3. Fetch Posts with Likes and Comments
-    // Note: c.reply_text is used to match your DB column
+    // 3. Main Feed Query (Supporting Video & Persisted Likes)
     let params = [userId];
     let postsQuery = `
-      SELECT p.*, u.email AS author_email, u.is_verified,
-      (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes_count,
-      EXISTS (SELECT 1 FROM likes WHERE post_id = p.id AND user_id = $1) AS liked_by_me,
-      (SELECT JSON_AGG(json_build_object(
-          'id', c.id,
-          'user_id', c.user_id,
-          'username', split_part(cu.email, '@', 1), 
-          'comment_text', c.reply_text 
-      )) FROM comments c 
-          JOIN users cu ON c.user_id = cu.id 
-          WHERE c.post_id = p.id) as comments_list
+      SELECT p.*, 
+             u.email AS author_email, 
+             u.profile_pic AS author_pic, 
+             u.is_verified,
+             -- Count total likes
+             (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes_count,
+             -- Check if logged in user liked it (Standardized naming)
+             EXISTS (SELECT 1 FROM likes WHERE post_id = p.id AND user_id = $1) AS is_liked,
+             -- Aggregate comments into a JSON list
+             (SELECT JSON_AGG(json_build_object(
+                 'id', c.id,
+                 'user_id', c.user_id,
+                 'username', split_part(cu.email, '@', 1), 
+                 'comment_text', c.reply_text 
+             )) FROM comments c 
+                JOIN users cu ON c.user_id = cu.id 
+                WHERE c.post_id = p.id) as comments_list
       FROM forum_posts p 
       JOIN users u ON p.author_id = u.id 
       WHERE p.is_deleted = false
