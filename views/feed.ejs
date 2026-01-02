@@ -315,20 +315,47 @@
         applyAvatarColors();
 
         // --- AJAX VIBES (LIKES) ---
-        async function sendVibe(btn, postId) {
-            btn.classList.add('vibe-pop');
-            setTimeout(() => btn.classList.remove('vibe-pop'), 300);
-            try {
-                const response = await fetch(`/event/${postId}/like`, { method: 'POST' });
-                const data = await response.json();
-                if (data.success) {
-                    btn.querySelector('.vibe-count').innerText = data.likesCount;
-                    btn.classList.toggle('text-red-500', data.isLiked);
-                    btn.classList.toggle('text-slate-500', !data.isLiked);
-                    btn.querySelector('i').className = data.isLiked ? 'fas fa-heart text-lg' : 'far fa-heart text-lg';
-                }
-            } catch (err) { console.error(err); }
+       async function sendVibe(btn, postId) {
+    // 1. Visual feedback (Pop animation)
+    btn.classList.add('vibe-pop');
+    setTimeout(() => btn.classList.remove('vibe-pop'), 300);
+
+    try {
+        // 2. Send the request to the server
+        const response = await fetch(`/event/${postId}/like`, { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const data = await response.json();
+
+        if (data.success) {
+            // 3. IMMEDIATELY update the count number
+            const countSpan = btn.querySelector('.vibe-count');
+            countSpan.innerText = data.likesCount;
+
+            // 4. IMMEDIATELY toggle the heart colors
+            // This removes the need for a manual refresh
+            const icon = btn.querySelector('i');
+            
+            if (data.isLiked) {
+                // Change to Filled Red Heart
+                btn.classList.remove('text-slate-500');
+                btn.classList.add('text-red-500');
+                icon.classList.remove('far');
+                icon.classList.add('fas');
+            } else {
+                // Change to Empty Grey Heart
+                btn.classList.remove('text-red-500');
+                btn.classList.add('text-slate-500');
+                icon.classList.remove('fas');
+                icon.classList.add('far');
+            }
         }
+    } catch (err) {
+        console.error("Vibe Error:", err);
+    }
+}
 
         // --- AJAX ECHOES (COMMENTS) ---
         async function postEcho(event, postId) {
