@@ -12,7 +12,8 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
-import nodemailer from "nodemailer";
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 import { Resend } from "resend";
 import 'dotenv/config';
 import { v2 as cloudinary } from 'cloudinary';
@@ -27,6 +28,45 @@ const router = express.Router();
 const PostgresStore = pgSession(session);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const httpServer = createServer(app);
+const io = new Server(httpServer);
+
+const onlineUsers = new Map(); // userId -> socketId
+
+io.on('connection', (socket) => {
+    socket.on('join', (userId) => {
+        onlineUsers.set(String(userId), socket.id);
+        console.log(`User ${userId} joined via socket ${socket.id}`);
+    });
+
+    // Typing Indicator
+    socket.on('typing', ({ receiverId, senderId, isTyping }) => {
+        const receiverSocketId = onlineUsers.get(String(receiverId));
+        if (receiverSocketId) {
+            io.to(receiverSocketId).emit('display_typing', { senderId, isTyping });
+        }
+    });
+
+    socket.on('private_message', ({ senderId, receiverId, content }) => {
+        const receiverSocketId = onlineUsers.get(String(receiverId));
+        if (receiverSocketId) {
+            io.to(receiverSocketId).emit('new_whisper', {
+                sender_id: senderId,
+                content,
+                created_at: new Date()
+            });
+        }
+    });
+
+    socket.on('disconnect', () => {
+        for (let [userId, socketId] of onlineUsers.entries()) {
+            if (socketId === socket.id) {
+                onlineUsers.delete(userId);
+                break;
+            }
+        }
+    });
+});
 // 1. Initialize DB first
 const db = new pg.Pool({
   connectionString: process.env.DATABASE_URL,

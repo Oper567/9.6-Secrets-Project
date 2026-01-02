@@ -202,101 +202,144 @@
     </div>
 </div>
 
+<script src="/socket.io/socket.io.js"></script>
+
 <script>
+    const socket = io();
     const currentUserId = '<%= user.id %>';
     let currentFriendId = null;
-    let lastMessageCount = 0;
+    let typingTimeout;
 
-    function selectFriend(id, name, pic) {
+    // 1. Identify ourselves to the server on connection
+    socket.emit('join', currentUserId);
+
+    // 2. Listen for incoming whispers
+    socket.on('new_whisper', (msg) => {
+        // If we are currently looking at the chat from this sender
+        if (String(msg.sender_id) === String(currentFriendId)) {
+            appendMessage(msg, false);
+            // Optional: notify server message was seen
+        } else {
+            // Update the UI sidebar badge for other friends
+            const badge = document.getElementById(`unread-${msg.sender_id}`);
+            if (badge) {
+                badge.innerText = parseInt(badge.innerText || 0) + 1;
+                badge.classList.remove('hidden');
+            }
+        }
+    });
+
+    // 3. Listen for "Typing" indicator
+    socket.on('display_typing', ({ senderId, isTyping }) => {
+        if (String(senderId) === String(currentFriendId)) {
+            const statusEl = document.getElementById('chatStatus');
+            if (isTyping) {
+                statusEl.innerHTML = `<span class="flex items-center gap-1 text-blue-400"><span class="typing-dot"></span> Thinking...</span>`;
+            } else {
+                statusEl.innerHTML = `<span class="flex items-center gap-1"><span class="typing-dot"></span> Whispering</span>`;
+            }
+        }
+    });
+
+    // 4. Update selectFriend to fetch history and clear badges
+    async function selectFriend(id, name, pic) {
         if (currentFriendId === id) return;
         currentFriendId = id;
-        lastMessageCount = 0; 
         
+        // UI Reset
         document.querySelectorAll('.friend-item').forEach(el => el.classList.remove('active'));
         const item = document.getElementById(`friend-${id}`);
-        if(item) item.classList.add('active');
+        if(item) {
+            item.classList.add('active');
+            const badge = document.getElementById(`unread-${id}`);
+            if(badge) badge.classList.add('hidden');
+        }
 
-        // UI Transitions
         document.getElementById('paneContainer').classList.add('show-chat');
         document.getElementById('mobileBack').classList.remove('hidden');
         document.getElementById('navHomeLink').classList.add('hidden');
         document.getElementById('inputDock').classList.remove('hidden');
+        document.getElementById('chatActions').classList.replace('invisible', 'visible');
         
-        // Ensure Action Button Visibility
-        const actions = document.getElementById('chatActions');
-        actions.classList.remove('invisible');
-        actions.classList.add('visible');
-        
-        // Header Avatar Logic
+        // Header Setup
         const avatarDiv = document.getElementById('activeChatAvatar');
         avatarDiv.classList.remove('hidden');
-        if (pic && pic !== 'null' && pic !== '') {
-            avatarDiv.innerHTML = `<img src="${pic}" class="w-full h-full object-cover">`;
-        } else {
-            avatarDiv.innerHTML = `<span>${name[0].toUpperCase()}</span>`;
-        }
-        
+        avatarDiv.innerHTML = pic && pic !== 'null' ? `<img src="${pic}" class="w-full h-full object-cover">` : `<span>${name[0]}</span>`;
         document.getElementById('chatHeaderTitle').innerText = `@${name}`;
-        document.getElementById('chatStatus').innerHTML = `<span class="flex items-center gap-1"><span class="typing-dot"></span> Whispering</span>`;
         
-        document.getElementById('unfriendForm').action = `/friends/unfriend/${id}`;
-        document.getElementById('chatWindow').innerHTML = '<div class="flex-1 flex items-center justify-center"><i class="fas fa-circle-notch animate-spin text-blue-600"></i></div>';
-        
-        fetchMessages();
+        // Load history via API
+        await fetchHistory(id);
     }
 
-    async function fetchMessages() {
-        if (!currentFriendId) return;
+    async function fetchHistory(friendId) {
+        const chatWindow = document.getElementById('chatWindow');
+        chatWindow.innerHTML = '<div class="my-auto mx-auto"><i class="fas fa-circle-notch animate-spin text-blue-600"></i></div>';
+        
         try {
-            const res = await fetch(`/api/chat/${currentFriendId}`);
+            const res = await fetch(`/api/chat/${friendId}`);
             const messages = await res.json();
-            const chatWindow = document.getElementById('chatWindow');
-            
-            // Only re-render if message count changed to save performance
-            if (messages.length === lastMessageCount) return;
-
             chatWindow.innerHTML = '';
-            messages.forEach(m => {
-                const isMe = String(m.sender_id) === String(currentUserId);
-                const div = document.createElement('div');
-                div.className = `bubble ${isMe ? 'bubble-me' : 'bubble-them'}`;
-                div.innerHTML = `
-                    <div class="font-medium">${m.content || m.message}</div>
-                    <div class="text-[8px] mt-1.5 opacity-40 flex items-center justify-end font-black uppercase tracking-tighter">
-                        ${new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                    </div>
-                `;
-                chatWindow.appendChild(div);
-            });
-            
-            lastMessageCount = messages.length;
-            chatWindow.scrollTo({ top: chatWindow.scrollHeight, behavior: 'smooth' });
-        } catch (e) { console.error("Whisper sync failed"); }
+            messages.forEach(m => appendMessage(m, String(m.sender_id) === String(currentUserId)));
+        } catch (e) { console.error("History failed"); }
     }
 
+    function appendMessage(m, isMe) {
+        const chatWindow = document.getElementById('chatWindow');
+        const empty = document.getElementById('emptyState');
+        if (empty) empty.style.display = 'none';
+
+        const div = document.createElement('div');
+        div.className = `bubble ${isMe ? 'bubble-me' : 'bubble-them'}`;
+        div.innerHTML = `
+            <div class="font-medium">${m.content || m.message}</div>
+            <div class="text-[8px] mt-1.5 opacity-40 flex items-center justify-end font-black uppercase tracking-tighter">
+                ${new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+            </div>
+        `;
+        chatWindow.appendChild(div);
+        chatWindow.scrollTo({ top: chatWindow.scrollHeight, behavior: 'smooth' });
+    }
+
+    // 5. Typing Logic
+    document.getElementById('msgInput')?.addEventListener('input', () => {
+        if (!currentFriendId) return;
+        socket.emit('typing', { receiverId: currentFriendId, senderId: currentUserId, isTyping: true });
+        
+        clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(() => {
+            socket.emit('typing', { receiverId: currentFriendId, senderId: currentUserId, isTyping: false });
+        }, 2000);
+    });
+
+    // 6. Submit Logic (Socket + API)
     document.getElementById('chatForm')?.addEventListener('submit', async e => {
         e.preventDefault();
         const input = document.getElementById('msgInput');
         const content = input.value.trim();
         if (!content || !currentFriendId) return;
         
+        const payload = { senderId: currentUserId, receiverId: currentFriendId, content };
+        
+        // Emit for instant delivery
+        socket.emit('private_message', payload);
+        // Show on our screen immediately
+        appendMessage({ content, sender_id: currentUserId, created_at: new Date() }, true);
+        
         input.value = '';
-        try {
-            await fetch('/api/chat/send', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ receiverId: currentFriendId, content })
-            });
-            fetchMessages(); 
-        } catch(err) { console.error("Failed to send"); }
+        socket.emit('typing', { receiverId: currentFriendId, senderId: currentUserId, isTyping: false });
+
+        // Save to DB in background
+        fetch('/api/chat/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ receiverId: currentFriendId, content })
+        });
     });
 
     function searchSouls() {
         const input = document.getElementById('globalSearch').value.toUpperCase();
-        const items = document.querySelectorAll('.friend-item');
-        items.forEach(item => {
-            const text = item.innerText.toUpperCase();
-            item.style.display = text.includes(input) ? "flex" : "none";
+        document.querySelectorAll('.friend-item').forEach(item => {
+            item.style.display = item.innerText.toUpperCase().includes(input) ? "flex" : "none";
         });
     }
 
@@ -304,30 +347,12 @@
         document.getElementById('paneContainer').classList.remove('show-chat');
         document.getElementById('mobileBack').classList.add('hidden');
         document.getElementById('navHomeLink').classList.remove('hidden');
-        
-        const actions = document.getElementById('chatActions');
-        actions.classList.add('invisible');
-        actions.classList.remove('visible');
-
+        document.getElementById('chatActions').classList.replace('visible', 'invisible');
         document.getElementById('activeChatAvatar').classList.add('hidden');
         document.getElementById('chatHeaderTitle').innerText = "Whispers";
-        document.getElementById('chatStatus').innerText = "Village Square";
-        
         currentFriendId = null;
-        lastMessageCount = 0;
     }
-
-    // Auto-open logic
-    window.addEventListener('load', () => {
-        const urlParams = new URLSearchParams(window.location.search);
-        const userId = urlParams.get('userId');
-        if (userId) {
-            const friendEl = document.getElementById(`friend-${userId}`);
-            if (friendEl) friendEl.click();
-        }
-    });
-
-    setInterval(() => { if (currentFriendId) fetchMessages(); }, 3000);
 </script>
+
 </body>
 </html>
