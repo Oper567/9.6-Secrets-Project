@@ -139,7 +139,6 @@
 
 <div class="flex-1 overflow-hidden relative">
     <div id="paneContainer" class="pane-container">
-        
         <aside class="friends-pane bg-slate-950 flex flex-col h-full">
             <div class="p-4">
                 <input type="text" id="globalSearch" onkeyup="searchSouls()" placeholder="Find a soul..." 
@@ -151,10 +150,12 @@
                     <% friends.forEach(f => { %>
                         <% const displayUsername = f.username || f.email.split('@')[0]; %>
                         <div id="friend-<%= f.id %>" class="friend-item p-4 flex items-center gap-4 cursor-pointer rounded-2xl hover:bg-white/5 transition-all group" 
-                             onclick="selectFriend('<%= f.id %>', `<%= displayUsername %>`, `<%= f.profile_pic %>`)">
+                             data-username="<%= displayUsername %>"
+                             data-pic="<%= f.profile_pic || '' %>"
+                             onclick="selectFriend('<%= f.id %>')">
                             
                             <div class="relative shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center border border-slate-700 overflow-hidden shadow-lg initial-avatar">
-                                <% if (f.profile_pic && f.profile_pic !== 'null') { %>
+                                <% if (f.profile_pic && f.profile_pic !== 'null' && f.profile_pic !== '') { %>
                                     <img src="<%= f.profile_pic %>" class="w-full h-full object-cover">
                                 <% } else { %>
                                     <span class="text-sm"><%= displayUsername[0] %></span>
@@ -165,9 +166,7 @@
                             <div class="flex-1 min-w-0">
                                 <div class="flex justify-between items-center mb-0.5">
                                     <span class="text-[12px] font-black block truncate text-slate-200 uppercase group-hover:text-blue-400 transition-colors">@<%= displayUsername %></span>
-                                    <% if (f.unread_count > 0) { %>
-                                        <span id="unread-<%= f.id %>" class="bg-blue-600 text-[9px] font-black px-2 py-0.5 rounded-full shadow-lg shadow-blue-600/20"><%= f.unread_count %></span>
-                                    <% } %>
+                                    <span id="unread-<%= f.id %>" class="hidden bg-blue-600 text-[9px] font-black px-2 py-0.5 rounded-full shadow-lg shadow-blue-600/20"><%= f.unread_count || 0 %></span>
                                 </div>
                                 <p class="text-[10px] text-slate-600 truncate italic uppercase tracking-widest font-bold">Tap to Whisper</p>
                             </div>
@@ -210,17 +209,16 @@
     let currentFriendId = null;
     let typingTimeout;
 
-    // 1. Identify ourselves to the server on connection
-    socket.emit('join', currentUserId);
+    // Connect & Join
+    socket.on('connect', () => {
+        socket.emit('join', currentUserId);
+    });
 
-    // 2. Listen for incoming whispers
+    // Listen for incoming messages
     socket.on('new_whisper', (msg) => {
-        // If we are currently looking at the chat from this sender
         if (String(msg.sender_id) === String(currentFriendId)) {
             appendMessage(msg, false);
-            // Optional: notify server message was seen
         } else {
-            // Update the UI sidebar badge for other friends
             const badge = document.getElementById(`unread-${msg.sender_id}`);
             if (badge) {
                 badge.innerText = parseInt(badge.innerText || 0) + 1;
@@ -229,47 +227,53 @@
         }
     });
 
-    // 3. Listen for "Typing" indicator
+    // Listen for typing
     socket.on('display_typing', ({ senderId, isTyping }) => {
         if (String(senderId) === String(currentFriendId)) {
             const statusEl = document.getElementById('chatStatus');
-            if (isTyping) {
-                statusEl.innerHTML = `<span class="flex items-center gap-1 text-blue-400"><span class="typing-dot"></span> Thinking...</span>`;
-            } else {
-                statusEl.innerHTML = `<span class="flex items-center gap-1"><span class="typing-dot"></span> Whispering</span>`;
-            }
+            statusEl.innerHTML = isTyping 
+                ? `<span class="flex items-center gap-1 text-blue-400"><span class="typing-dot"></span> Thinking...</span>`
+                : `<span class="flex items-center gap-1"><span class="typing-dot"></span> Whispering</span>`;
         }
     });
 
-    // 4. Update selectFriend to fetch history and clear badges
-    async function selectFriend(id, name, pic) {
-        if (currentFriendId === id) return;
-        currentFriendId = id;
-        
-        // UI Reset
-        document.querySelectorAll('.friend-item').forEach(el => el.classList.remove('active'));
-        const item = document.getElementById(`friend-${id}`);
-        if(item) {
-            item.classList.add('active');
-            const badge = document.getElementById(`unread-${id}`);
-            if(badge) badge.classList.add('hidden');
-        }
+    async function selectFriend(id) {
+    const item = document.getElementById(`friend-${id}`);
+    if (!item) return;
 
-        document.getElementById('paneContainer').classList.add('show-chat');
-        document.getElementById('mobileBack').classList.remove('hidden');
-        document.getElementById('navHomeLink').classList.add('hidden');
-        document.getElementById('inputDock').classList.remove('hidden');
-        document.getElementById('chatActions').classList.replace('invisible', 'visible');
-        
-        // Header Setup
-        const avatarDiv = document.getElementById('activeChatAvatar');
-        avatarDiv.classList.remove('hidden');
-        avatarDiv.innerHTML = pic && pic !== 'null' ? `<img src="${pic}" class="w-full h-full object-cover">` : `<span>${name[0]}</span>`;
-        document.getElementById('chatHeaderTitle').innerText = `@${name}`;
-        
-        // Load history via API
-        await fetchHistory(id);
+    // Pull data from attributes instead of function arguments
+    const name = item.getAttribute('data-username');
+    const pic = item.getAttribute('data-pic');
+
+    if (currentFriendId === String(id)) return;
+    currentFriendId = String(id);
+    
+    // UI Navigation
+    document.querySelectorAll('.friend-item').forEach(el => el.classList.remove('active'));
+    item.classList.add('active');
+    document.getElementById(`unread-${id}`)?.classList.add('hidden');
+
+    document.getElementById('paneContainer').classList.add('show-chat');
+    document.getElementById('mobileBack').classList.remove('hidden');
+    document.getElementById('navHomeLink').classList.add('hidden');
+    document.getElementById('inputDock').classList.remove('hidden');
+    
+    // Header Logic
+    const avatarDiv = document.getElementById('activeChatAvatar');
+    avatarDiv.classList.remove('hidden');
+    
+    if (pic && pic !== 'null' && pic !== '') {
+        avatarDiv.innerHTML = `<img src="${pic}" class="w-full h-full object-cover">`;
+    } else {
+        avatarDiv.innerHTML = `<span>${name ? name[0].toUpperCase() : '?'}</span>`;
     }
+
+    document.getElementById('chatHeaderTitle').innerText = `@${name}`;
+    document.getElementById('unfriendForm').action = `/friends/unfriend/${id}`;
+    
+    // Load history
+    fetchHistory(id);
+}
 
     async function fetchHistory(friendId) {
         const chatWindow = document.getElementById('chatWindow');
@@ -280,7 +284,9 @@
             const messages = await res.json();
             chatWindow.innerHTML = '';
             messages.forEach(m => appendMessage(m, String(m.sender_id) === String(currentUserId)));
-        } catch (e) { console.error("History failed"); }
+        } catch (e) { 
+            chatWindow.innerHTML = '<p class="text-center text-slate-600 text-xs">Failed to load ancient scrolls.</p>';
+        }
     }
 
     function appendMessage(m, isMe) {
@@ -300,35 +306,33 @@
         chatWindow.scrollTo({ top: chatWindow.scrollHeight, behavior: 'smooth' });
     }
 
-    // 5. Typing Logic
+    // Typing Logic
     document.getElementById('msgInput')?.addEventListener('input', () => {
         if (!currentFriendId) return;
         socket.emit('typing', { receiverId: currentFriendId, senderId: currentUserId, isTyping: true });
-        
         clearTimeout(typingTimeout);
         typingTimeout = setTimeout(() => {
             socket.emit('typing', { receiverId: currentFriendId, senderId: currentUserId, isTyping: false });
         }, 2000);
     });
 
-    // 6. Submit Logic (Socket + API)
+    // Send Message
     document.getElementById('chatForm')?.addEventListener('submit', async e => {
         e.preventDefault();
         const input = document.getElementById('msgInput');
         const content = input.value.trim();
         if (!content || !currentFriendId) return;
         
-        const payload = { senderId: currentUserId, receiverId: currentFriendId, content };
-        
-        // Emit for instant delivery
-        socket.emit('private_message', payload);
-        // Show on our screen immediately
+        // Instant UI
         appendMessage({ content, sender_id: currentUserId, created_at: new Date() }, true);
+        
+        // Socket Emit
+        socket.emit('private_message', { senderId: currentUserId, receiverId: currentFriendId, content });
         
         input.value = '';
         socket.emit('typing', { receiverId: currentFriendId, senderId: currentUserId, isTyping: false });
 
-        // Save to DB in background
+        // Save to DB
         fetch('/api/chat/send', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -353,6 +357,5 @@
         currentFriendId = null;
     }
 </script>
-
 </body>
 </html>

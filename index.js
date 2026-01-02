@@ -1008,16 +1008,20 @@ app.post("/forum/create", isAuth, upload.single('media'), async (req, res) => {
 app.get("/messages", isAuth, async (req, res) => {
   try {
     const friends = await db.query(
-      `
-        SELECT 
-        u.id, u.email, u.profile_pic,
+      `SELECT 
+        u.id, 
+        u.username, 
+        u.email, 
+        u.profile_pic,
         (u.last_active > NOW() - INTERVAL '5 minutes') as is_online,
-        f.status -- Added this so you can see if it's pending in EJS
-        FROM users u
-        JOIN friendships f ON (f.sender_id = u.id OR f.receiver_id = u.id)
-        WHERE (f.sender_id = $1 OR f.receiver_id = $1) 
-        AND u.id != $1 
-        AND f.status IN ('accepted', 'pending')`, // Changed this line
+        f.status
+      FROM users u
+      JOIN friendships f ON (
+        (f.sender_id = u.id AND f.receiver_id = $1) OR 
+        (f.receiver_id = u.id AND f.sender_id = $1)
+      )
+      WHERE u.id != $1 
+      AND f.status = 'accepted' -- Only show confirmed kin in whispers`,
       [req.user.id]
     );
 
@@ -1031,28 +1035,20 @@ app.get("/messages", isAuth, async (req, res) => {
   }
 });
 
+// GET Chat History
 app.get("/api/chat/:friendId", isAuth, async (req, res) => {
-  const userId = req.user.id;
-  const friendId = req.params.friendId;
-
   try {
     const result = await db.query(
-      `SELECT 
-                id, 
-                sender_id, 
-                receiver_id, 
-                content AS content, -- Ensure this matches your DB column name
-                created_at, 
-                is_read 
-             FROM messages 
-             WHERE (sender_id = $1 AND receiver_id = $2) 
-                OR (sender_id = $2 AND receiver_id = $1) 
-             ORDER BY created_at ASC`,
-      [userId, friendId]
+      `SELECT id, sender_id, receiver_id, content, created_at 
+       FROM messages 
+       WHERE (sender_id = $1 AND receiver_id = $2) 
+          OR (sender_id = $2 AND receiver_id = $1) 
+       ORDER BY created_at ASC`,
+      [req.user.id, req.params.friendId]
     );
     res.json(result.rows);
   } catch (err) {
-    res.status(500).json({ error: "Ancient spirits blocked the message." });
+    res.status(500).json({ error: "Ancient spirits blocked the history." });
   }
 });
 
@@ -1163,18 +1159,18 @@ app.post("/friends/request/:receiverId", isAuth, async (req, res) => {
 
 // 2. SEVER KINSHIP (UNFRIEND)
 app.post("/friends/unfriend/:id", isAuth, async (req, res) => {
-  const targetId = req.params.id;
-  const userId = req.user.id;
   try {
-    // Matches the sender_id/receiver_id naming convention
     await db.query(
       "DELETE FROM friendships WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)",
-      [userId, targetId]
+      [req.user.id, req.params.id]
     );
-    res.redirect(req.get("Referrer") || "/feed");
+    // This is useful for the AJAX call in whispers
+    if (req.xhr || req.headers.accept.indexOf('json') > -1) {
+        return res.json({ success: true });
+    }
+    res.redirect("back");
   } catch (err) {
-    console.error(err);
-    res.status(500).send("Failed to sever kinship.");
+    res.status(500).send("Failed to sever bond.");
   }
 });
 app.post("/friends/accept/:senderId", isAuth, async (req, res) => {
@@ -1182,13 +1178,13 @@ app.post("/friends/accept/:senderId", isAuth, async (req, res) => {
     const userId = req.user.id;
 
     try {
-        // Update friendship status
+        // Update status in friendships
         await db.query(
-            "UPDATE friendships SET status = 'accepted' WHERE user_id = $1 AND friend_id = $2",
+            "UPDATE friendships SET status = 'accepted' WHERE sender_id = $1 AND receiver_id = $2",
             [senderId, userId]
         );
 
-        // Mark notification as resolved so buttons disappear
+        // Resolve notification
         await db.query(
             "UPDATE notifications SET is_resolved = true WHERE user_id = $1 AND sender_id = $2 AND type = 'friend_request'",
             [userId, senderId]
@@ -1196,6 +1192,7 @@ app.post("/friends/accept/:senderId", isAuth, async (req, res) => {
 
         res.redirect("/notifications");
     } catch (err) {
+        console.error(err);
         res.status(500).send("Could not seal the kinship.");
     }
 });
@@ -1597,4 +1594,10 @@ app.get("/admin", isAdmin, async (req, res) => {
 });
 
 /* ---------------- SERVER START ---------------- */
+// WRONG: app.listen(3000); 
+
+// RIGHT:
+httpServer.listen(3000, () => {
+    console.log('Server and Sockets active on port 3000');
+});
 app.listen(port, () => console.log(`🚀 Village Square live at port ${port}`));
