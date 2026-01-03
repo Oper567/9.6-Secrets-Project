@@ -19,27 +19,36 @@
             border: 1px solid rgba(255, 255, 255, 0.05); 
             backdrop-filter: blur(12px); 
         }
+        /* Refined Reply Line for Deep Chains */
         .reply-line {
             position: relative;
         }
         .reply-line::before {
             content: '';
             position: absolute;
-            left: -1rem;
+            left: -1.25rem;
             top: 0;
-            bottom: 0;
+            bottom: -1.5rem; /* Extends to link with the next reply */
             width: 2px;
-            background: #3b82f6;
+            background: linear-gradient(to bottom, #3b82f6, transparent);
             border-radius: 2px;
+            opacity: 0.3;
         }
-        /* Fix for image visibility */
+        .reply-line:last-child::before {
+            bottom: 0; /* Ends the line at the last reply */
+            height: 50%;
+        }
         .post-image {
             display: block;
             width: 100%;
             height: auto;
             max-height: 600px;
-            object-fit: contain;
+            object-fit: cover;
             background: rgba(0,0,0,0.2);
+            transition: transform 0.5s ease;
+        }
+        .post-image:hover {
+            transform: scale(1.02);
         }
     </style>
 </head>
@@ -65,7 +74,7 @@
     </nav>
 
     <main class="max-w-4xl mx-auto px-4 mt-8">
-        <div class="glass-card rounded-[2.5rem] p-8 md:p-12 mb-10 shadow-2xl">
+        <div class="glass-card rounded-[2.5rem] p-8 md:p-12 mb-10 shadow-2xl overflow-hidden">
             <div class="flex items-center gap-4 mb-8">
                 <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center font-bold text-white overflow-hidden shadow-lg shadow-blue-900/20">
                     <% if (thread.author_pic) { %>
@@ -93,11 +102,11 @@
             </p>
 
             <% if (thread.media_url && thread.media_url.length > 5) { %>
-                <div class="rounded-[2rem] overflow-hidden border border-white/10 mb-10 bg-black/20 shadow-inner">
+                <div class="rounded-[2rem] overflow-hidden border border-white/10 mb-10 bg-black/20 shadow-inner group">
                     <img src="<%= thread.media_url %>" 
                          class="post-image" 
                          alt="Shared Media"
-                         onerror="this.style.display='none'; console.error('Image failed to load at:', this.src)">
+                         onerror="this.parentElement.style.display='none'">
                 </div>
             <% } %>
 
@@ -122,23 +131,22 @@
             </div>
         </div>
 
-        <div class="space-y-8">
+        <div class="space-y-8 mb-20">
             <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] ml-4">Village Responses</h3>
             
             <div id="reply-form-box" class="glass-card rounded-[2rem] p-4 mb-12">
                 <form action="/forum/thread/<%= thread.id %>/reply" method="POST" class="flex flex-col md:flex-row gap-4">
                     <textarea name="reply_text" placeholder="Share your perspective..." required 
                               class="flex-grow bg-white/5 border border-white/10 rounded-2xl p-6 text-white outline-none focus:border-blue-500/50 text-sm h-24 md:h-auto resize-none transition-all"></textarea>
-                    <button type="submit" class="bg-blue-600 text-white px-8 py-4 rounded-[1.5rem] font-black text-[10px] uppercase tracking-[0.2em] hover:bg-blue-500 transition-all active:scale-95 shadow-xl shadow-blue-600/20">
+                    <button type="submit" class="bg-blue-600 text-white px-8 py-4 rounded-[1.5rem] font-black text-[10px] uppercase tracking-[0.2em] hover:bg-blue-500 transition-all active:scale-95 shadow-xl shadow-blue-600/20 h-full">
                         Post Reply
                     </button>
                 </form>
             </div>
 
-            <div class="space-y-6">
-                <% if (typeof replies !== 'undefined' && replies.length > 0) { %>
+            <div class="space-y-12 ml-6"> <% if (typeof replies !== 'undefined' && replies.length > 0) { %>
                     <% replies.forEach(reply => { %>
-                        <div class="glass-card rounded-3xl p-6 ml-4 reply-line">
+                        <div class="glass-card rounded-3xl p-6 reply-line">
                             <div class="flex justify-between items-start mb-3">
                                 <div class="flex flex-col">
                                     <span class="text-[10px] font-black text-blue-400 uppercase tracking-widest">
@@ -150,7 +158,7 @@
                                 </div>
                                 
                                 <% if (user && user.id === reply.author_id) { %>
-                                    <form action="/forum/reply/<%= reply.id %>/delete" method="POST" onsubmit="return confirm('Remove your response?')">
+                                    <form action="/forum/reply/<%= reply.id %>/delete" method="POST">
                                         <input type="hidden" name="post_id" value="<%= thread.id %>">
                                         <button type="submit" class="text-slate-600 hover:text-red-500 text-[10px] transition-colors p-2">
                                             <i class="fas fa-times"></i>
@@ -162,7 +170,7 @@
                         </div>
                     <% }) %>
                 <% } else { %>
-                    <div class="glass-card rounded-[2rem] p-12 text-center">
+                    <div class="glass-card rounded-[2rem] p-12 text-center ml-0">
                         <p class="italic text-slate-500 text-sm">Silence fills the hall. Be the first to speak.</p>
                     </div>
                 <% } %>
@@ -184,12 +192,8 @@
                 if (response.ok) {
                     const data = await response.json();
                     countSpan.innerText = `${data.likesCount} Support`;
-                    
-                    if (btn.classList.contains('text-blue-500')) {
-                        btn.classList.replace('text-blue-500', 'text-slate-400');
-                    } else {
-                        btn.classList.replace('text-slate-400', 'text-blue-500');
-                    }
+                    btn.classList.toggle('text-blue-500');
+                    btn.classList.toggle('text-slate-400');
                 }
             } catch (err) {
                 console.error("Support failed:", err);

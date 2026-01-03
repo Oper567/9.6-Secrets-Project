@@ -655,54 +655,30 @@ function appendPostToFeed(p) {
   const echoesDiv = document.querySelector(`#echoes-${p.id} .p-6`);
   if (echoesDiv) echoesDiv.innerHTML = commentsHTML;
 }
-const seedForum = async () => {
-    try {
-        // 1. Create a Media Thread (Tests your post-image CSS)
-        const mediaThread = await db.query(`
-            INSERT INTO forum_threads (title, content, author_id, media_url, created_at) 
-            VALUES ($1, $2, $3, $4, NOW() - INTERVAL '2 days') RETURNING id`,
-            [
-                "The Great Market View", 
-                "Captured the horizon during the sunset today. The colors were incredible.",
-                1, // Assuming User 1 exists
-                "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1200"
-            ]
+// seeds.js snippet
+const seedAncientScrolls = async () => {
+    // 1. Create a Media Scroll (Testing your .post-image CSS)
+    const mediaThread = await db.query(`
+        INSERT INTO forum_threads (title, content, author_id, media_url, created_at)
+        VALUES ('The Sunset over the Great Hall', 'A rare moment of peace.', 1, 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b', NOW())
+        RETURNING id
+    `);
+
+    // 2. Create a Deep Chain (Testing your .reply-line CSS)
+    const chainThread = await db.query(`
+        INSERT INTO forum_threads (title, content, author_id, created_at)
+        VALUES ('Proposed Village Law #4', 'Should we limit palm wine at festivals?', 2, NOW())
+        RETURNING id
+    `);
+    const threadId = chainThread.rows[0].id;
+
+    // 3. Loop to create 15 replies (Testing scrolling and vertical lines)
+    for (let i = 1; i <= 15; i++) {
+        await db.query(`
+            INSERT INTO forum_replies (post_id, author_id, reply_text, created_at)
+            VALUES ($1, $2, $3, NOW() + INTERVAL '${i} minutes')`,
+            [threadId, (i % 2 === 0 ? 1 : 2), `Village Response #${i}: I believe the elders should decide.`]
         );
-
-        // 2. Create a "Mega-Thread" (Tests Deep Reply Chains & Scrolling)
-        const megaThread = await db.query(`
-            INSERT INTO forum_threads (title, content, author_id, created_at) 
-            VALUES ($1, $2, $3, NOW() - INTERVAL '5 hours') RETURNING id`,
-            ["Village Meeting: New Well Location", "Where should we dig the new well?", 2]
-        );
-
-        const threadId = megaThread.rows[0].id;
-
-        // 3. AUTOMATION LOOP: Generate 12 varied replies
-        const sampleReplies = [
-            "North grove has the freshest soil.",
-            "I agree with the elders, near the Great Hall is best.",
-            "Will it be deep enough for the dry season?",
-            "We should consult the rain-maker first.",
-            "I can provide the stones for the rim.",
-            "The southern path is too rocky for digging."
-        ];
-
-        for (let i = 0; i < 12; i++) {
-            await db.query(`
-                INSERT INTO forum_replies (post_id, author_id, reply_text, created_at) 
-                VALUES ($1, $2, $3, NOW() - INTERVAL '${12 - i} minutes')`,
-                [
-                    threadId, 
-                    (i % 2 === 0 ? 1 : 2), // Alternates between two authors
-                    `${sampleReplies[i % sampleReplies.length]} (Thought #${i + 1})`
-                ]
-            );
-        }
-
-        console.log("📜 Ancient Scrolls have been written to the database!");
-    } catch (err) {
-        console.error("Seeding Error:", err);
     }
 };
 
