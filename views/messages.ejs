@@ -292,19 +292,27 @@
     fetchHistory(id);
 }
 
-    async function fetchHistory(friendId) {
-        const chatWindow = document.getElementById('chatWindow');
-        chatWindow.innerHTML = '<div class="my-auto mx-auto"><i class="fas fa-circle-notch animate-spin text-blue-600"></i></div>';
+  async function fetchHistory(friendId) {
+    const chatWindow = document.getElementById('chatWindow');
+    chatWindow.innerHTML = '...'; 
+    
+    try {
+        const res = await fetch(`/api/chat/${friendId}`);
+        const messages = await res.json();
         
-        try {
-            const res = await fetch(`/api/chat/${friendId}`);
-            const messages = await res.json();
-            chatWindow.innerHTML = '';
-            messages.forEach(m => appendMessage(m, String(m.sender_id) === String(currentUserId)));
-        } catch (e) { 
-            chatWindow.innerHTML = '<p class="text-center text-slate-600 text-xs">Failed to load ancient scrolls.</p>';
-        }
+        chatWindow.innerHTML = ''; // Clear the window first
+        
+        messages.forEach(m => {
+            // Determine if the message was sent by the logged-in user
+            const isMe = String(m.sender_id) === String(currentUserId);
+            
+            // Only append to UI, DO NOT trigger any socket emits here
+            appendMessage(m, isMe);
+        });
+    } catch (e) { 
+        console.error("Scroll error:", e);
     }
+}
 
     function appendMessage(m, isMe) {
         const chatWindow = document.getElementById('chatWindow');
@@ -334,28 +342,35 @@
     });
 
     // Send Message
-    document.getElementById('chatForm')?.addEventListener('submit', async e => {
-        e.preventDefault();
-        const input = document.getElementById('msgInput');
-        const content = input.value.trim();
-        if (!content || !currentFriendId) return;
-        
-        // Instant UI
-        appendMessage({ content, sender_id: currentUserId, created_at: new Date() }, true);
-        
-        // Socket Emit
-        socket.emit('private_message', { senderId: currentUserId, receiverId: currentFriendId, content });
-        
-        input.value = '';
-        socket.emit('typing', { receiverId: currentFriendId, senderId: currentUserId, isTyping: false });
-
-        // Save to DB
-        fetch('/api/chat/send', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ receiverId: currentFriendId, content })
-        });
+  document.getElementById('chatForm')?.addEventListener('submit', async e => {
+    e.preventDefault();
+    const input = document.getElementById('msgInput');
+    const content = input.value.trim();
+    
+    if (!content || !currentFriendId) return;
+    
+    // 1. Show it to me immediately (Sender's UI)
+    appendMessage({ 
+        content, 
+        sender_id: currentUserId, 
+        created_at: new Date() 
+    }, true);
+    
+    // 2. Send to server via Socket ONLY
+    // The server will handle saving it to the DB once.
+    socket.emit('private_message', { 
+        senderId: currentUserId, 
+        receiverId: currentFriendId, 
+        content 
     });
+    
+    // 3. UI Cleanup
+    input.value = '';
+    socket.emit('typing', { receiverId: currentFriendId, senderId: currentUserId, isTyping: false });
+
+    // ❌ REMOVED: fetch('/api/chat/send', ...) 
+    // Keeping this fetch is what causes the double message on reload!
+});
 
     function searchSouls() {
         const input = document.getElementById('globalSearch').value.toUpperCase();
