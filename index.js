@@ -32,33 +32,41 @@ const httpServer = createServer(app);
 const io = new Server(httpServer);
 
 const onlineUsers = new Map(); // userId -> socketId
-
 io.on('connection', (socket) => {
+    // 1. Join Room
     socket.on('join', (userId) => {
+        socket.join(`user_${userId}`); // Better than a Map for multi-tab support
         onlineUsers.set(String(userId), socket.id);
         console.log(`User ${userId} joined via socket ${socket.id}`);
     });
 
-    // Typing Indicator
+    // 2. Typing Indicator
     socket.on('typing', ({ receiverId, senderId, isTyping }) => {
-        const receiverSocketId = onlineUsers.get(String(receiverId));
-        if (receiverSocketId) {
-            io.to(receiverSocketId).emit('display_typing', { senderId, isTyping });
-        }
+        io.to(`user_${receiverId}`).emit('display_typing', { senderId, isTyping });
     });
 
+    // 3. Private Message (MERGED)
     socket.on('private_message', ({ senderId, receiverId, content }) => {
-        const receiverSocketId = onlineUsers.get(String(receiverId));
-        if (receiverSocketId) {
-            io.to(receiverSocketId).emit('new_whisper', {
-                sender_id: senderId,
-                content,
-                created_at: new Date()
-            });
-        }
+        // Send to the specific room for that user
+        io.to(`user_${receiverId}`).emit('new_whisper', {
+            sender_id: senderId,
+            content: content,
+            created_at: new Date()
+        });
+    });
+
+    // 4. Friend Request (MOVED INSIDE)
+    socket.on('send_request', async (data) => {
+        const { senderId, receiverId } = data;
+        io.to(`user_${receiverId}`).emit('notification_received', {
+            type: 'friend_request',
+            from: senderId,
+            message: "A new soul seeks kinship."
+        });
     });
 
     socket.on('disconnect', () => {
+        // Cleanup onlineUsers Map
         for (let [userId, socketId] of onlineUsers.entries()) {
             if (socketId === socket.id) {
                 onlineUsers.delete(userId);
@@ -66,28 +74,7 @@ io.on('connection', (socket) => {
             }
         }
     });
-});
-// Inside io.on('connection', ...)
-socket.on('send_request', async (data) => {
-    const { senderId, receiverId } = data;
-    // Notify the receiver instantly
-    io.to(`user_${receiverId}`).emit('notification_received', {
-        type: 'friend_request',
-        from: senderId,
-        message: "A new soul seeks kinship."
-    });
-});
-
-socket.on('private_message', (data) => {
-    const { receiverId, senderId, content } = data;
-    
-    // Notify receiver of a new message (for the sidebar/toast)
-    io.to(`user_${receiverId}`).emit('new_whisper', {
-        sender_id: senderId,
-        content: content,
-        created_at: new Date()
-    });
-});
+}); // <--- EVERYTHING SOCKET RELATED MUST BE ABOVE THIS BRACE
 // 1. Initialize DB first
 const db = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
