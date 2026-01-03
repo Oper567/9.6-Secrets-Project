@@ -1588,23 +1588,35 @@ function formatTimeAgo(date) {
   return date.toLocaleDateString();
 }
 app.post("/forum/thread/:id/reply", async (req, res) => {
-    if (!req.isAuthenticated()) return res.redirect("/login");
+    // 1. Ensure user is logged in
+    if (!req.isAuthenticated()) {
+        return res.status(401).send("You must be a villager to speak here.");
+    }
 
     const threadId = req.params.id;
     const { reply_text } = req.body;
-    const userId = req.user.id;
+    const authorId = req.user.id;
+
+    // 2. Validation
+    if (!reply_text || reply_text.trim().length === 0) {
+        return res.status(400).send("A silent reply cannot be heard.");
+    }
 
     try {
+        // 3. Insert the reply
+        // Make sure your table is 'forum_replies' and columns match!
         await db.query(
-            "INSERT INTO forum_replies (post_id, author_id, reply_text, created_at) VALUES ($1, $2, $3, NOW())",
-            [threadId, userId, reply_text]
+            `INSERT INTO forum_replies (post_id, author_id, reply_text, created_at) 
+             VALUES ($1, $2, $3, NOW())`,
+            [threadId, authorId, reply_text]
         );
         
-        // Redirect back to the thread to see the new reply
+        // 4. Return to the thread to see the message
         res.redirect(`/forum/thread/${threadId}`);
     } catch (err) {
         console.error("REPLY ERROR:", err);
-        res.status(500).send("The village elders could not hear your reply.");
+        // This is what triggers your error message
+        res.status(500).send("The village elders could not hear your reply: " + err.message);
     }
 });
 app.post("/forum/reply/:id/delete", async (req, res) => {
