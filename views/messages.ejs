@@ -217,7 +217,7 @@
 
     // Listen for incoming messages
 // Inside messages.ejs <script>
-    socket.on('new_whisper', (msg) => {
+socket.on('new_whisper', (msg) => {
     // 1. Check if the message is from the friend I am currently viewing
     const isCurrentChat = String(msg.sender_id) === String(currentFriendId);
     
@@ -240,7 +240,7 @@
             badge.classList.remove('hidden');
         }
     }
-    });
+});
 
     // Listen for typing
     socket.on('display_typing', ({ senderId, isTyping }) => {
