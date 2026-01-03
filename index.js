@@ -655,6 +655,56 @@ function appendPostToFeed(p) {
   const echoesDiv = document.querySelector(`#echoes-${p.id} .p-6`);
   if (echoesDiv) echoesDiv.innerHTML = commentsHTML;
 }
+const seedForum = async () => {
+    try {
+        // 1. Create a Media Thread (Tests your post-image CSS)
+        const mediaThread = await db.query(`
+            INSERT INTO forum_threads (title, content, author_id, media_url, created_at) 
+            VALUES ($1, $2, $3, $4, NOW() - INTERVAL '2 days') RETURNING id`,
+            [
+                "The Great Market View", 
+                "Captured the horizon during the sunset today. The colors were incredible.",
+                1, // Assuming User 1 exists
+                "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1200"
+            ]
+        );
+
+        // 2. Create a "Mega-Thread" (Tests Deep Reply Chains & Scrolling)
+        const megaThread = await db.query(`
+            INSERT INTO forum_threads (title, content, author_id, created_at) 
+            VALUES ($1, $2, $3, NOW() - INTERVAL '5 hours') RETURNING id`,
+            ["Village Meeting: New Well Location", "Where should we dig the new well?", 2]
+        );
+
+        const threadId = megaThread.rows[0].id;
+
+        // 3. AUTOMATION LOOP: Generate 12 varied replies
+        const sampleReplies = [
+            "North grove has the freshest soil.",
+            "I agree with the elders, near the Great Hall is best.",
+            "Will it be deep enough for the dry season?",
+            "We should consult the rain-maker first.",
+            "I can provide the stones for the rim.",
+            "The southern path is too rocky for digging."
+        ];
+
+        for (let i = 0; i < 12; i++) {
+            await db.query(`
+                INSERT INTO forum_replies (post_id, author_id, reply_text, created_at) 
+                VALUES ($1, $2, $3, NOW() - INTERVAL '${12 - i} minutes')`,
+                [
+                    threadId, 
+                    (i % 2 === 0 ? 1 : 2), // Alternates between two authors
+                    `${sampleReplies[i % sampleReplies.length]} (Thought #${i + 1})`
+                ]
+            );
+        }
+
+        console.log("📜 Ancient Scrolls have been written to the database!");
+    } catch (err) {
+        console.error("Seeding Error:", err);
+    }
+};
 
 // ADD THIS: Discover Route (Random media gallery)
 app.get("/discover", isAuth, async (req, res) => {
@@ -1519,14 +1569,22 @@ app.get("/forum/thread/:id", async (req, res) => {
         const postId = req.params.id;
         const userId = req.user ? req.user.id : 0;
 
+        // 1. Fetch the main post
+        // NOTE: Changed 'forum_posts' to 'forum_threads' if that's what your DB uses
         const threadResult = await db.query(`
             SELECT f.*, u.email AS author_email, u.profile_pic AS author_pic,
             (SELECT COUNT(*) FROM likes WHERE post_id = f.id) AS likes_count,
             (SELECT EXISTS (SELECT 1 FROM likes WHERE post_id = f.id AND user_id = $2)) AS liked_by_me
-            FROM forum_posts f 
+            FROM forum_threads f 
             JOIN users u ON f.author_id = u.id 
             WHERE f.id = $1`, [postId, userId]);
 
+        // Handle case where thread ID doesn't exist
+        if (threadResult.rows.length === 0) {
+            return res.status(404).send("This scroll has been lost to time.");
+        }
+
+        // 2. Fetch replies
         const repliesResult = await db.query(`
             SELECT r.*, u.email AS author_email 
             FROM forum_replies r 
@@ -1540,6 +1598,7 @@ app.get("/forum/thread/:id", async (req, res) => {
             user: req.user
         });
     } catch (err) {
+        console.error("GET THREAD ERROR:", err);
         res.status(500).send("Error reading scroll.");
     }
 });
@@ -1556,16 +1615,27 @@ function formatTimeAgo(date) {
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
   return date.toLocaleDateString();
 }
-app.post("/forum/thread/:id/reply", async (req, res) => {
+app.post("/forum/thread/:id/reply", isAuth, async (req, res) => {
     try {
-        const { reply_text } = req.body; // Matches <textarea name="reply_text">
+        const { reply_text } = req.body;
         const postId = req.params.id;
         const userId = req.user.id;
 
+        // 1. Save the reply
         await db.query(`
             INSERT INTO forum_replies (reply_text, post_id, author_id) 
             VALUES ($1, $2, $3)
         `, [reply_text, postId, userId]);
+
+        // 2. Fetch thread owner to notify them (Optional but recommended)
+        const thread = await db.query("SELECT author_id FROM forum_threads WHERE id = $1", [postId]);
+        
+        if (thread.rows.length > 0 && thread.rows[0].author_id !== userId) {
+            await db.query(`
+                INSERT INTO notifications (user_id, sender_id, type, message, is_read) 
+                VALUES ($1, $2, 'forum_reply', 'replied to your thread', false)
+            `, [thread.rows[0].author_id, userId]);
+        }
 
         res.redirect(`/forum/thread/${postId}`);
     } catch (err) {
