@@ -67,6 +67,27 @@ io.on('connection', (socket) => {
         }
     });
 });
+// Inside io.on('connection', ...)
+socket.on('send_request', async (data) => {
+    const { senderId, receiverId } = data;
+    // Notify the receiver instantly
+    io.to(`user_${receiverId}`).emit('notification_received', {
+        type: 'friend_request',
+        from: senderId,
+        message: "A new soul seeks kinship."
+    });
+});
+
+socket.on('private_message', (data) => {
+    const { receiverId, senderId, content } = data;
+    
+    // Notify receiver of a new message (for the sidebar/toast)
+    io.to(`user_${receiverId}`).emit('new_whisper', {
+        sender_id: senderId,
+        content: content,
+        created_at: new Date()
+    });
+});
 // 1. Initialize DB first
 const db = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
@@ -1007,21 +1028,29 @@ app.post("/forum/create", isAuth, upload.single('media'), async (req, res) => {
 /* ---------------- CHAT SYSTEM ---------------- */
 app.get("/messages", isAuth, async (req, res) => {
   try {
+    const userId = req.user.id;
+    
     const friends = await db.query(
       `SELECT 
         u.id, 
-        u.email, -- Use email instead of username
+        u.email, 
         u.profile_pic,
         (u.last_active > NOW() - INTERVAL '5 minutes') as is_online,
-        f.status
+        f.status,
+        -- Count unread messages specifically from this friend to the current user
+        (SELECT COUNT(*) FROM messages m 
+         WHERE m.sender_id = u.id 
+         AND m.receiver_id = $1 
+         AND m.is_read = false) as unread_count
       FROM users u
       JOIN friendships f ON (
         (f.sender_id = u.id AND f.receiver_id = $1) OR 
         (f.receiver_id = u.id AND f.sender_id = $1)
       )
       WHERE u.id != $1 
-      AND f.status = 'accepted'`,
-      [req.user.id]
+      AND f.status = 'accepted'
+      ORDER BY is_online DESC, u.id DESC`,
+      [userId]
     );
 
     res.render("messages", {
@@ -1029,7 +1058,7 @@ app.get("/messages", isAuth, async (req, res) => {
       user: req.user,
     });
   } catch (err) {
-    console.error(err);
+    console.error("MESSAGES ROUTE ERROR:", err);
     res.redirect("/feed");
   }
 });
@@ -1133,25 +1162,37 @@ app.post("/friends/request/:receiverId", isAuth, async (req, res) => {
     const receiverId = req.params.receiverId;
 
     try {
-        // Prevent sending a request to yourself
         if (senderId == receiverId) return res.redirect("/villagers");
 
-        // Check if a request already exists
         const check = await db.query(
             "SELECT * FROM friendships WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)",
             [senderId, receiverId]
         );
 
         if (check.rows.length === 0) {
+            // 1. Create the friendship record
             await db.query(
                 "INSERT INTO friendships (sender_id, receiver_id, status) VALUES ($1, $2, 'pending')",
                 [senderId, receiverId]
             );
+
+            // 2. Create the notification record
+            await db.query(
+                `INSERT INTO notifications (user_id, sender_id, type, message, is_read) 
+                 VALUES ($1, $2, 'friend_request', 'seeks kinship with you', false)`,
+                [receiverId, senderId]
+            );
+
+            // 3. (Optional) Emit socket event for real-time pop-up
+            // io.to(`user_${receiverId}`).emit('notification_received', {
+            //    type: 'friend_request',
+            //    message: 'Someone seeks kinship!'
+            // });
         }
         
-        res.redirect("/villagers"); // Stay on the page
+        res.redirect("/villagers"); 
     } catch (err) {
-        console.error(err);
+        console.error("FRIEND REQUEST ERROR:", err);
         res.status(500).send("Village Square Error");
     }
 });
@@ -1177,21 +1218,34 @@ app.post("/friends/accept/:senderId", isAuth, async (req, res) => {
     const userId = req.user.id;
 
     try {
-        // Update status in friendships
+        // 1. Update status in friendships
         await db.query(
             "UPDATE friendships SET status = 'accepted' WHERE sender_id = $1 AND receiver_id = $2",
             [senderId, userId]
         );
 
-        // Resolve notification
+        // 2. Mark the incoming notification as resolved
         await db.query(
-            "UPDATE notifications SET is_resolved = true WHERE user_id = $1 AND sender_id = $2 AND type = 'friend_request'",
+            "UPDATE notifications SET is_resolved = true, is_read = true WHERE user_id = $1 AND sender_id = $2 AND type = 'friend_request'",
             [userId, senderId]
         );
 
+        // 3. Notify the original sender that their request was accepted
+        await db.query(
+            `INSERT INTO notifications (user_id, sender_id, type, message, is_read) 
+             VALUES ($1, $2, 'friend_accept', 'sealed a kinship with you', false)`,
+            [senderId, userId]
+        );
+
+        // 4. (Optional) Real-time socket pulse to the sender
+        // io.to(`user_${senderId}`).emit('notification_received', {
+        //     type: 'friend_accept',
+        //     message: 'Kinship sealed! You can now whisper.'
+        // });
+
         res.redirect("/notifications");
     } catch (err) {
-        console.error(err);
+        console.error("ACCEPT ERROR:", err);
         res.status(500).send("Could not seal the kinship.");
     }
 });
@@ -1292,18 +1346,26 @@ app.get("/notifications", isAuth, async (req, res) => {
     const userId = req.user.id;
 
     try {
-        // 1. Fetch notifications with sender details
+        // 1. Fetch notifications + sender info + CURRENT friendship status
         const result = await db.query(`
-            SELECT n.*, u.email AS sender_name, u.profile_pic AS sender_pic
+            SELECT 
+                n.*, 
+                u.email AS sender_name, 
+                u.profile_pic AS sender_pic,
+                f.status AS friendship_status -- Added to check if already 'accepted'
             FROM notifications n
             LEFT JOIN users u ON n.sender_id = u.id
+            LEFT JOIN friendships f ON (
+                (f.sender_id = n.sender_id AND f.receiver_id = n.user_id) OR
+                (f.receiver_id = n.sender_id AND f.sender_id = n.user_id)
+            )
             WHERE n.user_id = $1
             ORDER BY n.created_at DESC
             LIMIT 50`, 
             [userId]
         );
 
-        // 2. Mark all as read once the page is opened
+        // 2. Mark as read
         await db.query(
             "UPDATE notifications SET is_read = true WHERE user_id = $1 AND is_read = false",
             [userId]
@@ -1312,20 +1374,27 @@ app.get("/notifications", isAuth, async (req, res) => {
         res.render("notifications", {
             notifications: result.rows,
             user: req.user,
-            unreadCount: 0 // Reset since we just marked them as read
+            unreadCount: 0 
         });
     } catch (err) {
         console.error("Alerts Error:", err);
-        res.status(500).send("The village drums are silent. Error fetching alerts.");
+        res.status(500).send("The village drums are silent.");
     }
 });
 
 // ADD THIS: Clear Notifications Route
 app.post("/notifications/clear", isAuth, async (req, res) => {
+    const userId = req.user.id;
     try {
-        await db.query("DELETE FROM notifications WHERE user_id = $1", [req.user.id]);
+        // 1. Wipe the echoes from the database
+        await db.query("DELETE FROM notifications WHERE user_id = $1", [userId]);
+
+        // 2. (Optional) If you have a real-time unread counter, reset it
+        // io.to(`user_${userId}`).emit('clear_unread_count');
+
         res.redirect("/notifications");
     } catch (err) {
+        console.error("CLEAR NOTIF ERROR:", err);
         res.status(500).send("The echoes refused to fade.");
     }
 });

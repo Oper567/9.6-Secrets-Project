@@ -19,16 +19,6 @@
             backdrop-filter: blur(20px); 
             -webkit-backdrop-filter: blur(20px);
         }
-        
-        #nav-dropdown:not(.hidden) { 
-            display: flex !important;
-            animation: slideDown 0.3s ease-out forwards; 
-        }
-        @keyframes slideDown {
-            from { opacity: 0; transform: translateY(-15px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
         .unread-dot { 
             width: 10px; height: 10px; 
             background-color: #3b82f6; 
@@ -38,6 +28,11 @@
         .notif-card { transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
         .notif-card:hover { border-color: rgba(59, 130, 246, 0.4); }
         
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        .new-notif-anim { animation: slideIn 0.4s ease-out; }
         ::-webkit-scrollbar { width: 0px; background: transparent; }
     </style>
 </head>
@@ -47,26 +42,12 @@
         <div class="max-w-6xl mx-auto px-4 py-3">
             <div class="flex justify-between items-center">
                 <div class="flex items-center gap-4">
-                    <button id="menu-btn" class="md:hidden text-slate-400 p-1">
-                        <i class="fas fa-bars text-xl"></i>
-                    </button>
                     <h1 class="text-xl font-black text-blue-500 italic tracking-tighter cursor-pointer" onclick="window.location.href='/feed'">APUGO</h1>
                 </div>
-                
-                <div class="flex items-center gap-4">
-                    <a href="/logout" class="text-[10px] font-black text-slate-500 uppercase border border-slate-800 px-4 py-2 rounded-full hover:bg-red-950/30 hover:text-red-400 transition-all">
-                        <i class="fas fa-sign-out-alt md:hidden"></i>
-                        <span class="hidden md:inline">Exit Square</span>
-                    </a>
-                </div>
-            </div>
-
-            <div id="nav-dropdown" class="hidden flex-col md:flex-row items-center gap-4 mt-4 pb-2">
-                <div class="flex flex-col md:flex-row w-full md:w-auto md:gap-4 text-[10px] font-black uppercase tracking-widest bg-slate-950 md:bg-transparent rounded-2xl border border-slate-800 md:border-0 overflow-hidden shadow-2xl">
-                    <a href="/feed" class="px-6 py-4 border-b border-slate-900 md:border-0 text-slate-400 hover:text-blue-400 hover:bg-slate-900 transition">Village Square</a>
-                    <a href="/discover" class="px-6 py-4 border-b border-slate-900 md:border-0 text-slate-400 hover:text-blue-400 hover:bg-slate-900 transition">Discovery</a>
-                    <a href="/messages" class="px-6 py-4 border-b border-slate-900 md:border-0 text-slate-400 hover:text-blue-400 hover:bg-slate-900 transition">Whispers</a>
-                    <a href="/profile" class="px-6 py-4 text-slate-400 hover:text-blue-400 hover:bg-slate-900 transition">My Hut</a>
+                <div class="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest hidden md:flex">
+                    <a href="/feed" class="text-slate-400 hover:text-white transition">Square</a>
+                    <a href="/messages" class="text-slate-400 hover:text-white transition">Whispers</a>
+                    <a href="/profile" class="text-slate-400 hover:text-white transition">My Hut</a>
                 </div>
             </div>
         </div>
@@ -83,7 +64,7 @@
             </div>
             
             <% if (locals.notifications && notifications.length > 0) { %>
-                <form action="/notifications/clear" method="POST" id="clearNotifForm">
+                <form action="/notifications/clear" method="POST">
                     <button type="submit" class="text-[9px] font-black text-slate-600 hover:text-red-500 uppercase tracking-widest transition-colors">
                         Clear All
                     </button>
@@ -97,7 +78,7 @@
                     <div class="notif-card bg-slate-900/40 border <%= notif.is_read ? 'border-white/5' : 'border-blue-500/30 bg-blue-900/20' %> rounded-[2rem] p-5 flex items-center justify-between group">
                         <div class="flex items-center gap-4 min-w-0">
                             <div class="relative shrink-0">
-                                <div class="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center border border-slate-700 overflow-hidden shadow-inner">
+                                <div class="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center border border-slate-700 overflow-hidden">
                                     <% if (notif.sender_pic) { %>
                                         <img src="<%= notif.sender_pic %>" class="w-full h-full object-cover">
                                     <% } else { %>
@@ -115,7 +96,7 @@
                                     <span class="opacity-70"><%= notif.message %></span>
                                 </p>
                                 <p class="text-[9px] text-slate-600 font-black uppercase mt-1.5 tracking-wider">
-                                    <%= new Date(notif.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) %>
+                                    <%= new Date(notif.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) %>
                                 </p>
                             </div>
                         </div>
@@ -124,20 +105,23 @@
                             <% if (notif.type === 'friend_request' && !notif.is_resolved) { %>
                                 <div class="flex gap-2">
                                     <form action="/friends/accept/<%= notif.sender_id %>" method="POST">
-                                        <button class="bg-blue-600 hover:bg-blue-500 text-white w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 shadow-lg shadow-blue-600/20">
+                                        <button class="bg-blue-600 hover:bg-blue-500 text-white w-9 h-9 rounded-full flex items-center justify-center transition-all shadow-lg shadow-blue-600/20">
                                             <i class="fas fa-check text-xs"></i>
                                         </button>
                                     </form>
                                     <form action="/friends/decline/<%= notif.sender_id %>" method="POST">
-                                        <button class="bg-slate-800 hover:bg-red-900/40 text-slate-400 hover:text-red-500 w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90">
+                                        <button class="bg-slate-800 hover:bg-red-900/40 text-slate-400 hover:text-red-500 w-9 h-9 rounded-full flex items-center justify-center transition-all">
                                             <i class="fas fa-times text-xs"></i>
                                         </button>
                                     </form>
                                 </div>
+                            <% } else if (notif.type === 'whisper') { %>
+                                <a href="/messages" class="w-8 h-8 flex items-center justify-center text-blue-500">
+                                    <i class="fas fa-comment-dots text-sm"></i>
+                                </a>
                             <% } else { %>
                                 <div class="w-8 h-8 flex items-center justify-center text-slate-700 group-hover:text-blue-500 transition-colors">
                                     <% if (notif.type === 'like') { %><i class="fas fa-heart text-sm"></i><% } %>
-                                    <% if (notif.type === 'comment') { %><i class="fas fa-comment-dots text-sm"></i><% } %>
                                     <% if (notif.type === 'friend_accept') { %><i class="fas fa-user-plus text-sm"></i><% } %>
                                 </div>
                             <% } %>
@@ -145,52 +129,51 @@
                     </div>
                 <% }) %>
             <% } else { %>
-                <div class="py-24 text-center border border-dashed border-white/5 rounded-[3rem] bg-slate-900/20">
-                    <div class="w-20 h-20 bg-slate-900/50 rounded-full flex items-center justify-center mx-auto mb-6 border border-white/5 shadow-inner">
-                        <i class="fas fa-wind text-slate-700 text-2xl"></i>
-                    </div>
+                <div id="empty-state" class="py-24 text-center border border-dashed border-white/5 rounded-[3rem] bg-slate-900/20">
+                    <i class="fas fa-wind text-slate-700 text-2xl mb-4"></i>
                     <p class="text-slate-600 font-black uppercase tracking-[0.4em] text-[10px]">Quiet in the village</p>
-                    <p class="text-slate-800 text-[9px] font-medium mt-2 italic">Check back later for new echoes</p>
                 </div>
             <% } %>
         </div>
     </div>
 
     <nav class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-2xl border border-white/10 px-8 py-4 rounded-full flex gap-10 shadow-2xl z-[60] md:hidden">
-        <a href="/feed" class="text-slate-500 hover:text-blue-400 transition-all"><i class="fas fa-home text-lg"></i></a>
-        <a href="/discover" class="text-slate-500 hover:text-blue-400 transition-all"><i class="fas fa-compass text-lg"></i></a>
-        <a href="/messages" class="text-slate-500 hover:text-blue-400 transition-all"><i class="fas fa-comment-dots text-lg"></i></a>
+        <a href="/feed" class="text-slate-500"><i class="fas fa-home text-lg"></i></a>
+        <a href="/messages" class="text-slate-500"><i class="fas fa-comment-dots text-lg"></i></a>
         <a href="/notifications" class="text-blue-500"><i class="fas fa-bell text-lg"></i></a>
-        <a href="/profile" class="text-slate-500 hover:text-blue-400 transition-all"><i class="fas fa-user text-lg"></i></a>
+        <a href="/profile" class="text-slate-500"><i class="fas fa-user text-lg"></i></a>
     </nav>
 
+    <script src="/socket.io/socket.io.js"></script>
     <script>
-        // Hamburger Menu Toggle
-        const menuBtn = document.getElementById('menu-btn');
-        const dropdown = document.getElementById('nav-dropdown');
-        menuBtn?.addEventListener('click', () => {
-            dropdown.classList.toggle('hidden');
-        });
+        const socket = io();
+        const userId = "<%= user.id %>";
+        socket.emit('join', userId);
 
-        // Optional: AJAX Clear All (if you want it to clear without page reload)
-        /*
-        const clearForm = document.getElementById('clearNotifForm');
-        clearForm?.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const response = await fetch('/notifications/clear', { method: 'POST' });
-            if (response.ok) {
-                document.getElementById('notification-container').innerHTML = `
-                    <div class="py-24 text-center border border-dashed border-white/5 rounded-[3rem] bg-slate-900/20">
-                        <div class="w-20 h-20 bg-slate-900/50 rounded-full flex items-center justify-center mx-auto mb-6 border border-white/5 shadow-inner">
-                            <i class="fas fa-wind text-slate-700 text-2xl"></i>
-                        </div>
-                        <p class="text-slate-600 font-black uppercase tracking-[0.4em] text-[10px]">Quiet in the village</p>
+        socket.on('notification_received', (data) => {
+            const container = document.getElementById('notification-container');
+            const emptyState = document.getElementById('empty-state');
+            if (emptyState) emptyState.remove();
+
+            const newCard = document.createElement('div');
+            newCard.className = "notif-card bg-blue-900/20 border border-blue-500/30 rounded-[2rem] p-5 flex items-center justify-between new-notif-anim";
+            newCard.innerHTML = `
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white shadow-lg">
+                        <i class="fas fa-bolt text-xs"></i>
                     </div>
-                `;
-                clearForm.remove();
-            }
+                    <div>
+                        <p class="text-[13px] text-white font-black">New Alert</p>
+                        <p class="text-[11px] text-slate-400">${data.message || 'Something happened in the square'}</p>
+                    </div>
+                </div>
+                <button onclick="location.reload()" class="text-blue-500 text-[10px] font-black uppercase px-4 py-2 bg-blue-500/10 rounded-full">Update</button>
+            `;
+            container.prepend(newCard);
+            
+            // Play a subtle sound if you like
+            // new Audio('/sounds/echo.mp3').play();
         });
-        */
     </script>
 </body>
 </html>
