@@ -1543,9 +1543,12 @@ app.get("/forum", async (req, res) => {
 app.get("/forum/thread/:id", async (req, res) => {
     try {
         const postId = req.params.id;
+        // Verify postId is a number to prevent SQL errors
+        if (isNaN(postId)) return res.status(400).send("Invalid Scroll ID");
+
         const userId = req.user ? req.user.id : 0;
 
-        // Fetch thread with author info and like status
+        // Optimized Query: Note the column names!
         const threadResult = await db.query(`
             SELECT f.*, u.username, u.email AS author_email, u.profile_pic AS author_pic,
             (SELECT COUNT(*) FROM likes WHERE post_id = f.id) AS likes_count,
@@ -1555,10 +1558,9 @@ app.get("/forum/thread/:id", async (req, res) => {
             WHERE f.id = $1`, [postId, userId]);
 
         if (threadResult.rows.length === 0) {
-            return res.status(404).send("This scroll has been lost to time.");
+            return res.status(404).render("404"); // Or a custom 'not found' page
         }
 
-        // Fetch replies
         const repliesResult = await db.query(`
             SELECT r.*, u.username, u.email AS author_email 
             FROM forum_replies r 
@@ -1569,11 +1571,14 @@ app.get("/forum/thread/:id", async (req, res) => {
         res.render("thread", {
             thread: threadResult.rows[0],
             replies: repliesResult.rows,
-            user: req.user || null // Crucial: prevents EJS 'undefined' errors
+            user: req.user || null
         });
     } catch (err) {
-        console.error("GET THREAD ERROR:", err);
-        res.status(500).send("Error reading scroll.");
+        // LOOK AT YOUR TERMINAL/CMD WHEN THIS HAPPENS:
+        console.error("--- DATABASE ERROR ---");
+        console.error(err.message); 
+        console.error("----------------------");
+        res.status(500).send(`Error reading scroll: ${err.message}`);
     }
 });
 
