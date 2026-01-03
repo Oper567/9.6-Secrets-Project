@@ -1005,22 +1005,19 @@ app.delete("/event/:postId/comment/:commentId", isAuth, async (req, res) => {
 // Ensure the route matches the form action (/forum/create)
 app.post("/forum/create", isAuth, upload.single('media'), async (req, res) => {
     try {
-        // 1. Extract the new fields (title, category, price) from the form
         const { title, content, category, price } = req.body;
         const authorId = req.user.id;
         
         let mediaUrl = null;
         let mediaType = 'text';
 
-        // Validation: Ensure we have a title and content
         if (!title || !content) {
             return res.status(400).send("The decree must have a title and a message.");
         }
 
-        // 2. Handle the Price logic for Marketplace
-        // If it's marketplace, convert price to number; otherwise, set to null
         const finalPrice = category === 'marketplace' && price ? parseFloat(price) : null;
 
+        // --- Supabase Upload Logic ---
         if (req.file) {
             const file = req.file;
             const fileExt = file.originalname.split('.').pop();
@@ -1029,7 +1026,6 @@ app.post("/forum/create", isAuth, upload.single('media'), async (req, res) => {
 
             mediaType = file.mimetype.startsWith('video') ? 'video' : 'image';
 
-            // Upload Buffer to Supabase
             const { data, error } = await supabase.storage
                 .from('apugo_village')
                 .upload(filePath, file.buffer, {
@@ -1039,7 +1035,6 @@ app.post("/forum/create", isAuth, upload.single('media'), async (req, res) => {
 
             if (error) throw error;
 
-            // Get the Public URL
             const { data: { publicUrl } } = supabase.storage
                 .from('apugo_village')
                 .getPublicUrl(filePath);
@@ -1047,16 +1042,19 @@ app.post("/forum/create", isAuth, upload.single('media'), async (req, res) => {
             mediaUrl = publicUrl;
         }
 
-        // 3. Updated SQL Query to include title, category, and price
-        await db.query(
-            `INSERT INTO forum_posts 
+        // --- Database Logic ---
+        // Change 'forum_posts' to 'forum_threads' to match your GET route!
+        const result = await db.query(
+            `INSERT INTO forum_threads 
             (author_id, title, content, category, price, media_url, media_type, is_deleted) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, false)`,
+            VALUES ($1, $2, $3, $4, $5, $6, $7, false) 
+            RETURNING id`, 
             [authorId, title, content, category, finalPrice, mediaUrl, mediaType]
         );
 
-        // Redirect back to forum so they see their new thread
-        res.redirect("/forum");
+        // Redirect directly to the newly created thread
+        res.redirect(`/forum/thread/${result.rows[0].id}`);
+
     } catch (err) {
         console.error("POST ERROR:", err);
         res.status(500).send("The Village Scroll could not be sealed: " + err.message);
@@ -1501,24 +1499,25 @@ app.get("/forum", async (req, res) => {
         
         let query = `
             SELECT 
-                forum_posts.*, 
-                users.email AS author_email, 
-                users.profile_pic AS author_pic 
-            FROM forum_posts 
-            LEFT JOIN users ON forum_posts.author_id = users.id
+                f.*, 
+                u.email AS author_email, 
+                u.profile_pic AS author_pic,
+                (SELECT COUNT(*) FROM forum_replies WHERE post_id = f.id) AS reply_count
+            FROM forum_posts f
+            LEFT JOIN users u ON f.author_id = u.id
+            WHERE f.is_deleted = false
         `;
         
         let params = [];
         if (activeCat !== 'all') {
-            query += ` WHERE category = $1`;
+            query += ` AND f.category = $1`;
             params.push(activeCat);
         }
         
-        query += ` ORDER BY created_at DESC`;
+        query += ` ORDER BY f.created_at DESC`;
 
         const result = await db.query(query, params);
 
-        // This makes sure the template has 'threads' and 'user'
         res.render("forum", { 
             threads: result.rows, 
             activeCat: activeCat,
@@ -1545,20 +1544,19 @@ app.get("/forum/thread/:id", async (req, res) => {
         const postId = req.params.id;
         const userId = req.user ? req.user.id : 0;
 
-        // REMOVED u.username to fix your error
+        // Standardized to forum_posts
         const threadResult = await db.query(`
             SELECT f.*, u.email AS author_email, u.profile_pic AS author_pic,
             (SELECT COUNT(*) FROM likes WHERE post_id = f.id) AS likes_count,
             (SELECT EXISTS (SELECT 1 FROM likes WHERE post_id = f.id AND user_id = $2)) AS liked_by_me
-            FROM forum_threads f 
+            FROM forum_posts f 
             JOIN users u ON f.author_id = u.id 
-            WHERE f.id = $1`, [postId, userId]);
+            WHERE f.id = $1 AND f.is_deleted = false`, [postId, userId]);
 
         if (threadResult.rows.length === 0) {
             return res.status(404).send("This scroll has been lost to time.");
         }
 
-        // REMOVED u.username here as well
         const repliesResult = await db.query(`
             SELECT r.*, u.email AS author_email 
             FROM forum_replies r 
