@@ -216,16 +216,24 @@
 
     // Listen for incoming messages
     socket.on('new_whisper', (msg) => {
-        if (String(msg.sender_id) === String(currentFriendId)) {
-            appendMessage(msg, false);
-        } else {
-            const badge = document.getElementById(`unread-${msg.sender_id}`);
-            if (badge) {
-                badge.innerText = parseInt(badge.innerText || 0) + 1;
-                badge.classList.remove('hidden');
-            }
+    if (String(msg.sender_id) === String(currentFriendId)) {
+        appendMessage(msg, false);
+
+        // ✅ ADD THIS: Tell the server I've seen this specific new message
+        fetch(`/api/chat/read/${msg.sender_id}`, { method: 'POST' })
+            .catch(err => console.error("Could not sync read status:", err));
+            
+    } else {
+        const badge = document.getElementById(`unread-${msg.sender_id}`);
+        if (badge) {
+            badge.innerText = parseInt(badge.innerText || 0) + 1;
+            badge.classList.remove('hidden');
         }
-    });
+        
+        // Optional: Play a "whisper" sound for background messages
+        // new Audio('/sounds/notification.mp3').play();
+    }
+});
 
     // Listen for typing
     socket.on('display_typing', ({ senderId, isTyping }) => {
