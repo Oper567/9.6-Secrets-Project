@@ -216,25 +216,31 @@
     });
 
     // Listen for incoming messages
+    // Inside messages.ejs <script>
     socket.on('new_whisper', (msg) => {
-    if (String(msg.sender_id) === String(currentFriendId)) {
+    // 1. Check if the message is from the friend I am currently viewing
+    const isCurrentChat = String(msg.sender_id) === String(currentFriendId);
+    
+    // 2. CHECK: Is this message NOT from me? 
+    // (This prevents the double-display for the sender)
+    const isNotMe = String(msg.sender_id) !== String(currentUserId);
+
+    if (isCurrentChat && isNotMe) {
         appendMessage(msg, false);
 
-        // ✅ ADD THIS: Tell the server I've seen this specific new message
+        // Sync read status
         fetch(`/api/chat/read/${msg.sender_id}`, { method: 'POST' })
-            .catch(err => console.error("Could not sync read status:", err));
+            .catch(err => console.error("Read sync failed:", err));
             
-    } else {
+    } else if (isNotMe) {
+        // Only update badges for messages from OTHERS
         const badge = document.getElementById(`unread-${msg.sender_id}`);
         if (badge) {
             badge.innerText = parseInt(badge.innerText || 0) + 1;
             badge.classList.remove('hidden');
         }
-        
-        // Optional: Play a "whisper" sound for background messages
-        // new Audio('/sounds/notification.mp3').play();
-    }
-});
+        }
+    });
 
     // Listen for typing
     socket.on('display_typing', ({ senderId, isTyping }) => {
