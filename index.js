@@ -1539,31 +1539,39 @@ app.get("/forum", async (req, res) => {
 // 'media' here MUST match name="media" in your HTM1
 
 // VIEW SINGLE THREAD
-app.post("/forum/thread/:id/reply", async (req, res) => {
-    if (!req.isAuthenticated()) return res.redirect("/login");
-
-    const threadId = req.params.id;
-    const { reply_text } = req.body; 
-    const authorId = req.user.id;
-
-    // DEBUG: Check your terminal for this log!
-    console.log("Incoming Reply Text:", reply_text);
-
-    if (!reply_text) {
-        return res.status(400).send("The elders cannot read an empty scroll.");
-    }
-
+app.get("/forum/thread/:id", async (req, res) => {
     try {
-        await db.query(
-            `INSERT INTO forum_replies (post_id, author_id, comment_text, created_at) 
-             VALUES ($1, $2, $3, NOW())`,
-            [threadId, authorId, reply_text] // reply_text (from form) -> comment_text (in DB)
-        );
-        
-        res.redirect(`/forum/thread/${threadId}`);
+        const postId = req.params.id;
+        const userId = req.user ? req.user.id : 0;
+
+        // Standardized to forum_posts
+        const threadResult = await db.query(`
+            SELECT f.*, u.email AS author_email, u.profile_pic AS author_pic,
+            (SELECT COUNT(*) FROM likes WHERE post_id = f.id) AS likes_count,
+            (SELECT EXISTS (SELECT 1 FROM likes WHERE post_id = f.id AND user_id = $2)) AS liked_by_me
+            FROM forum_posts f 
+            JOIN users u ON f.author_id = u.id 
+            WHERE f.id = $1 AND f.is_deleted = false`, [postId, userId]);
+
+        if (threadResult.rows.length === 0) {
+            return res.status(404).send("This scroll has been lost to time.");
+        }
+
+      const repliesResult = await db.query(`
+      SELECT r.id, r.comment_text, r.created_at, u.email AS author_email, u.id AS author_id
+      FROM forum_replies r 
+      JOIN users u ON r.author_id = u.id 
+      WHERE r.post_id = $1 
+      ORDER BY r.created_at ASC`, [postId]);
+
+        res.render("thread", {
+            thread: threadResult.rows[0],
+            replies: repliesResult.rows,
+            user: req.user || null
+        });
     } catch (err) {
-        console.error("REPLY ERROR:", err);
-        res.status(500).send("The village elders could not hear your reply.");
+        console.error("GET THREAD ERROR:", err);
+        res.status(500).send("Error reading scroll.");
     }
 });
 
@@ -1583,15 +1591,21 @@ app.post("/forum/thread/:id/reply", async (req, res) => {
     if (!req.isAuthenticated()) return res.redirect("/login");
 
     const threadId = req.params.id;
-    const { reply_text } = req.body; // This comes from your <textarea name="reply_text">
+    const { reply_text } = req.body; 
     const authorId = req.user.id;
 
+    // DEBUG: Check your terminal for this log!
+    console.log("Incoming Reply Text:", reply_text);
+
+    if (!reply_text) {
+        return res.status(400).send("The elders cannot read an empty scroll.");
+    }
+
     try {
-        // Updated to use 'comment_text' as required by your database
         await db.query(
             `INSERT INTO forum_replies (post_id, author_id, comment_text, created_at) 
              VALUES ($1, $2, $3, NOW())`,
-            [threadId, authorId, reply_text] 
+            [threadId, authorId, reply_text] // reply_text (from form) -> comment_text (in DB)
         );
         
         res.redirect(`/forum/thread/${threadId}`);
