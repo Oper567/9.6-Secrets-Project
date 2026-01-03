@@ -1545,24 +1545,22 @@ app.get("/forum/thread/:id", async (req, res) => {
         const postId = req.params.id;
         const userId = req.user ? req.user.id : 0;
 
-        // 1. Fetch the main post
-        // NOTE: Changed 'forum_posts' to 'forum_threads' if that's what your DB uses
+        // Fetch thread with author info and like status
         const threadResult = await db.query(`
-            SELECT f.*, u.email AS author_email, u.profile_pic AS author_pic,
+            SELECT f.*, u.username, u.email AS author_email, u.profile_pic AS author_pic,
             (SELECT COUNT(*) FROM likes WHERE post_id = f.id) AS likes_count,
             (SELECT EXISTS (SELECT 1 FROM likes WHERE post_id = f.id AND user_id = $2)) AS liked_by_me
             FROM forum_threads f 
             JOIN users u ON f.author_id = u.id 
             WHERE f.id = $1`, [postId, userId]);
 
-        // Handle case where thread ID doesn't exist
         if (threadResult.rows.length === 0) {
             return res.status(404).send("This scroll has been lost to time.");
         }
 
-        // 2. Fetch replies
+        // Fetch replies
         const repliesResult = await db.query(`
-            SELECT r.*, u.email AS author_email 
+            SELECT r.*, u.username, u.email AS author_email 
             FROM forum_replies r 
             JOIN users u ON r.author_id = u.id 
             WHERE r.post_id = $1 
@@ -1571,7 +1569,7 @@ app.get("/forum/thread/:id", async (req, res) => {
         res.render("thread", {
             thread: threadResult.rows[0],
             replies: repliesResult.rows,
-            user: req.user
+            user: req.user || null // Crucial: prevents EJS 'undefined' errors
         });
     } catch (err) {
         console.error("GET THREAD ERROR:", err);
@@ -1591,32 +1589,36 @@ function formatTimeAgo(date) {
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
   return date.toLocaleDateString();
 }
-app.post("/forum/thread/:id/reply", isAuth, async (req, res) => {
+app.post("/forum/thread/:id/reply", async (req, res) => {
+    if (!req.isAuthenticated()) return res.redirect("/login");
+
+    const threadId = req.params.id;
+    const { reply_text } = req.body;
+    const userId = req.user.id;
+
     try {
-        const { reply_text } = req.body;
-        const postId = req.params.id;
-        const userId = req.user.id;
-
-        // 1. Save the reply
-        await db.query(`
-            INSERT INTO forum_replies (reply_text, post_id, author_id) 
-            VALUES ($1, $2, $3)
-        `, [reply_text, postId, userId]);
-
-        // 2. Fetch thread owner to notify them (Optional but recommended)
-        const thread = await db.query("SELECT author_id FROM forum_threads WHERE id = $1", [postId]);
+        await db.query(
+            "INSERT INTO forum_replies (post_id, author_id, reply_text, created_at) VALUES ($1, $2, $3, NOW())",
+            [threadId, userId, reply_text]
+        );
         
-        if (thread.rows.length > 0 && thread.rows[0].author_id !== userId) {
-            await db.query(`
-                INSERT INTO notifications (user_id, sender_id, type, message, is_read) 
-                VALUES ($1, $2, 'forum_reply', 'replied to your thread', false)
-            `, [thread.rows[0].author_id, userId]);
-        }
-
-        res.redirect(`/forum/thread/${postId}`);
+        // Redirect back to the thread to see the new reply
+        res.redirect(`/forum/thread/${threadId}`);
     } catch (err) {
         console.error("REPLY ERROR:", err);
-        res.status(500).send("The Great Hall rejected your reply.");
+        res.status(500).send("The village elders could not hear your reply.");
+    }
+});
+app.post("/forum/reply/:id/delete", async (req, res) => {
+    const replyId = req.params.id;
+    const { post_id } = req.body; // Passed via hidden input in your EJS
+
+    try {
+        // Ensure only the author can delete
+        await db.query("DELETE FROM forum_replies WHERE id = $1 AND author_id = $2", [replyId, req.user.id]);
+        res.redirect(`/forum/thread/${post_id}`);
+    } catch (err) {
+        res.status(500).send("Could not erase response.");
     }
 });
 
@@ -1649,34 +1651,36 @@ app.post("/forum/thread/:id/delete", async (req, res) => {
     }
 });
 app.post("/forum/post/:id/like", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ error: "Login required" });
+
+    const postId = req.params.id;
+    const userId = req.user.id;
+
     try {
-        const postId = req.params.id;
-        const userId = req.user?.id; // Check if user exists
-
-        if (!userId) return res.status(401).json({ error: "Unauthorized" });
-
-        // 1. Check if the like already exists
+        // Check if already liked
         const checkLike = await db.query(
             "SELECT * FROM likes WHERE post_id = $1 AND user_id = $2",
             [postId, userId]
         );
 
         if (checkLike.rows.length > 0) {
-            // 2. If it exists, remove it (Unlike)
+            // Unlike
             await db.query("DELETE FROM likes WHERE post_id = $1 AND user_id = $2", [postId, userId]);
         } else {
-            // 3. If not, add it (Like)
+            // Like
             await db.query("INSERT INTO likes (post_id, user_id) VALUES ($1, $2)", [postId, userId]);
         }
 
-        // 4. Get the updated count to send back to the frontend
-        const countResult = await db.query("SELECT COUNT(*) FROM likes WHERE post_id = $1", [postId]);
+        // Get updated count
+        const countRes = await db.query("SELECT COUNT(*) FROM likes WHERE post_id = $1", [postId]);
         
-        res.json({ likesCount: countResult.rows[0].count });
-
+        res.json({ 
+            likesCount: countRes.rows[0].count,
+            isLiked: checkLike.rows.length === 0 
+        });
     } catch (err) {
         console.error("LIKE ERROR:", err);
-        res.status(500).json({ error: "Internal server error" });
+        res.status(500).json({ error: "Database error" });
     }
 });
 
