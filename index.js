@@ -1557,12 +1557,12 @@ app.get("/forum/thread/:id", async (req, res) => {
             return res.status(404).send("This scroll has been lost to time.");
         }
 
-        const repliesResult = await db.query(`
-            SELECT r.*, u.email AS author_email 
-            FROM forum_replies r 
-            JOIN users u ON r.author_id = u.id 
-            WHERE r.post_id = $1 
-            ORDER BY r.created_at ASC`, [postId]);
+      const repliesResult = await db.query(`
+      SELECT r.id, r.comment_text, r.created_at, u.email AS author_email, u.id AS author_id
+      FROM forum_replies r 
+      JOIN users u ON r.author_id = u.id 
+      WHERE r.post_id = $1 
+      ORDER BY r.created_at ASC`, [postId]);
 
         res.render("thread", {
             thread: threadResult.rows[0],
@@ -1588,35 +1588,24 @@ function formatTimeAgo(date) {
   return date.toLocaleDateString();
 }
 app.post("/forum/thread/:id/reply", async (req, res) => {
-    // 1. Ensure user is logged in
-    if (!req.isAuthenticated()) {
-        return res.status(401).send("You must be a villager to speak here.");
-    }
+    if (!req.isAuthenticated()) return res.redirect("/login");
 
     const threadId = req.params.id;
-    const { reply_text } = req.body;
+    const { reply_text } = req.body; // This comes from your <textarea name="reply_text">
     const authorId = req.user.id;
 
-    // 2. Validation
-    if (!reply_text || reply_text.trim().length === 0) {
-        return res.status(400).send("A silent reply cannot be heard.");
-    }
-
     try {
-        // 3. Insert the reply
-        // Make sure your table is 'forum_replies' and columns match!
+        // Updated to use 'comment_text' as required by your database
         await db.query(
-            `INSERT INTO forum_replies (post_id, author_id, reply_text, created_at) 
+            `INSERT INTO forum_replies (post_id, author_id, comment_text, created_at) 
              VALUES ($1, $2, $3, NOW())`,
-            [threadId, authorId, reply_text]
+            [threadId, authorId, reply_text] 
         );
         
-        // 4. Return to the thread to see the message
         res.redirect(`/forum/thread/${threadId}`);
     } catch (err) {
         console.error("REPLY ERROR:", err);
-        // This is what triggers your error message
-        res.status(500).send("The village elders could not hear your reply: " + err.message);
+        res.status(500).send("The village elders could not hear your reply.");
     }
 });
 app.post("/forum/reply/:id/delete", async (req, res) => {
