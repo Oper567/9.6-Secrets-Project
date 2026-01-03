@@ -1543,14 +1543,11 @@ app.get("/forum", async (req, res) => {
 app.get("/forum/thread/:id", async (req, res) => {
     try {
         const postId = req.params.id;
-        // Verify postId is a number to prevent SQL errors
-        if (isNaN(postId)) return res.status(400).send("Invalid Scroll ID");
-
         const userId = req.user ? req.user.id : 0;
 
-        // Optimized Query: Note the column names!
+        // REMOVED u.username to fix your error
         const threadResult = await db.query(`
-            SELECT f.*, u.username, u.email AS author_email, u.profile_pic AS author_pic,
+            SELECT f.*, u.email AS author_email, u.profile_pic AS author_pic,
             (SELECT COUNT(*) FROM likes WHERE post_id = f.id) AS likes_count,
             (SELECT EXISTS (SELECT 1 FROM likes WHERE post_id = f.id AND user_id = $2)) AS liked_by_me
             FROM forum_threads f 
@@ -1558,11 +1555,12 @@ app.get("/forum/thread/:id", async (req, res) => {
             WHERE f.id = $1`, [postId, userId]);
 
         if (threadResult.rows.length === 0) {
-            return res.status(404).render("404"); // Or a custom 'not found' page
+            return res.status(404).send("This scroll has been lost to time.");
         }
 
+        // REMOVED u.username here as well
         const repliesResult = await db.query(`
-            SELECT r.*, u.username, u.email AS author_email 
+            SELECT r.*, u.email AS author_email 
             FROM forum_replies r 
             JOIN users u ON r.author_id = u.id 
             WHERE r.post_id = $1 
@@ -1574,11 +1572,8 @@ app.get("/forum/thread/:id", async (req, res) => {
             user: req.user || null
         });
     } catch (err) {
-        // LOOK AT YOUR TERMINAL/CMD WHEN THIS HAPPENS:
-        console.error("--- DATABASE ERROR ---");
-        console.error(err.message); 
-        console.error("----------------------");
-        res.status(500).send(`Error reading scroll: ${err.message}`);
+        console.error("GET THREAD ERROR:", err);
+        res.status(500).send("Error reading scroll.");
     }
 });
 
