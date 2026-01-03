@@ -46,14 +46,38 @@ io.on('connection', (socket) => {
     });
 
     // 3. Private Message (MERGED)
-    socket.on('private_message', ({ senderId, receiverId, content }) => {
-        // Send to the specific room for that user
+    socket.on('private_message', async ({ senderId, receiverId, content }) => {
+    try {
+        // 1. Save the actual message to the messages table
+        await db.query(
+            "INSERT INTO messages (sender_id, receiver_id, content) VALUES ($1, $2, $3)",
+            [senderId, receiverId, content]
+        );
+
+        // 2. Create a notification record so it shows up in the Alerts page
+        await db.query(
+            `INSERT INTO notifications (user_id, sender_id, type, message, is_read, is_resolved) 
+             VALUES ($1, $2, 'whisper', 'sent you a new whisper', false, true)`,
+            [receiverId, senderId]
+        );
+
+        // 3. Send real-time data to the receiver if they are online
         io.to(`user_${receiverId}`).emit('new_whisper', {
             sender_id: senderId,
             content: content,
             created_at: new Date()
         });
-    });
+
+        // 4. Trigger the notification alert (the red dot/popup)
+        io.to(`user_${receiverId}`).emit('notification_received', {
+            type: 'whisper',
+            message: "New whisper received in your hut."
+        });
+
+    } catch (err) {
+        console.error("Whisper Error:", err);
+    }
+});
 
     // 4. Friend Request (MOVED INSIDE)
     socket.on('send_request', async (data) => {
